@@ -166,6 +166,9 @@ function MainApp({user,onLogout}){
   const submitReport=async()=>{if(!myTs)return;setSubmitting(true);setSubmitMsg("");const data={name:user.name,timeslot:myTs,...Object.fromEntries(METRICS.map(m=>[m.key,parseInt(myR[m.key])||0]))};const ok=await st.set(`wr:${todayStr}:${san(myTs)}:${san(user.name)}`,data);if(ok){const wh=await st.get("wt:webhook");if(wh)await sendNotif(wh,user.name,myTs,data,targets);setSelTs(myTs);await loadReports(myTs);setSubmitMsg("✓ 제출 완료!");}else setSubmitMsg("❌ 오류 발생");setSubmitting(false);};
   const loadAllData=async()=>{setLoadingAll(true);const keys=await st.list("wr:");const byDate={};for(const k of keys){const r=await st.get(k);if(r){const date=k.split(":")[1]||todayStr;const ts=r.timeslot||"미분류";if(!byDate[date])byDate[date]={};if(!byDate[date][ts])byDate[date][ts]=[];byDate[date][ts].push(r);}}setAllData(byDate);setLoadingAll(false);};
 
+  // CE 담당자 필터: 관리자는 전체, 사원은 본인 담당 건만
+  const filterCE=useCallback(evts=>user.isAdmin?evts:evts.filter(e=>!e.manager||e.manager===user.name),[user]);
+
   const owners=useMemo(()=>[...new Set(tasks.filter(t=>t._sk!=="tasks:_pub"&&t._sk!=="tasks:_prv").map(t=>t.owner).filter(Boolean))]  ,[tasks]);
   const projects=useMemo(()=>[...new Set(tasks.map(t=>t.project).filter(Boolean))]  ,[tasks]);
   const filtered=useMemo(()=>tasks.filter(t=>{if(fOwner!=="all"&&t.owner!==fOwner)return false;if(fStatus!=="all"&&t.status!==fStatus)return false;if(fPriority!=="all"&&t.priority!==fPriority)return false;if(fProject!=="all"&&t.project!==fProject)return false;return true;}),[tasks,fOwner,fStatus,fPriority,fProject]);
