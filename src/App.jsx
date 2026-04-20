@@ -63,7 +63,7 @@ function ProfileModal({user,profiles,onUpdateProfile,onClose,contracts}){
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',sans-serif"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:28,width:380,maxWidth:"90vw",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div style={{display:"flex",justifyContent:"center",gap:80,alignItems:"center",marginBottom:20}}>
           <span style={{fontSize:15,fontWeight:700,color:"#111827"}}>내 프로필</span>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#9ca3af"}}>✕</button>
         </div>
@@ -173,17 +173,17 @@ function LoginScreen({onLogin}){
     else{const accounts=await st.get("accounts:all")||[];const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:false});}
     setLoading(false);
   };
-  const lineStyle={fontFamily:"'Zen Dots',sans-serif",fontSize:13,color:"rgba(180,210,255,0.75)",letterSpacing:5,lineHeight:2.4,display:"block",opacity:0,transform:"translateX(-50px)"};
+  const lineStyle={fontFamily:"'Zen Dots',sans-serif",fontSize:18,color:"rgba(180,210,255,0.75)",letterSpacing:5,lineHeight:2.4,display:"block",opacity:0,transform:"translateX(-50px)"};
   return(
     <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",display:"flex",alignItems:"center",fontFamily:"'Inter',sans-serif"}}>
       <canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%"}}/>
       <div style={{position:"relative",zIndex:10,display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 52px",gap:40}}>
         {/* 왼쪽 */}
-        <div style={{flex:1}}>
+        <div style={{flex:"none"}}>
           <span id="ls-t1" style={lineStyle}>PROFESSIONAL</span>
           <span id="ls-t2" style={lineStyle}>MARKETING</span>
           <span id="ls-t3" style={lineStyle}>MANAGEMENT</span>
-          <div id="ls-t4" style={{fontFamily:"'Orbitron',sans-serif",fontSize:56,fontWeight:900,color:"#fff",letterSpacing:2,marginTop:18,textShadow:"0 0 50px rgba(100,160,255,0.5)",opacity:0,transform:"translateX(-50px)"}}>PRO.</div>
+          <div id="ls-t4" style={{fontFamily:"'Orbitron',sans-serif",fontSize:82,fontWeight:900,color:"#fff",letterSpacing:2,marginTop:18,textShadow:"0 0 50px rgba(100,160,255,0.5)",opacity:0,transform:"translateX(-50px)"}}>PRO.</div>
         </div>
         {/* 로그인 카드 */}
         <div style={{width:310,flexShrink:0,position:"relative",paddingTop:38}}>
