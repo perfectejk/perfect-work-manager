@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
+import { doc, getDoc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore';
+import { db } from './firebase';
 
 const METRICS=[{key:"calls",label:"콜수",unit:"콜"},{key:"callTime",label:"콜시간",unit:"분"},{key:"materials",label:"자료수",unit:"개"},{key:"toss",label:"토스",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"},{key:"positive",label:"긍정백톡",unit:"개"},{key:"negative",label:"부정백톡",unit:"개"}];
 const DEF_TARGETS={calls:200,materials:25,retarget:4};
@@ -13,11 +15,21 @@ const CE={온보딩:{color:"#d97706",bg:"#fef3c7"},관리전화:{color:"#16a34a"
 const DAYS=["일","월","화","수","목","금","토"];
 const EF=(isAdmin)=>({title:"",project:"",priority:"medium",status:"todo",due:"",memo:"",visibility:isAdmin?"public":"personal",repeat:"none",repeatDays:[]});
 
+// Firestore key sanitizer (no slashes or colons in doc IDs)
+const fkey=k=>k.replace(/\//g,'__').replace(/:/g,'--');
+
 const st={
-  get:async(k,sh=false)=>{try{const r=await window.storage.get(k,sh);return r?JSON.parse(r.value):null;}catch{return null;}},
-  set:async(k,v,sh=false)=>{try{await window.storage.set(k,JSON.stringify(v),sh);return true;}catch{return false;}},
-  del:async(k,sh=false)=>{try{await window.storage.delete(k,sh);}catch{}},
-  list:async(p,sh=false)=>{try{const r=await window.storage.list(p,sh);return r?.keys||[];}catch{return[];}},
+  get:async(k)=>{try{const s=await getDoc(doc(db,'kv',fkey(k)));return s.exists()?JSON.parse(s.data().v):null;}catch{return null;}},
+  set:async(k,v)=>{try{await setDoc(doc(db,'kv',fkey(k)),{v:JSON.stringify(v),k});return true;}catch{return false;}},
+  del:async(k)=>{try{await deleteDoc(doc(db,'kv',fkey(k)));}catch{}},
+  list:async(prefix)=>{try{const s=await getDocs(collection(db,'kv'));return s.docs.filter(d=>d.data().k?.startsWith(prefix)).map(d=>d.data().k);}catch{return[];}},
+};
+
+// Session: localStorage (device-specific)
+const ses={
+  get:()=>{try{const v=localStorage.getItem('ses:user');return v?JSON.parse(v):null;}catch{return null;}},
+  set:v=>{try{localStorage.setItem('ses:user',JSON.stringify(v));}catch{}},
+  del:()=>{try{localStorage.removeItem('ses:user');}catch{}},
 };
 
 const addBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
@@ -115,7 +127,7 @@ const Sel=({value,onChange,opts,placeholder})=>(<select value={value} onChange={
 /* ── Login ── */
 function LoginScreen({onLogin}){
   const[name,setName]=useState("");const[pw,setPw]=useState("");const[isAdmin,setIsAdmin]=useState(false);const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
-  const go=async()=>{if(!name.trim())return setErr("이름을 입력하세요");if(!pw.trim())return setErr("비밀번호를 입력하세요");setLoading(true);if(isAdmin){if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}await st.set("ses:user",{name:name.trim(),isAdmin:true});onLogin({name:name.trim(),isAdmin:true});}else{const accounts=await st.get("accounts:all",true)||[];const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}await st.set("ses:user",{name:name.trim(),isAdmin:false});onLogin({name:name.trim(),isAdmin:false});}setLoading(false);};
+  const go=async()=>{if(!name.trim())return setErr("이름을 입력하세요");if(!pw.trim())return setErr("비밀번호를 입력하세요");setLoading(true);if(isAdmin){if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:true});}else{const accounts=await st.get("accounts:all")||[];const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:false});}setLoading(false);};
   const iS={border:"1px solid #e5e7eb",borderRadius:10,padding:"11px 14px",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box"};
   return(<div style={{minHeight:"100vh",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}><div style={{background:"#fff",borderRadius:20,padding:32,width:"100%",maxWidth:360,border:"1px solid #e5e7eb",boxShadow:"0 4px 24px rgba(0,0,0,0.06)"}}><div style={{textAlign:"center",marginBottom:28}}><div style={{fontSize:36,marginBottom:8}}>📋</div><h2 style={{margin:0,fontSize:21,fontWeight:800,color:"#111827"}}>업무 관리 시스템</h2><p style={{margin:"6px 0 0",fontSize:13,color:"#9ca3af"}}>로그인하여 시작하세요</p></div><div style={{display:"flex",background:"#f3f4f6",borderRadius:10,padding:3,marginBottom:18,gap:3}}>{[{v:false,l:"👤 사원"},{v:true,l:"🔒 관리자"}].map(({v,l})=>(<button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,border:"none",borderRadius:8,padding:"8px",fontSize:13,fontWeight:600,cursor:"pointer",background:isAdmin===v?"#fff":"transparent",color:isAdmin===v?"#111827":"#9ca3af"}}>{l}</button>))}</div><div style={{display:"flex",flexDirection:"column",gap:10}}><input value={name} onChange={e=>setName(e.target.value)} placeholder="이름" onKeyDown={e=>e.key==="Enter"&&go()} style={iS}/><input type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="비밀번호" onKeyDown={e=>e.key==="Enter"&&go()} style={iS}/>{err&&<p style={{margin:0,fontSize:12,color:"#ef4444",textAlign:"center"}}>{err}</p>}<button onClick={go} disabled={loading} style={{background:"#2563eb",color:"#fff",border:"none",borderRadius:10,padding:"12px",fontSize:15,fontWeight:700,cursor:"pointer",marginTop:4}}>{loading?"확인 중…":"로그인"}</button></div></div></div>);
 }
@@ -426,9 +438,10 @@ function MainApp({user,onLogout}){
 
 export default function App(){
   const[user,setUser]=useState(null);const[loading,setLoading]=useState(true);
-  useEffect(()=>{st.get("ses:user").then(u=>{if(u)setUser(u);setLoading(false);});},[]);
-  const handleLogout=async()=>{await st.del("ses:user");setUser(null);};
+  useEffect(()=>{const u=ses.get();if(u)setUser(u);setLoading(false);},[]);
+  const handleLogout=()=>{ses.del();setUser(null);};
+  const handleLogin=u=>{ses.set(u);setUser(u);};
   if(loading)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><p style={{color:"#9ca3af"}}>불러오는 중…</p></div>;
-  if(!user)return <LoginScreen onLogin={setUser}/>;
+  if(!user)return <LoginScreen onLogin={handleLogin}/>;
   return <MainApp user={user} onLogout={handleLogout}/>;
 }
