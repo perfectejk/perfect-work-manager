@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import React from 'react';
+import React, { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { doc, getDoc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore';
 import { db } from './firebase';
