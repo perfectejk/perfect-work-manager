@@ -76,29 +76,31 @@ function LoginScreen({onLogin}){
         <div key={i} style={{position:"absolute",width:b.w,height:b.h,background:b.bg,borderRadius:"50%",top:b.t,left:b.l,bottom:b.b,right:b.r,filter:"blur(70px)",opacity:b.op,zIndex:0}}/>
       ))}
       <div style={{position:"relative",zIndex:10,fontWeight:900,fontSize:28,color:"#fff",textAlign:"center",lineHeight:1.2,letterSpacing:-0.5,textShadow:"0 2px 16px rgba(0,0,0,0.15)",marginBottom:30}}>PRO Marketing<br/>Management</div>
-      <div style={{position:"relative",zIndex:10,width:"100%",maxWidth:340,paddingTop:44}}>
-        <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:88,height:88,background:"rgba(59,130,246,0.75)",border:"3px solid rgba(255,255,255,0.7)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20}}>
+      <div style={{position:"relative",zIndex:10,width:"100%",maxWidth:340,paddingTop:48}}>
+        {/* 아바타 - 카드 위에 걸침 */}
+        <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:88,height:88,background:"rgba(59,130,246,0.8)",border:"3px solid rgba(255,255,255,0.75)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,boxShadow:"0 4px 20px rgba(0,0,0,0.2)"}}>
           <svg width="38" height="38" viewBox="0 0 38 38" fill="none"><circle cx="19" cy="14" r="7" stroke="rgba(255,255,255,0.95)" strokeWidth="2.3"/><path d="M5 34c0-7.732 6.268-12 14-12s14 4.268 14 12" stroke="rgba(255,255,255,0.95)" strokeWidth="2.3" strokeLinecap="round"/></svg>
         </div>
-        <div style={{background:"rgba(255,255,255,0.22)",border:"1.5px solid rgba(255,255,255,0.5)",borderRadius:"0 0 22px 22px",padding:"52px 28px 28px",backdropFilter:"blur(20px)",boxShadow:"0 12px 40px rgba(0,0,0,0.15)"}}>
-          <div style={{background:"rgba(255,255,255,0.22)",border:"1.5px solid rgba(255,255,255,0.5)",borderRadius:"22px 22px 0 0",padding:"20px 28px 16px",margin:"-52px -28px 0",backdropFilter:"blur(20px)"}}>
-            <div style={{display:"flex",background:"rgba(0,0,0,0.12)",borderRadius:10,padding:3,gap:3,marginBottom:0}}>
-              {[{v:false,l:"사원",icon:<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>},{v:true,l:"관리자",icon:<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="8" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}].map(({v,l,icon})=>(
-                <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,border:"none",borderRadius:8,padding:"8px",fontSize:12,fontWeight:600,cursor:"pointer",background:isAdmin===v?"rgba(255,255,255,0.3)":"transparent",color:isAdmin===v?"#fff":"rgba(255,255,255,0.45)",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
-                  <span style={{color:"inherit"}}>{icon}</span>{l}
-                </button>
-              ))}
-            </div>
+        {/* 단일 카드 */}
+        <div style={{background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.45)",borderRadius:22,padding:"52px 28px 28px",backdropFilter:"blur(20px)",boxShadow:"0 12px 40px rgba(0,0,0,0.18)"}}>
+          {/* 탭 */}
+          <div style={{display:"flex",background:"rgba(0,0,0,0.12)",borderRadius:10,padding:3,gap:3,marginBottom:18}}>
+            {[{v:false,l:"사원",icon:<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>},{v:true,l:"관리자",icon:<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="8" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}].map(({v,l,icon})=>(
+              <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,border:"none",borderRadius:8,padding:"8px",fontSize:12,fontWeight:600,cursor:"pointer",background:isAdmin===v?"rgba(255,255,255,0.28)":"transparent",color:isAdmin===v?"#fff":"rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",gap:5,fontFamily:"Inter,sans-serif"}}>
+                <span style={{color:"inherit"}}>{icon}</span>{l}
+              </button>
+            ))}
           </div>
-          <div style={{marginTop:20,display:"flex",flexDirection:"column",gap:10}}>
+          {/* 입력 */}
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {[{v:name,sv:setName,ph:"이름을 입력하세요",type:"text",icon:<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="rgba(255,255,255,0.72)" strokeWidth="1.5"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="rgba(255,255,255,0.72)" strokeWidth="1.5" strokeLinecap="round"/></svg>},{v:pw,sv:setPw,ph:"비밀번호",type:"password",icon:<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="8" rx="2" stroke="rgba(255,255,255,0.72)" strokeWidth="1.5"/><path d="M5 7V5a3 3 0 016 0v2" stroke="rgba(255,255,255,0.72)" strokeWidth="1.5" strokeLinecap="round"/></svg>}].map((f,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.38)",borderRadius:10,padding:"11px 14px",gap:10}}>
+              <div key={i} style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.35)",borderRadius:10,padding:"11px 14px",gap:10}}>
                 {f.icon}
-                <input type={f.type} value={f.v} onChange={e=>f.sv(e.target.value)} placeholder={f.ph} onKeyDown={e=>e.key==="Enter"&&go()} style={{background:"none",border:"none",outline:"none",fontSize:13,color:"#fff",flex:1,fontFamily:"inherit"}}/>
+                <input type={f.type} value={f.v} onChange={e=>f.sv(e.target.value)} placeholder={f.ph} onKeyDown={e=>e.key==="Enter"&&go()} style={{background:"none",border:"none",outline:"none",fontSize:13,color:"#fff",flex:1,fontFamily:"Inter,sans-serif"}}/>
               </div>
             ))}
             {err&&<p style={{margin:0,fontSize:12,color:"#fca5a5",textAlign:"center"}}>{err}</p>}
-            <button onClick={go} disabled={loading} style={{background:"#fff",color:"#1e40af",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:900,cursor:"pointer",marginTop:4,letterSpacing:1,fontFamily:"inherit"}}>{loading?"확인 중…":"LOGIN"}</button>
+            <button onClick={go} disabled={loading} style={{background:"#fff",color:"#1e40af",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:900,cursor:"pointer",marginTop:6,letterSpacing:1.5,fontFamily:"Inter,sans-serif"}}>{loading?"확인 중…":"LOGIN"}</button>
           </div>
         </div>
       </div>
@@ -134,8 +136,9 @@ function Sidebar({tab,setTab,user,onLogout,contracts}){
         ))}
       </div>
       <div style={{padding:"10px 8px 16px",borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-        <button onClick={onLogout} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"none",border:"none",cursor:"pointer"}}>
-          <Icon.logout/><span style={{fontSize:12,color:"rgba(255,255,255,0.22)",fontWeight:500}}>로그아웃</span>
+        <button onClick={onLogout} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:9,cursor:"pointer"}}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5.5 12H3a1 1 0 01-1-1V3a1 1 0 011-1h2.5" stroke="rgba(255,255,255,0.7)" strokeWidth="1.3" strokeLinecap="round"/><path d="M9.5 10l3-3-3-3M12.5 7H5.5" stroke="rgba(255,255,255,0.7)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <span style={{fontSize:12,color:"rgba(255,255,255,0.7)",fontWeight:500}}>로그아웃</span>
         </button>
       </div>
     </div>
@@ -544,7 +547,13 @@ function MainApp({user,onLogout}){
 
 export default function App(){
   const[user,setUser]=useState(null);const[loading,setLoading]=useState(true);
-  useEffect(()=>{const u=ses.get();if(u)setUser(u);setLoading(false);},[]);
+  useEffect(()=>{
+    const link=document.createElement('link');
+    link.rel='stylesheet';
+    link.href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap';
+    document.head.appendChild(link);
+    const u=ses.get();if(u)setUser(u);setLoading(false);
+  },[]);
   const handleLogout=()=>{ses.del();setUser(null);};
   const handleLogin=u=>{ses.set(u);setUser(u);};
   if(loading)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><p style={{color:"#9ca3af"}}>불러오는 중…</p></div>;
