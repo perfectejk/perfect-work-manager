@@ -33,7 +33,7 @@ const ses={
 /* ── Helpers ── */
 const addBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
 const subBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
-const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,5);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;while(true){cur=addBizDays(cur,10);if(cur>=rptDate)break;evts.push({type:"관리전화",date:cur,cid:c.id,name:c.name,manager:c.manager||""});}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
+const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,3);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;while(true){cur=addBizDays(cur,10);if(cur>=rptDate)break;evts.push({type:"관리전화",date:cur,cid:c.id,name:c.name,manager:c.manager||""});}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
 const ceKey=e=>`${e.cid}:${e.type}:${e.date}`;
 const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[:\\s]\\s*([^\\n]+)'));return m?m[1].trim():'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};return{name:line('상호명'),phone:line('번호'),link:line('플레이스 링크'),products:section('상품내역',['서비스내역','결제정보','담당자']),services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액'),manager:line('담당자'),notes:line('특이사항')};};
 const sendNotif=async(url,name,ts,data,targets)=>{if(!url?.startsWith("http"))return;const lines=METRICS.map(m=>{const v=data[m.key]||0,t=targets[m.key];return`• ${m.label}: **${v}${m.unit}**${t?` / ${t}${m.unit} (${Math.round(v/t*100)}%)`:''}`;});try{await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:"업무보고 알림",content:`📊 **[${ts}] ${name}** 실적 제출\n${lines.join('\n')}`})});}catch{}};
@@ -204,7 +204,7 @@ function ContractForm({initial,onSubmit,onCancel}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>총금액</label><input value={parsed.total} onChange={e=>setParsed(p=>({...p,total:e.target.value}))} placeholder="00만원" style={{...iS}}/></div><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>담당자</label><input value={parsed.manager} onChange={e=>setParsed(p=>({...p,manager:e.target.value}))} placeholder="담당자 이름" style={{...iS}}/></div></div>
     <div style={{marginBottom:8}}><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>특이사항</label><input value={parsed.notes} onChange={e=>setParsed(p=>({...p,notes:e.target.value}))} style={{...iS}}/></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 시작일 *</label><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} style={{...iS}}/></div><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 종료일 *</label><input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={{...iS}}/></div></div>
-    <div style={{background:"#f0fdf4",borderRadius:10,padding:"9px 14px",marginBottom:12,fontSize:12,color:"#166534"}}>📅 [온보딩] 시작일 · [관리전화] 영업일 10일 간격 · [리포트] 종료 5영업일 전</div>
+    <div style={{background:"#f0fdf4",borderRadius:10,padding:"9px 14px",marginBottom:12,fontSize:12,color:"#166534"}}>📅 [온보딩] 시작일 · [관리전화] 영업일 10일 간격 · [리포트] 종료 3영업일 전</div>
     <div style={{display:"flex",gap:8}}><button onClick={handleSubmit} style={{flex:1,background:"#2563eb",color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:14,fontWeight:600,cursor:"pointer"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:10,padding:"10px 16px",fontSize:14,cursor:"pointer"}}>취소</button></div>
   </div>);
 }
@@ -445,10 +445,16 @@ function MainApp({user,onLogout}){
                         </div>
                         {allCellItems.slice(0,2).map((item,ti)=>{
                           const iD=item._ce?!!completions[ceKey(item)]:item.status==="done";
-                          if(item._ce){const ce=CE[item.type];return <div key={ti} style={{fontSize:10,background:ce.bg,color:ce.color,borderRadius:4,padding:"1px 4px",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:700,textDecoration:iD?"line-through":"none",opacity:iD?0.6:1}}>[{item.type[0]}] {item.name}</div>;}
-                          return <div key={ti} style={{fontSize:10,background:P[item.priority].bg,color:P[item.priority].color,borderRadius:4,padding:"1px 4px",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,textDecoration:iD?"line-through":"none",opacity:iD?0.6:1}}>{item._ir?"🔄":""}{item.title}</div>;
+                          const label=item._ce?`[${item.type[0]}] ${item.name}`:`${item._ir?"🔄":""}${item.title}`;
+                          const bg=item._ce?CE[item.type].bg:P[item.priority].bg;
+                          const color=item._ce?CE[item.type].color:P[item.priority].color;
+                          return(
+                            <div key={ti} title={label} style={{fontSize:10,background:bg,color,borderRadius:4,padding:"1px 4px",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:item._ce?700:600,textDecoration:iD?"line-through":"none",opacity:iD?0.6:1,maxWidth:"100%",cursor:"pointer"}}>
+                              {label}
+                            </div>
+                          );
                         })}
-                        {allCellItems.length>2&&<div style={{fontSize:10,color:"#9ca3af",textAlign:"center"}}>+{allCellItems.length-2}</div>}
+                        {allCellItems.length>2&&<div style={{fontSize:9,color:"#9ca3af",textAlign:"center",cursor:"pointer"}}>+{allCellItems.length-2}개 더보기</div>}
                       </div>
                     );
                   })}
