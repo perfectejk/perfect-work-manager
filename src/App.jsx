@@ -790,4 +790,7 @@ export default function App(){
   useEffect(()=>{const u=ses.get();if(u)setUser(u);setLoading(false);},[]);
   const handleLogout=()=>{ses.del();setUser(null);};
   const handleLogin=u=>{ses.set(u);setUser(u);};
-  if(loading)return <div style={{minHeight:"100vh",display
+  if(loading)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,sans-serif"}}><p style={{color:"#9ca3af"}}>불러오는 중…</p></div>;
+  if(!user)return <LoginScreen onLogin={handleLogin}/>;
+  return <MainApp user={user} onLogout={handleLogout}/>;
+  }
