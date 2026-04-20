@@ -177,13 +177,13 @@ function LoginScreen({onLogin}){
   return(
     <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",display:"flex",alignItems:"center",fontFamily:"'Inter',sans-serif"}}>
       <canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%"}}/>
-      <div style={{position:"relative",zIndex:10,display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 52px",gap:40}}>
+      <div style={{position:"relative",zIndex:10,display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 52px",gap:80,justifyContent:"center"}}>
         {/* 왼쪽 */}
         <div style={{flex:"none"}}>
           <span id="ls-t1" style={lineStyle}>PROFESSIONAL</span>
           <span id="ls-t2" style={lineStyle}>MARKETING</span>
           <span id="ls-t3" style={lineStyle}>MANAGEMENT</span>
-          <div id="ls-t4" style={{fontFamily:"'Orbitron',sans-serif",fontSize:82,fontWeight:900,color:"#fff",letterSpacing:2,marginTop:18,textShadow:"0 0 50px rgba(100,160,255,0.5)",opacity:0,transform:"translateX(-50px)"}}>PRO.</div>
+          <div id="ls-t4" style={{fontFamily:"'Orbitron',sans-serif",fontSize:92,fontWeight:900,color:"#fff",letterSpacing:2,marginTop:18,textShadow:"0 0 50px rgba(100,160,255,0.5)",opacity:0,transform:"translateX(-50px)"}}>PRO.</div>
         </div>
         {/* 로그인 카드 */}
         <div style={{width:310,flexShrink:0,position:"relative",paddingTop:38}}>
