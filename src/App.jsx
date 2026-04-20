@@ -110,31 +110,99 @@ const Badge=({label,color,bg})=><span style={{fontSize:11,fontWeight:600,color,b
 /* ── Login ── */
 function LoginScreen({onLogin}){
   const[name,setName]=useState("");const[pw,setPw]=useState("");const[isAdmin,setIsAdmin]=useState(false);const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
-  const go=async()=>{if(!name.trim())return setErr("이름을 입력하세요");if(!pw.trim())return setErr("비밀번호를 입력하세요");setLoading(true);if(isAdmin){if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:true});}else{const accounts=await st.get("accounts:all")||[];const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:false});}setLoading(false);};
+  const canvasRef=useRef();
+  useEffect(()=>{
+    const link=document.createElement('link');link.rel='stylesheet';
+    link.href='https://fonts.googleapis.com/css2?family=Zen+Dots&family=Orbitron:wght@900&display=swap';
+    document.head.appendChild(link);
+    const canvas=canvasRef.current;if(!canvas)return;
+    const ctx=canvas.getContext('2d');
+    function resize(){canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;}
+    resize();
+    function draw(){
+      const W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);
+      const bg=ctx.createRadialGradient(W*0.3,H*0.3,0,W*0.5,H*0.5,H*1.1);
+      bg.addColorStop(0,'#112050');bg.addColorStop(0.4,'#162860');bg.addColorStop(0.7,'#101e50');bg.addColorStop(1,'#0a1438');
+      ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+      const stars=[
+        {x:0.04,y:0.06,r:1.8,op:0.95},{x:0.10,y:0.14,r:1,op:0.65},{x:0.17,y:0.05,r:2.2,op:0.9},
+        {x:0.24,y:0.20,r:1,op:0.5},{x:0.31,y:0.08,r:1.5,op:0.75},{x:0.44,y:0.06,r:2.3,op:0.95},
+        {x:0.51,y:0.17,r:1,op:0.6},{x:0.57,y:0.04,r:1.6,op:0.85},{x:0.64,y:0.21,r:1,op:0.55},
+        {x:0.71,y:0.08,r:1.9,op:0.8},{x:0.84,y:0.05,r:1.5,op:0.85},{x:0.96,y:0.07,r:2,op:0.9},
+        {x:0.08,y:0.32,r:1,op:0.45},{x:0.30,y:0.42,r:1.7,op:0.7},{x:0.48,y:0.44,r:1.3,op:0.6},
+        {x:0.62,y:0.38,r:1.7,op:0.8},{x:0.80,y:0.40,r:1.3,op:0.6},{x:0.94,y:0.35,r:1.7,op:0.7},
+      ];
+      stars.forEach(s=>{
+        ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(215,232,255,${s.op})`;ctx.fill();
+        if(s.r>=1.8){
+          const g=ctx.createRadialGradient(s.x*W,s.y*H,0,s.x*W,s.y*H,s.r*7);
+          g.addColorStop(0,`rgba(190,215,255,${s.op*0.32})`);g.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r*7,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+          ctx.strokeStyle=`rgba(200,220,255,${s.op*0.35})`;ctx.lineWidth=0.5;
+          ctx.beginPath();ctx.moveTo(s.x*W-s.r*6,s.y*H);ctx.lineTo(s.x*W+s.r*6,s.y*H);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(s.x*W,s.y*H-s.r*6);ctx.lineTo(s.x*W,s.y*H+s.r*6);ctx.stroke();
+        }
+      });
+      const ey=H*1.06,er=H*0.66;
+      const eg=ctx.createRadialGradient(W*0.5,ey,er*0.1,W*0.5,ey,er);
+      eg.addColorStop(0,'#102060');eg.addColorStop(0.5,'#0c1848');eg.addColorStop(1,'#080f30');
+      ctx.beginPath();ctx.arc(W*0.5,ey,er,0,Math.PI*2);ctx.fillStyle=eg;ctx.fill();
+      const atm=ctx.createRadialGradient(W*0.5,ey,er-14,W*0.5,ey,er+38);
+      atm.addColorStop(0,'rgba(50,140,255,0)');atm.addColorStop(0.25,'rgba(70,170,255,0.6)');
+      atm.addColorStop(0.55,'rgba(90,190,255,0.25)');atm.addColorStop(1,'rgba(0,100,220,0)');
+      ctx.beginPath();ctx.arc(W*0.5,ey,er+38,0,Math.PI*2);ctx.fillStyle=atm;ctx.fill();
+    }
+    draw();
+    window.addEventListener('resize',()=>{resize();draw();});
+    // 한 줄씩 애니메이션
+    const ids=['ls-t1','ls-t2','ls-t3','ls-t4'];
+    ids.forEach((id,i)=>{
+      setTimeout(()=>{
+        const el=document.getElementById(id);if(!el)return;
+        el.style.transition='opacity 0.65s cubic-bezier(0.22,1,0.36,1), transform 0.65s cubic-bezier(0.22,1,0.36,1)';
+        el.style.opacity='1';el.style.transform='translateX(0)';
+      },i*500+200);
+    });
+  },[]);
+  const go=async()=>{
+    if(!name.trim())return setErr("이름을 입력하세요");
+    if(!pw.trim())return setErr("비밀번호를 입력하세요");
+    setLoading(true);
+    if(isAdmin){if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:true});}
+    else{const accounts=await st.get("accounts:all")||[];const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:false});}
+    setLoading(false);
+  };
+  const lineStyle={fontFamily:"'Zen Dots',sans-serif",fontSize:13,color:"rgba(180,210,255,0.75)",letterSpacing:5,lineHeight:2.4,display:"block",opacity:0,transform:"translateX(-50px)"};
   return(
-    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',sans-serif",position:"relative",overflow:"hidden",background:"#1e40af",padding:"32px 20px 40px"}}>
-      {[{w:420,h:420,bg:"#1d4ed8",t:-130,l:-100,op:1},{w:360,h:360,bg:"#f8fafc",b:-100,r:-80,op:0.95},{w:300,h:300,bg:"#e0f2fe",t:"15%",r:-30,op:0.85},{w:240,h:240,bg:"#f0f9ff",b:"5%",l:-30,op:0.7}].map((b,i)=>(
-        <div key={i} style={{position:"absolute",width:b.w,height:b.h,background:b.bg,borderRadius:"50%",top:b.t,left:b.l,bottom:b.b,right:b.r,filter:"blur(70px)",opacity:b.op,zIndex:0}}/>
-      ))}
-      <div style={{position:"relative",zIndex:10,fontFamily:"'Orbitron',sans-serif",fontWeight:900,fontSize:24,color:"#fff",textAlign:"center",lineHeight:1.3,letterSpacing:1,textShadow:"0 2px 16px rgba(0,0,0,0.15)",marginBottom:30}}>PRO Marketing<br/>Management</div>
-      <div style={{position:"relative",zIndex:10,width:"100%",maxWidth:340,paddingTop:48}}>
-        <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:88,height:88,background:"rgba(59,130,246,0.8)",border:"3px solid rgba(255,255,255,0.75)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20}}>
-          <svg width="38" height="38" viewBox="0 0 38 38" fill="none"><circle cx="19" cy="14" r="7" stroke="rgba(255,255,255,0.95)" strokeWidth="2.3"/><path d="M5 34c0-7.732 6.268-12 14-12s14 4.268 14 12" stroke="rgba(255,255,255,0.95)" strokeWidth="2.3" strokeLinecap="round"/></svg>
+    <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",display:"flex",alignItems:"center",fontFamily:"'Inter',sans-serif"}}>
+      <canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%"}}/>
+      <div style={{position:"relative",zIndex:10,display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 52px",gap:40}}>
+        {/* 왼쪽 */}
+        <div style={{flex:1}}>
+          <span id="ls-t1" style={lineStyle}>PROFESSIONAL</span>
+          <span id="ls-t2" style={lineStyle}>MARKETING</span>
+          <span id="ls-t3" style={lineStyle}>MANAGEMENT</span>
+          <div id="ls-t4" style={{fontFamily:"'Orbitron',sans-serif",fontSize:56,fontWeight:900,color:"#fff",letterSpacing:2,marginTop:18,textShadow:"0 0 50px rgba(100,160,255,0.5)",opacity:0,transform:"translateX(-50px)"}}>PRO.</div>
         </div>
-        <div style={{background:"rgba(255,255,255,0.2)",border:"1.5px solid rgba(255,255,255,0.45)",borderRadius:22,padding:"52px 28px 28px",backdropFilter:"blur(20px)",boxShadow:"0 12px 40px rgba(0,0,0,0.18)"}}>
-          <div style={{display:"flex",background:"rgba(0,0,0,0.12)",borderRadius:10,padding:3,gap:3,marginBottom:18}}>
-            {[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(
-              <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,border:"none",borderRadius:8,padding:"8px",fontSize:12,fontWeight:600,cursor:"pointer",background:isAdmin===v?"rgba(255,255,255,0.28)":"transparent",color:isAdmin===v?"#fff":"rgba(255,255,255,0.4)",fontFamily:"'Inter',sans-serif"}}>{l}</button>
-            ))}
+        {/* 로그인 카드 */}
+        <div style={{width:310,flexShrink:0,position:"relative",paddingTop:38}}>
+          <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:72,height:72,borderRadius:"50%",background:"linear-gradient(135deg,#2a5bbf,#4a7ee8)",border:"3px solid rgba(150,190,255,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,boxShadow:"0 4px 20px rgba(40,100,220,0.35)"}}>
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="10" r="5" stroke="rgba(210,230,255,0.9)" strokeWidth="1.8"/><path d="M4 26c0-5.5 4.5-9 10-9s10 3.5 10 9" stroke="rgba(210,230,255,0.9)" strokeWidth="1.8" strokeLinecap="round"/></svg>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{background:"rgba(8,20,60,0.82)",border:"1.5px solid rgba(100,150,255,0.28)",borderRadius:20,padding:"44px 24px 24px",backdropFilter:"blur(28px)"}}>
+            <div style={{display:"flex",background:"rgba(5,15,50,0.7)",borderRadius:10,padding:4,gap:4,marginBottom:16}}>
+              {[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(
+                <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,border:"none",borderRadius:8,padding:"9px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',sans-serif",color:"#fff",background:isAdmin===v?"rgba(50,100,210,0.8)":"transparent"}}>{l}</button>
+              ))}
+            </div>
             {[{v:name,sv:setName,ph:"이름을 입력하세요",type:"text"},{v:pw,sv:setPw,ph:"비밀번호",type:"password"}].map((f,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.35)",borderRadius:10,padding:"11px 14px",gap:10}}>
-                <input type={f.type} value={f.v} onChange={e=>f.sv(e.target.value)} placeholder={f.ph} onKeyDown={e=>e.key==="Enter"&&go()} style={{background:"none",border:"none",outline:"none",fontSize:13,color:"#fff",flex:1,fontFamily:"'Inter',sans-serif"}}/>
+              <div key={i} style={{background:"rgba(5,15,55,0.6)",border:"1.5px solid rgba(90,140,230,0.25)",borderRadius:10,padding:"13px 16px",marginBottom:10}}>
+                <input type={f.type} value={f.v} onChange={e=>f.sv(e.target.value)} placeholder={f.ph} onKeyDown={e=>e.key==="Enter"&&go()} style={{background:"none",border:"none",outline:"none",fontSize:13,color:"#fff",width:"100%",fontFamily:"'Inter',sans-serif"}}/>
               </div>
             ))}
-            {err&&<p style={{margin:0,fontSize:12,color:"#fca5a5",textAlign:"center"}}>{err}</p>}
-            <button onClick={go} disabled={loading} style={{background:"#fff",color:"#1e40af",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:900,cursor:"pointer",marginTop:6,letterSpacing:2,fontFamily:"'Orbitron',sans-serif"}}>{loading?"확인 중…":"LOGIN"}</button>
+            {err&&<p style={{margin:"0 0 8px",fontSize:12,color:"#fca5a5",textAlign:"center"}}>{err}</p>}
+            <button onClick={go} disabled={loading} style={{width:"100%",background:"rgba(30,75,200,0.75)",color:"#fff",border:"1px solid rgba(100,160,255,0.3)",borderRadius:10,padding:13,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Orbitron',sans-serif",letterSpacing:3}}>{loading?"확인 중…":"LOGIN"}</button>
           </div>
         </div>
       </div>
