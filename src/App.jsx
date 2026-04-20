@@ -143,7 +143,7 @@ function LoginScreen({onLogin}){
 }
 
 /* ── Sidebar ── */
-function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile}){
+function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navOrder,setNavOrder}){
   const myCount=user.isAdmin?contracts.length:contracts.filter(c=>c.manager===user.name).length;
   const NAV=[
     {id:"list",label:"목록",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1.3" fill="white"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1.3" fill="white" opacity="0.4"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1.3" fill="white" opacity="0.4"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.3" fill="white"/></svg>},
@@ -152,6 +152,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile}){
     {id:"report",label:"업무보고",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="9" width="3" height="5" rx="1" fill="rgba(255,255,255,0.4)"/><rect x="6" y="5.5" width="3" height="8.5" rx="1" fill="rgba(255,255,255,0.4)"/><rect x="11" y="2" width="3" height="12" rx="1" fill="rgba(255,255,255,0.4)"/></svg>},
     {id:"ranking",label:"매출 랭킹",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1l1.5 3.5L13 5l-3 3 .5 4L7.5 10 4 12l.5-4L1.5 5l4-.5L7.5 1z" stroke="rgba(255,255,255,0.4)" strokeWidth="1.2" strokeLinejoin="round"/></svg>},
   ];
+  const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean);
   return(
     <div style={{width:200,minHeight:"100vh",background:"linear-gradient(160deg,#1e3a8a 0%,#1e40af 40%,rgba(59,130,246,0.45) 100%)",display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh",borderRight:"1px solid rgba(255,255,255,0.08)"}}>
       <div style={{padding:"20px 16px 14px"}}>
@@ -381,7 +382,7 @@ function RankingTab({contracts,profiles,accounts}){
 }
 
 /* ── Admin Tab ── */
-function AdminTab({projectCategories,setProjectCategories,targets,setTargets,accounts,setAccounts,webhookUrl,setWebhookUrl,allData,loadAllData,loadingAll,contracts}){
+function AdminTab({projectCategories,setProjectCategories,targets,setTargets,accounts,setAccounts,webhookUrl,setWebhookUrl,allData,loadAllData,loadingAll,contracts,navOrder,setNavOrder}){
   const[newProjInput,setNewProjInput]=useState("");
   const[newAccName,setNewAccName]=useState("");const[newAccPw,setNewAccPw]=useState("");
   const[editTargets,setEditTargets]=useState(targets);
@@ -395,7 +396,7 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
   const saveTargets=async()=>{await st.set("wt:targets",editTargets);setTargets({...editTargets});alert("저장되었습니다!");};
   const saveWebhook=async()=>{await st.set("wt:webhook",webhookUrl);alert("저장되었습니다!");};
 
-  const SECTIONS=[{id:"accounts",label:"👥 계정관리"},{id:"projects",label:"📁 프로젝트"},{id:"targets",label:"🎯 목표 설정"},{id:"webhook",label:"🔔 알림 설정"},{id:"monthly",label:"📊 월별 매출현황"},{id:"history",label:"📂 누적 데이터"}];
+  const SECTIONS=[{id:"accounts",label:"👥 계정관리"},{id:"projects",label:"📁 프로젝트"},{id:"targets",label:"🎯 목표 설정"},{id:"webhook",label:"🔔 알림 설정"},{id:"monthly",label:"📊 월별 매출현황"},{id:"history",label:"📂 누적 데이터"},{id:"navorder",label:"📌 메뉴 순서"}];
 
   // 월별 사원별 집계
   const monthlyStats=useMemo(()=>{
@@ -495,6 +496,30 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
             {Object.keys(allData).length===0&&!loadingAll&&<p style={{fontSize:13,color:"#9ca3af",textAlign:"center",padding:"16px 0"}}>버튼을 눌러 데이터를 불러오세요</p>}
           </div>
         )}
+        {section==="navorder"&&(
+          <div>
+            <div style={{fontWeight:700,fontSize:14,marginBottom:6}}>📌 메뉴 순서 설정</div>
+            <p style={{fontSize:12,color:"#9ca3af",marginBottom:14}}>드래그 대신 위/아래 버튼으로 순서를 바꾸세요</p>
+            {(()=>{
+              const NAV_LABELS={list:"📋 목록",calendar:"📅 캘린더",contracts:"🤝 계약관리",report:"📊 업무보고",ranking:"🏆 매출 랭킹"};
+              const move=async(idx,dir)=>{
+                const arr=[...navOrder];
+                const swap=idx+dir;
+                if(swap<0||swap>=arr.length)return;
+                [arr[idx],arr[swap]]=[arr[swap],arr[idx]];
+                await st.set("config:navOrder",arr);
+                setNavOrder(arr);
+              };
+              return navOrder.map((id,i)=>(
+                <div key={id} style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",borderRadius:10,padding:"10px 14px",marginBottom:6,border:"1px solid #e2e8f0"}}>
+                  <span style={{fontSize:13,fontWeight:600,flex:1,color:"#374151"}}>{NAV_LABELS[id]}</span>
+                  <button onClick={()=>move(i,-1)} disabled={i===0} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 8px",cursor:i===0?"not-allowed":"pointer",color:i===0?"#d1d5db":"#374151",fontSize:12}}>▲</button>
+                  <button onClick={()=>move(i,1)} disabled={i===navOrder.length-1} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 8px",cursor:i===navOrder.length-1?"not-allowed":"pointer",color:i===navOrder.length-1?"#d1d5db":"#374151",fontSize:12}}>▼</button>
+                </div>
+              ));
+            })()}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -503,6 +528,7 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
 /* ══════════ MAIN APP ══════════ */
 function MainApp({user,onLogout}){
   const[tasks,setTasks]=useState([]);const[loadingTasks,setLoadingTasks]=useState(true);
+  const[navOrder,setNavOrder]=useState(["list","calendar","contracts","report","ranking"]);
   const[editTaskData,setEditTaskData]=useState(null);const[form,setForm]=useState(EF(user.isAdmin));const[showForm,setShowForm]=useState(false);
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[completions,setCompletions]=useState({});
@@ -545,7 +571,7 @@ function MainApp({user,onLogout}){
   const updateProfile=async(name,img)=>{const p=await st.get("profiles:all")||{};p[name]=img;await st.set("profiles:all",p);setProfiles({...p});};
   const loadProjectCategories=async()=>{const p=await st.get("config:projects")||[];setProjectCategories(p);};
   const loadAccounts=async()=>{const a=await st.get("accounts:all")||[];setAccounts(a);};
-  const loadSettings=async()=>{const t=await st.get("wt:targets");if(t)setTargets(t);const w=await st.get("wt:webhook");if(w)setWebhookUrl(w);const ts=await st.get("wt:ts:fixed")||[];setTimeslots(ts);if(ts.length>0){setSelTs(ts[ts.length-1]);setMyTs(ts[ts.length-1]);}};
+  const loadSettings=async()=>{const t=await st.get("wt:targets");if(t)setTargets(t);const w=await st.get("wt:webhook");if(w)setWebhookUrl(w);const no=await st.get("config:navOrder");if(no)setNavOrder(no);const ts=await st.get("wt:ts:fixed")||[];setTimeslots(ts);if(ts.length>0){setSelTs(ts[ts.length-1]);setMyTs(ts[ts.length-1]);}};
   const addTimeslot=async()=>{const ts=newTs.trim();if(!ts)return;const list=await st.get("wt:ts:fixed")||[];if(!list.includes(ts)){list.push(ts);await st.set("wt:ts:fixed",list);setTimeslots(list);}setSelTs(ts);setMyTs(ts);setNewTs("");};
   const removeTimeslot=async ts=>{const list=(await st.get("wt:ts:fixed")||[]).filter(t=>t!==ts);await st.set("wt:ts:fixed",list);setTimeslots(list);if(selTs===ts)setSelTs(list[list.length-1]||"");if(myTs===ts)setMyTs(list[list.length-1]||"");};
   const loadReports=async ts=>{setLoadingR(true);const keys=await st.list(`wr:${todayStr}:${san(ts)}:`);const rows=[];for(const k of keys){const r=await st.get(k);if(r)rows.push(r);}setTsReports(rows);setLoadingR(false);};
@@ -579,7 +605,7 @@ function MainApp({user,onLogout}){
   return(
     <div style={{display:"flex",minHeight:"100vh",fontFamily:"'Inter',sans-serif",background:"#f0f5ff"}}>
       {showProfile&&<ProfileModal user={user} profiles={profiles} onUpdateProfile={updateProfile} onClose={()=>setShowProfile(false)} contracts={contracts}/>}
-      <Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)}/>
+      <Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)} navOrder={navOrder} setNavOrder={setNavOrder}/>
 
       <div style={{flex:1,minWidth:0,overflowY:"auto"}}>
         <div style={{background:"#fff",padding:"14px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #e2e8f0",position:"sticky",top:0,zIndex:50}}>
@@ -783,6 +809,7 @@ function MainApp({user,onLogout}){
               webhookUrl={webhookUrl} setWebhookUrl={setWebhookUrl}
               allData={allData} loadAllData={loadAllData} loadingAll={loadingAll}
               contracts={contracts}
+              navOrder={navOrder} setNavOrder={setNavOrder}
             />
           )}
         </div>
