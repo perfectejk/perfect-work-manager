@@ -170,7 +170,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
         </div>
       </div>
       <div style={{padding:"0 8px",flex:1}}>
-        {NAV.map(n=>(
+        {sortedNav.map(n=>
           <button key={n.id} onClick={()=>setTab(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:9,padding:"10px 12px",borderRadius:10,border:tab===n.id?"1px solid rgba(255,255,255,0.18)":"1px solid transparent",background:tab===n.id?"rgba(255,255,255,0.15)":"transparent",cursor:"pointer",textAlign:"left",marginBottom:2}}>
             {n.icon}
             <span style={{fontSize:13,fontWeight:tab===n.id?600:500,color:tab===n.id?"#fff":"rgba(255,255,255,0.4)"}}>{n.label}</span>
