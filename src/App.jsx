@@ -11,7 +11,7 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 const san=s=>s.replace(/[\s/\\'":]/g,"_").slice(0,50);
 const P={high:{label:"높음",color:"#ef4444",bg:"#fef2f2"},medium:{label:"중간",color:"#f59e0b",bg:"#fffbeb"},low:{label:"낮음",color:"#10b981",bg:"#f0fdf4"}};
 const S={todo:{label:"할 일",color:"#6b7280",bg:"#f3f4f6"},doing:{label:"진행 중",color:"#2563eb",bg:"#eff6ff"},done:{label:"완료",color:"#10b981",bg:"#d1fae5"}};
-const CE={온보딩:{color:"#d97706",bg:"#fef3c7"},관리전화:{color:"#16a34a",bg:"#dcfce7"},리포트:{color:"#dc2626",bg:"#fee2e2"}};
+const CE={온보딩:{color:"#6b7280",bg:"#f3f4f6"},관리전화:{color:"#2563eb",bg:"#eff6ff"},리포트:{color:"#db2777",bg:"#fdf2f8"}};
 const DAYS=["일","월","화","수","목","금","토"];
 const EF=(isAdmin)=>({title:"",project:"",priority:"medium",status:"todo",due:"",memo:"",visibility:isAdmin?"public":"personal",repeat:"none",repeatDays:[]});
 
