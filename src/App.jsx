@@ -267,7 +267,6 @@ function RankingTab({contracts,profiles,accounts}){
   const now=new Date();
   const[selYear,setSelYear]=useState(now.getFullYear());
   const[selMonth,setSelMonth]=useState(now.getMonth()+1);
-
   const managerStats=useMemo(()=>{
     const map={};
     contracts.forEach(c=>{
@@ -281,15 +280,21 @@ function RankingTab({contracts,profiles,accounts}){
     return Object.values(map).sort((a,b)=>b.amount-a.amount);
   },[contracts,selYear,selMonth]);
 
+  const top=managerStats.slice(0,3);
+  const rest=managerStats.slice(3);
+
+  // 포디움 순서: 2등 - 1등 - 3등
+  const podium=[
+    {rank:2,size:100,height:120,color:"#94a3b8",bg:"linear-gradient(135deg,#f1f5f9,#e2e8f0)",border:"#94a3b8"},
+    {rank:1,size:140,height:160,color:"#f59e0b",bg:"linear-gradient(135deg,#fef9c3,#fde68a)",border:"#f59e0b"},
+    {rank:3,size:80,height:90,color:"#b45309",bg:"linear-gradient(135deg,#fef3c7,#fde68a)",border:"#b45309"},
+  ];
   const medals=["🥇","🥈","🥉"];
-  const medalColors=["#f59e0b","#94a3b8","#b45309"];
-  const medalBg=["linear-gradient(135deg,#fef9c3,#fde68a)","linear-gradient(135deg,#f1f5f9,#e2e8f0)","linear-gradient(135deg,#fef3c7,#fde68a)"];
-  const rankColors=["#d97706","#64748b","#92400e"];
 
   return(
     <div>
       {/* 월 선택 */}
-      <div style={{background:"#fff",borderRadius:14,padding:"16px 20px",marginBottom:16,border:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:12}}>
+      <div style={{background:"#fff",borderRadius:14,padding:"14px 20px",marginBottom:20,border:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:12}}>
         <select value={selYear} onChange={e=>setSelYear(parseInt(e.target.value))} style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 12px",fontSize:13,background:"#fff"}}>
           {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}년</option>)}
         </select>
@@ -306,55 +311,56 @@ function RankingTab({contracts,profiles,accounts}){
         </div>
       ):(
         <>
-          {/* 1등 스페셜 카드 */}
-          {managerStats[0]&&(
-            <div style={{background:"linear-gradient(135deg,#1e3a8a,#2563eb,#60a5fa)",borderRadius:20,padding:"28px 24px",marginBottom:16,textAlign:"center",position:"relative",overflow:"hidden"}}>
-              <div style={{position:"absolute",top:-20,left:-20,width:120,height:120,background:"rgba(255,255,255,0.05)",borderRadius:"50%"}}/>
-              <div style={{position:"absolute",bottom:-30,right:-30,width:160,height:160,background:"rgba(255,255,255,0.04)",borderRadius:"50%"}}/>
-              <div style={{fontSize:32,marginBottom:8}}>🥇</div>
-              <div style={{marginBottom:12}}>
-                <Avatar name={managerStats[0].name} img={profiles[managerStats[0].name]} size={72} border="4px solid rgba(255,255,255,0.8)"/>
-              </div>
-              <div style={{fontSize:20,fontWeight:800,color:"#fff",marginBottom:4}}>{managerStats[0].name}</div>
-              <div style={{fontSize:13,color:"rgba(255,255,255,0.7)",marginBottom:16}}>🎉 이달의 1등! 축하해요!! 🎉</div>
-              <div style={{display:"flex",gap:12,justifyContent:"center"}}>
-                <div style={{background:"rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 20px"}}>
-                  <div style={{fontSize:22,fontWeight:800,color:"#fff"}}>{managerStats[0].count}건</div>
-                  <div style={{fontSize:11,color:"rgba(255,255,255,0.65)"}}>계약 건수</div>
-                </div>
-                <div style={{background:"rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 20px"}}>
-                  <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{fmtAmount(managerStats[0].amount)}</div>
-                  <div style={{fontSize:11,color:"rgba(255,255,255,0.65)"}}>총 매출액</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 2등 이하 */}
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {managerStats.slice(1).map((s,i)=>{
-              const rank=i+2;
-              const medal=medals[rank-1]||`${rank}위`;
-              const mColor=rankColors[rank-1]||"#374151";
-              const mBg=medalBg[rank-1]||"#f8fafc";
-              return(
-                <div key={s.name} style={{background:"#fff",borderRadius:14,padding:"16px 20px",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:16}}>
-                  <div style={{width:44,height:44,borderRadius:12,background:mBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{medal}</div>
-                  <Avatar name={s.name} img={profiles[s.name]} size={44} border="2px solid #e5e7eb"/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:700,color:"#111827"}}>{s.name}</div>
-                    <div style={{fontSize:12,color:"#9ca3af",marginTop:2}}>{rank}위</div>
+          {/* 포디움 */}
+          <div style={{background:"linear-gradient(160deg,#1e3a8a,#2563eb)",borderRadius:20,padding:"32px 20px 0",marginBottom:16,overflow:"hidden"}}>
+            <div style={{textAlign:"center",fontSize:16,fontWeight:800,color:"#fff",marginBottom:24,letterSpacing:1}}>🏆 {selYear}년 {selMonth}월 TOP 3</div>
+            <div style={{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:12}}>
+              {podium.map(({rank,size,height,color,bg,border})=>{
+                const s=top[rank-1];
+                if(!s)return <div key={rank} style={{width:size+40,height:height+size+60}}/>;
+                return(
+                  <div key={rank} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
+                    {/* 아바타 */}
+                    <div style={{position:"relative",marginBottom:8}}>
+                      <div style={{width:size,height:size,borderRadius:"50%",border:`4px solid ${border}`,overflow:"hidden",boxShadow:`0 0 0 4px rgba(255,255,255,0.2), 0 8px 24px rgba(0,0,0,0.3)`}}>
+                        {profiles[s.name]
+                          ?<img src={profiles[s.name]} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={s.name}/>
+                          :<div style={{width:"100%",height:"100%",background:ACOLORS[s.name.charCodeAt(0)%ACOLORS.length],display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.38,fontWeight:800,color:"#fff"}}>{s.name.slice(0,1)}</div>
+                        }
+                      </div>
+                      <div style={{position:"absolute",bottom:-4,right:-4,width:28,height:28,borderRadius:"50%",background:bg,border:`2px solid ${border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>{medals[rank-1]}</div>
+                    </div>
+                    <div style={{fontSize:rank===1?14:12,fontWeight:800,color:"#fff",marginBottom:2}}>{s.name}</div>
+                    <div style={{fontSize:rank===1?13:11,color:"rgba(255,255,255,0.8)",marginBottom:8}}>{fmtAmount(s.amount)}</div>
+                    {/* 단상 */}
+                    <div style={{width:size+40,height:height,background:bg,borderRadius:"12px 12px 0 0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 -4px 12px rgba(0,0,0,0.2)"}}>
+                      <div style={{fontSize:rank===1?32:24,fontWeight:900,color:color}}>{rank}</div>
+                      <div style={{fontSize:11,color:"#374151",fontWeight:600}}>{s.count}건</div>
+                    </div>
                   </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{fontSize:15,fontWeight:800,color:mColor}}>{fmtAmount(s.amount)}</div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 4등 이하 */}
+          {rest.length>0&&(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {rest.map((s,i)=>(
+                <div key={s.name} style={{background:"#fff",borderRadius:14,padding:"14px 18px",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:14}}>
+                  <div style={{width:32,height:32,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#64748b",flexShrink:0}}>{i+4}</div>
+                  <Avatar name={s.name} img={profiles[s.name]} size={40} border="2px solid #e5e7eb"/>
+                  <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#111827"}}>{s.name}</div></div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:14,fontWeight:800,color:"#374151"}}>{fmtAmount(s.amount)}</div>
                     <div style={{fontSize:11,color:"#9ca3af"}}>{s.count}건</div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
 
-          {/* 전체 참여자 없으면 표시 */}
+          {/* 미참여자 */}
           {accounts.filter(a=>!managerStats.find(s=>s.name===a.name)).length>0&&(
             <div style={{marginTop:12,background:"#f8fafc",borderRadius:12,padding:"12px 16px",border:"1px solid #e2e8f0"}}>
               <div style={{fontSize:12,color:"#9ca3af",marginBottom:8}}>이달 계약 없음</div>
