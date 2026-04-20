@@ -75,7 +75,7 @@ function LoginScreen({onLogin}){
       {[{w:420,h:420,bg:"#1d4ed8",t:-130,l:-100,op:1},{w:360,h:360,bg:"#f8fafc",b:-100,r:-80,op:0.95},{w:300,h:300,bg:"#e0f2fe",t:"15%",r:-30,op:0.85},{w:240,h:240,bg:"#f0f9ff",b:"5%",l:-30,op:0.7}].map((b,i)=>(
         <div key={i} style={{position:"absolute",width:b.w,height:b.h,background:b.bg,borderRadius:"50%",top:b.t,left:b.l,bottom:b.b,right:b.r,filter:"blur(70px)",opacity:b.op,zIndex:0}}/>
       ))}
-      <div style={{position:"relative",zIndex:10,fontWeight:900,fontSize:28,color:"#fff",textAlign:"center",lineHeight:1.2,letterSpacing:-0.5,textShadow:"0 2px 16px rgba(0,0,0,0.15)",marginBottom:30}}>PRO Marketing<br/>Management</div>
+      <div style={{position:"relative",zIndex:10,fontFamily:"'Orbitron',sans-serif",fontWeight:900,fontSize:24,color:"#fff",textAlign:"center",lineHeight:1.3,letterSpacing:1,textShadow:"0 2px 16px rgba(0,0,0,0.15)",marginBottom:30}}>PRO Marketing<br/>Management</div>
       <div style={{position:"relative",zIndex:10,width:"100%",maxWidth:340,paddingTop:48}}>
         {/* 아바타 - 카드 위에 걸침 */}
         <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:88,height:88,background:"rgba(59,130,246,0.8)",border:"3px solid rgba(255,255,255,0.75)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,boxShadow:"0 4px 20px rgba(0,0,0,0.2)"}}>
@@ -100,7 +100,7 @@ function LoginScreen({onLogin}){
               </div>
             ))}
             {err&&<p style={{margin:0,fontSize:12,color:"#fca5a5",textAlign:"center"}}>{err}</p>}
-            <button onClick={go} disabled={loading} style={{background:"#fff",color:"#1e40af",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:900,cursor:"pointer",marginTop:6,letterSpacing:1.5,fontFamily:"Inter,sans-serif"}}>{loading?"확인 중…":"LOGIN"}</button>
+            <button onClick={go} disabled={loading} style={{background:"#fff",color:"#1e40af",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:900,cursor:"pointer",marginTop:6,letterSpacing:2,fontFamily:"'Orbitron',sans-serif"}}>{loading?"확인 중…":"LOGIN"}</button>
           </div>
         </div>
       </div>
@@ -550,7 +550,7 @@ export default function App(){
   useEffect(()=>{
     const link=document.createElement('link');
     link.rel='stylesheet';
-    link.href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap';
+    link.href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@700;900&display=swap';
     document.head.appendChild(link);
     const u=ses.get();if(u)setUser(u);setLoading(false);
   },[]);
