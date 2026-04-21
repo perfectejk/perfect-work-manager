@@ -598,7 +598,7 @@ function MainApp({user,onLogout}){
   const[tasks,setTasks]=useState([]);const[loadingTasks,setLoadingTasks]=useState(true);
   const[navOrder,setNavOrder]=useState(["list","calendar","contracts","report","ranking"]);
   const[editTaskData,setEditTaskData]=useState(null);const[form,setForm]=useState(EF(user.isAdmin));const[showForm,setShowForm]=useState(false);
-  const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
+  const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[completions,setCompletions]=useState({});
   const[profiles,setProfiles]=useState({});
   const[showProfile,setShowProfile]=useState(false);
@@ -827,10 +827,29 @@ function MainApp({user,onLogout}){
           {/* ══ CONTRACTS ══ */}
           {tab==="contracts"&&(
             <div>
+              const managers=[...new Set(contracts.map(c=>c.manager).filter(Boolean))];
+              const filteredContracts=contractManager==="all"?visibleContracts:visibleContracts.filter(c=>c.manager===contractManager);
+              const totalPages=Math.ceil(filteredContracts.length/10);
+              const pagedContracts=filteredContracts.slice((contractPage-1)*10,contractPage*10);
               {showCF&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}}/>}
+              {user.isAdmin&&(
+                <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+                  <button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#2563eb":"#e2e8f0"}`,borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#eff6ff":"#fff",color:contractManager==="all"?"#2563eb":"#6b7280"}}>전체</button>
+                  {managers.map(m=>(
+                    <button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#7c3aed":"#6b7280"}}>{m}</button>
+                  ))}
+                </div>
+              {totalPages>1&&(
+                <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:14}}>
+                  {Array.from({length:totalPages},(_,i)=>(
+                    <button key={i} onClick={()=>setContractPage(i+1)} style={{width:32,height:32,borderRadius:8,border:`1.5px solid ${contractPage===i+1?"#2563eb":"#e2e8f0"}`,background:contractPage===i+1?"#2563eb":"#fff",color:contractPage===i+1?"#fff":"#6b7280",fontSize:13,fontWeight:600,cursor:"pointer"}}>{i+1}</button>
+                  ))}
+                </div>
+              )}
+              )}
               {visibleContracts.length===0&&!showCF?<div style={{textAlign:"center",padding:"48px 0",color:"#9ca3af",fontSize:13,background:"#fff",borderRadius:14,border:"1px solid #e2e8f0"}}>{user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div>
-              :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{visibleContracts.map(c=>{const evts=genEvents(c);const isActive=c.endDate>=todayStr;const nextCall=evts.filter(e=>e.type==="관리전화"&&e.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date))[0];const rpt=evts.find(e=>e.type==="리포트");return(
-                <div key={c.id} style={{background:"#fff",borderRadius:14,border:"1px solid #e2e8f0",padding:16,opacity:isActive?1:0.65}}>
+              :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{pagedContracts.map(c=>{const evts=genEvents(c);const isActive=c.endDate>=todayStr;const nextCall=evts.filter(e=>e.type==="관리전화"&&e.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date))[0];const rpt=evts.find(e=>e.type==="리포트");return(
+                <div key={c.id} style={{background:"#fff",borderRadius:14,border:"1px solid #e2e8f0",padding:"10px 14px",opacity:isActive?1:0.65}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                     <div><div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:15}}>{c.name}</span><Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/></div><div style={{fontSize:12,color:"#64748b",marginTop:3}}>📅 {c.startDate} ~ {c.endDate}</div></div>
                     {user.isAdmin&&<div style={{display:"flex",gap:4}}><button onClick={()=>{setEditContract(c);setShowCF(true);}} style={{background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:13}}>✏️</button><button onClick={()=>deleteContract(c.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:13}}>✕</button></div>}
