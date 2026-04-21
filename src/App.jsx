@@ -839,6 +839,7 @@ function MainApp({user,onLogout}){
                     <button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#7c3aed":"#6b7280"}}>{m}</button>
                   ))}
                 </div>
+              }
               {totalPages>1&&(
                 <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:14}}>
                   {Array.from({length:totalPages},(_,i)=>(
