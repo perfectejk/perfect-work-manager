@@ -793,7 +793,7 @@ function MainApp({user,onLogout}){
                     const nextCall=evts.filter(e=>e.type==="관리전화"&&e.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date))[0];
                     const rpt=evts.find(e=>e.type==="리포트");
                     return(
-                      <div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",padding:"10px 14px",opacity:isActive?1:0.65}}>
+                      <div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",padding:"10px 14px",opacity:isActive?1:0.65,height:160,overflow:"hidden",boxSizing:"border-box"}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                           <div><div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:14}}>{c.name}</span><Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/></div><div style={{fontSize:11,color:"#64748b",marginTop:2}}>📅 {c.startDate} ~ {c.endDate}</div></div>
                           {user.isAdmin&&<div style={{display:"flex",gap:3}}><button onClick={()=>{setEditContract(c);setShowCF(true);}} style={{background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:12}}>✏️</button><button onClick={()=>deleteContract(c.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:12}}>✕</button></div>}
