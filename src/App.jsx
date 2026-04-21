@@ -825,6 +825,10 @@ function MainApp({user,onLogout}){
           )}
 
           {/* ══ CONTRACTS ══ */}
+          const managers=[...new Set(contracts.map(c=>c.manager).filter(Boolean))];
+          const filteredContracts=contractManager==="all"?visibleContracts:visibleContracts.filter(c=>c.manager===contractManager);
+          const totalPages=Math.ceil(filteredContracts.length/10);
+          const pagedContracts=filteredContracts.slice((contractPage-1)*10,contractPage*10);
           {tab==="contracts"&&(
             <div>
               const managers=[...new Set(contracts.map(c=>c.manager).filter(Boolean))];
