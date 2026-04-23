@@ -303,7 +303,7 @@ function ContractForm({initial,onSubmit,onCancel}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}><div><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>총금액</label><input value={parsed.total} onChange={e=>setParsed(p=>({...p,total:e.target.value}))} placeholder="00만원" style={{...iS}}/></div><div><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>담당자</label><input value={parsed.manager} onChange={e=>setParsed(p=>({...p,manager:e.target.value}))} placeholder="담당자 이름" style={{...iS}}/></div></div>
     <div style={{marginBottom:6}}><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>특이사항</label><input value={parsed.notes} onChange={e=>setParsed(p=>({...p,notes:e.target.value}))} style={{...iS}}/></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}><div><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>계약 시작일 *</label><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} style={{...iS}}/></div><div><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>계약 종료일 *</label><input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={{...iS}}/></div></div>
-    <div style={{background:"#f0fdf4",borderRadius:8,padding:"7px 12px",marginBottom:10,fontSize:11,color:"#166534"}}>📅 [온보딩] 시작일 · [관리전화] 영업일 10일 간격 · [리포트] 종료 3영업일 전</div>
+    <div style={{background:"#f0fdf4",borderRadius:8,padding:"7px 12px",marginBottom:10,fontSize:11,color:"#166534"}}>📅 [관리전화] 영업일 10일 간격 · [리포트] 종료 3영업일 전</div>
     <div style={{display:"flex",gap:6}}><button onClick={()=>{if(!parsed.name.trim()||!startDate||!endDate)return alert("상호명과 계약 기간은 필수입니다.");if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");onSubmit({...parsed,startDate,endDate,id:initial?.id||uid()});}} style={{flex:1,background:"#2563eb",color:"#fff",border:"none",borderRadius:8,padding:"8px",fontSize:13,fontWeight:600,cursor:"pointer"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:8,padding:"8px 14px",fontSize:13,cursor:"pointer"}}>취소</button></div>
   </div>);
 }
@@ -367,7 +367,6 @@ function RevenueCalendarTab({contracts,user,profiles}){
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      {/* 상단 요약 */}
       <div style={{background:"linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%)",borderRadius:14,padding:"18px 22px",color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 8px 24px rgba(217,119,6,0.25)"}}>
         <div>
           <div style={{fontSize:11,opacity:0.85,fontWeight:600,marginBottom:2}}>💰 {calY}년 {calM+1}월 총 매출</div>
@@ -380,7 +379,6 @@ function RevenueCalendarTab({contracts,user,profiles}){
         </div>
       </div>
 
-      {/* 캘린더 */}
       <div style={{background:"#fff",borderRadius:14,padding:18,border:"1px solid #e2e8f0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
           <button onClick={()=>{let m=calM-1,y=calY;if(m<0){m=11;y--;}setCalM(m);setCalY(y);setSelectedDay(null);}} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:16}}>‹</button>
@@ -451,7 +449,6 @@ function RevenueCalendarTab({contracts,user,profiles}){
         </div>
       </div>
 
-      {/* 선택된 날짜 상세 */}
       {selectedDay&&selDayContracts.length>0&&(
         <div style={{background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",overflow:"hidden"}}>
           <div style={{padding:"13px 20px",borderBottom:"1px solid #fde68a",background:"linear-gradient(90deg,#fffbeb,#fef3c7)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -484,7 +481,6 @@ function RevenueCalendarTab({contracts,user,profiles}){
         </div>
       )}
 
-      {/* 이달 담당자별 매출 요약 (관리자 & 전체 필터 시) */}
       {user.isAdmin&&selectedManager==="all"&&managerMonthStats.length>0&&(
         <div style={{background:"#fff",borderRadius:12,padding:"14px 18px",border:"1px solid #e2e8f0"}}>
           <div style={{fontWeight:700,fontSize:13,color:"#111827",marginBottom:10}}>📊 이달 담당자별 매출</div>
@@ -574,7 +570,7 @@ function RankingTab({contracts,profiles,accounts}){
                     </div>
                     <div style={{fontSize:rank===1?14:12,fontWeight:800,color:"#1e293b",marginBottom:2}}>{s.name}</div>
                     <div style={{fontSize:rank===1?13:11,color:"#2563eb",fontWeight:700,marginBottom:8}}>{fmtAmount(s.amount)}</div>
-                    <div style={{width:size+40,height:height,background:"#fff",borderRadius:"12px 12px 0 0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 -2px 12px rgba(0,0,0,0.06)",border:"1px solid #e2e8f0",borderBottom:"none"}}>
+                    <div style={{width:size+40,height,background:"#fff",borderRadius:"12px 12px 0 0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 -2px 12px rgba(0,0,0,0.06)",border:"1px solid #e2e8f0",borderBottom:"none"}}>
                       <div style={{fontSize:rank===1?32:24,fontWeight:900,color}}>{rank}</div>
                       <div style={{fontSize:11,color:"#64748b",fontWeight:600}}>{s.count}건</div>
                     </div>
@@ -797,8 +793,21 @@ function MainApp({user,onLogout}){
   const updateProfile=async(name,img)=>{const p=await st.get("profiles:all")||{};p[name]=img;await st.set("profiles:all",p);setProfiles({...p});};
   const loadProjectCategories=async()=>{const p=await st.get("config:projects")||[];setProjectCategories(p);};
   const loadAccounts=async()=>{const a=await st.get("accounts:all")||[];setAccounts(a);};
-  const loadSettings=async()=>{const t=await st.get("wt:targets");if(t)setTargets(t);const w=await st.get("wt:webhook");if(w)setWebhookUrl(w);const no=await st.get("config:navOrder");if(no){// 기존 저장값에 revenue가 없으면 자동 추가
-    if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no];if(idx>=0)newArr.splice(idx+1,0,"revenue");else newArr.push("revenue");await st.set("config:navOrder",newArr);setNavOrder(newArr);}else setNavOrder(no);}const ts=await st.get("wt:ts:fixed")||[];setTimeslots(ts);if(ts.length>0){setSelTs(ts[ts.length-1]);setMyTs(ts[ts.length-1]);}};
+  const loadSettings=async()=>{
+    const t=await st.get("wt:targets");if(t)setTargets(t);
+    const w=await st.get("wt:webhook");if(w)setWebhookUrl(w);
+    const no=await st.get("config:navOrder");
+    if(no){
+      if(!no.includes("revenue")){
+        const idx=no.indexOf("calendar");
+        const newArr=[...no];
+        if(idx>=0)newArr.splice(idx+1,0,"revenue");else newArr.push("revenue");
+        await st.set("config:navOrder",newArr);
+        setNavOrder(newArr);
+      }else setNavOrder(no);
+    }
+    const ts=await st.get("wt:ts:fixed")||[];setTimeslots(ts);if(ts.length>0){setSelTs(ts[ts.length-1]);setMyTs(ts[ts.length-1]);}
+  };
   const addTimeslot=async()=>{const ts=newTs.trim();if(!ts)return;const list=await st.get("wt:ts:fixed")||[];if(!list.includes(ts)){list.push(ts);await st.set("wt:ts:fixed",list);setTimeslots(list);}setSelTs(ts);setMyTs(ts);setNewTs("");};
   const removeTimeslot=async ts=>{const list=(await st.get("wt:ts:fixed")||[]).filter(t=>t!==ts);await st.set("wt:ts:fixed",list);setTimeslots(list);if(selTs===ts)setSelTs(list[list.length-1]||"");if(myTs===ts)setMyTs(list[list.length-1]||"");};
   const loadReports=async ts=>{setLoadingR(true);const keys=await st.list(`wr:${todayStr}:${san(ts)}:`);const rows=[];for(const k of keys){const r=await st.get(k);if(r)rows.push(r);}setTsReports(rows);setLoadingR(false);};
@@ -819,7 +828,7 @@ function MainApp({user,onLogout}){
   const totalPages=useMemo(()=>Math.ceil(filteredContracts.length/10),[filteredContracts]);
   const pagedContracts=useMemo(()=>filteredContracts.slice((contractPage-1)*10,contractPage*10),[filteredContracts,contractPage]);
   const calTasksExp=useMemo(()=>expandForMonth(filtered,calY,calM),[filtered,calY,calM]);
-  // 📅 캘린더: 온보딩 제외 (관리전화 + 리포트만)
+  // 📅 캘린더: 온보딩 제외 (관리전화 + 리포트만 표시)
   const calCE=useMemo(()=>filterCE(allCE.filter(e=>e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`)&&e.type!=="온보딩")),[allCE,calY,calM,filterCE]);
   const tasksByDay=useMemo(()=>{const m={};if(calFilter!=="contracts")calTasksExp.forEach(t=>{if(t.due){const d=parseInt(t.due.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].t.push(t);}});if(calFilter!=="tasks")calCE.forEach(e=>{const d=parseInt(e.date.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].e.push(e);});return m;},[calTasksExp,calCE,calFilter]);
   const selDayTasks=useMemo(()=>calTasksExp.filter(t=>t.due===selectedDay),[calTasksExp,selectedDay]);
@@ -858,7 +867,6 @@ function MainApp({user,onLogout}){
               </div>
             </div>
           )}
-          {/* ══ LIST ══ */}
           {tab==="list"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               {showForm&&<TaskForm form={form} setForm={setForm} onSubmit={submitTask} onCancel={()=>{setShowForm(false);setEditTaskData(null);setForm(EF(user.isAdmin));}} isEdit={!!editTaskData} isAdminUser={user.isAdmin} projectCategories={projectCategories}/>}
@@ -918,7 +926,6 @@ function MainApp({user,onLogout}){
               </div>
             </div>
           )}
-          {/* ══ CALENDAR ══ */}
           {tab==="calendar"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid #e2e8f0"}}>
@@ -976,9 +983,7 @@ function MainApp({user,onLogout}){
               )}
             </div>
           )}
-          {/* ══ REVENUE CALENDAR ══ */}
           {tab==="revenue"&&<RevenueCalendarTab contracts={contracts} user={user} profiles={profiles}/>}
-          {/* ══ CONTRACTS ══ */}
           {tab==="contracts"&&(
             <div>
               {showCF&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}}/>}
@@ -1019,18 +1024,98 @@ function MainApp({user,onLogout}){
               )}
             </div>
           )}
-          {/* ══ REPORT ══ */}
           {tab==="report"&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 <div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid #e2e8f0"}}>
                   <div style={{fontWeight:700,fontSize:12,marginBottom:10}}>⏰ 보고 타임</div>
                   <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:timeslots.length?8:0}}>
-                    {timeslots.map(ts=>(<div key={ts} style={{display:"flex",alignItems:"center",gap:2}}><button onClick={()=>setSelTs(ts)} style={{border:`2px solid ${selTs===ts?"#7c3aed":"#e2e8f0"}`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",background:selTs===ts?"#f5f3ff":"#fff",color:selTs===ts?"#7c3aed":"#374151"}}>{ts}</button>{user.isAdmin&&<button onClick={()=>removeTimeslot(ts)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:11}}>✕</button>}</div>))}
+                    {timeslots.map(ts=>(
+                      <div key={ts} style={{display:"flex",alignItems:"center",gap:2}}>
+                        <button onClick={()=>setSelTs(ts)} style={{border:`2px solid ${selTs===ts?"#7c3aed":"#e2e8f0"}`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",background:selTs===ts?"#f5f3ff":"#fff",color:selTs===ts?"#7c3aed":"#374151"}}>{ts}</button>
+                        {user.isAdmin&&<button onClick={()=>removeTimeslot(ts)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:11}}>✕</button>}
+                      </div>
+                    ))}
                     {timeslots.length===0&&<span style={{fontSize:12,color:"#9ca3af"}}>관리자가 타임을 추가해야 합니다</span>}
                   </div>
-                  {user.isAdmin&&<div style={{display:"flex",gap:7}}><input value={newTs} onChange={e=>setNewTs(e.target.value)} placeholder="새 타임 (예: 11시 타임)" onKeyDown={e=>e.key==="Enter"&&addTimeslot()} style={{flex:1,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12,outline:"none"}}/><button onClick={addTimeslot} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>+ 추가</button></div>}
+                  {user.isAdmin&&(
+                    <div style={{display:"flex",gap:7}}>
+                      <input value={newTs} onChange={e=>setNewTs(e.target.value)} placeholder="새 타임 (예: 11시 타임)" onKeyDown={e=>e.key==="Enter"&&addTimeslot()} style={{flex:1,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12,outline:"none"}}/>
+                      <button onClick={addTimeslot} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>+ 추가</button>
+                    </div>
+                  )}
                 </div>
                 <div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid #e2e8f0"}}>
                   <div style={{fontWeight:700,fontSize:12,marginBottom:10}}>✏️ 내 실적 입력</div>
-                  {timeslots.length>0?(<><div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10,alignItems:"center"}}>{timeslots.map(ts=><button key={ts} onClick={()=>setMyTs(ts)} style={{border:`2px solid ${myTs===ts?"#2563eb":"#e2e8f0"}`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",background:myTs===ts?"#eff6ff":"#fff",color:myTs===ts?"#2563eb":"#374151"}}>{ts}</button>)}</div><div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,marginBottom:10}}>{METRICS.map(m=>(<div key={m.key}><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>{m.label} ({m.unit}){targets[m.key]&&<span style={{color:"#2563eb"}}> · 목표 {targets[m.key]}</span>}</label><input type="number" min="0" value={myR[m.key]} onChange={e=>setMyR(r=>({...r,[m.key]:e.target.value}))} placeholder="0" style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>))}</div><button onClick={submitReport} disabled={submitting||!myTs} style={{width:"100%",background:myTs?"#2563eb":"#e5e7eb",color:myTs?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,cursor:myTs?"pointer":"not-allowed"}}>{submitting?"저장 중…":"실적 제출"}</button>{submitMsg&&<p style={{fontSize:11,color:submitMsg.startsWith("✓")?"#10b981":"#ef4444",textAlign:"center",margin:"6px 0 0",fontWeight:600}}>{submitMsg}</p>}</>):<p style={{fontSize:12,color:"#9ca3af",textAlign:"center",padding:"10px 0"}}>
+                  {timeslots.length>0?(
+                    <>
+                      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10,alignItems:"center"}}>
+                        {timeslots.map(ts=>(
+                          <button key={ts} onClick={()=>setMyTs(ts)} style={{border:`2px solid ${myTs===ts?"#2563eb":"#e2e8f0"}`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",background:myTs===ts?"#eff6ff":"#fff",color:myTs===ts?"#2563eb":"#374151"}}>{ts}</button>
+                        ))}
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,marginBottom:10}}>
+                        {METRICS.map(m=>(
+                          <div key={m.key}>
+                            <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>
+                              {m.label} ({m.unit}){targets[m.key]&&<span style={{color:"#2563eb"}}> · 목표 {targets[m.key]}</span>}
+                            </label>
+                            <input type="number" min="0" value={myR[m.key]} onChange={e=>setMyR(r=>({...r,[m.key]:e.target.value}))} placeholder="0" style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={submitReport} disabled={submitting||!myTs} style={{width:"100%",background:myTs?"#2563eb":"#e5e7eb",color:myTs?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,cursor:myTs?"pointer":"not-allowed"}}>
+                        {submitting?"저장 중…":"실적 제출"}
+                      </button>
+                      {submitMsg&&<p style={{fontSize:11,color:submitMsg.startsWith("✓")?"#10b981":"#ef4444",textAlign:"center",margin:"6px 0 0",fontWeight:600}}>{submitMsg}</p>}
+                    </>
+                  ):(
+                    <p style={{fontSize:12,color:"#9ca3af",textAlign:"center",padding:"10px 0"}}>관리자가 타임을 먼저 추가해야 합니다</p>
+                  )}
+                </div>
+              </div>
+              <div>
+                {selTs&&(
+                  <div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid #e2e8f0",marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <span style={{fontWeight:700,fontSize:12}}>👥 {selTs} 팀 현황 ({tsReports.length}명)</span>
+                      <button onClick={()=>loadReports(selTs)} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"3px 8px",fontSize:11,cursor:"pointer"}}>🔄</button>
+                    </div>
+                    {loadingR
+                      ?<div style={{textAlign:"center",padding:"16px",color:"#9ca3af"}}>불러오는 중…</div>
+                      :tsReports.length===0
+                        ?<div style={{textAlign:"center",padding:"16px",color:"#9ca3af",background:"#f8fafc",borderRadius:8}}>아직 제출된 실적이 없습니다</div>
+                        :tsReports.map((r,i)=><ReportCard key={i} report={r} targets={targets} timeslot={selTs}/>)
+                    }
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {tab==="ranking"&&<RankingTab contracts={contracts} profiles={profiles} accounts={accounts}/>}
+          {tab==="admin"&&user.isAdmin&&(
+            <AdminTab
+              projectCategories={projectCategories} setProjectCategories={setProjectCategories}
+              targets={targets} setTargets={setTargets}
+              accounts={accounts} setAccounts={setAccounts}
+              webhookUrl={webhookUrl} setWebhookUrl={setWebhookUrl}
+              allData={allData} loadAllData={loadAllData} loadingAll={loadingAll}
+              contracts={contracts}
+              navOrder={navOrder} setNavOrder={setNavOrder}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function App(){
+  const[user,setUser]=useState(null);const[loading,setLoading]=useState(true);
+  useEffect(()=>{const u=ses.get();if(u)setUser(u);setLoading(false);},[]);
+  const handleLogout=()=>{ses.del();setUser(null);};
+  const handleLogin=u=>{ses.set(u);setUser(u);};
+  if(loading)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,sans-serif"}}><p style={{color:"#9ca3af"}}>불러오는 중…</p></div>;
+  if(!user)return <LoginScreen onLogin={handleLogin}/>;
+  return <MainApp user={user} onLogout={handleLogout}/>;
+}
