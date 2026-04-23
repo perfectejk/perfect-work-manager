@@ -205,6 +205,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
   const NAV=[
     {id:"list",label:"목록",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1.3" fill="white"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1.3" fill="white" opacity="0.4"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1.3" fill="white" opacity="0.4"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.3" fill="white"/></svg>},
     {id:"calendar",label:"캘린더",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="2" width="13" height="12" rx="2" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3"/><path d="M5 1v2M10 1v2M1 6h13" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3" strokeLinecap="round"/></svg>},
+    {id:"revenue",label:"매출현황 캘린더",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="2" width="13" height="12" rx="2" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3"/><path d="M5 1v2M10 1v2" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3" strokeLinecap="round"/><path d="M3 11l2.5-2.5 2 1.5L11 6.5" stroke="rgba(251,191,36,0.9)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="6.5" r="1" fill="rgba(251,191,36,0.9)"/></svg>},
     {id:"contracts",label:"계약관리",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="5.5" cy="4.5" r="2.5" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3"/><path d="M1.5 12c0-2.5 1.8-4 4-4s4 1.5 4 4" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3" strokeLinecap="round"/><path d="M11 7v5M9 9.5h4" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3" strokeLinecap="round"/></svg>,badge:myCount>0?myCount:null,badgeColor:"rgba(167,139,250,0.35)",badgeTextColor:"#c4b5fd"},
     {id:"report",label:"업무보고",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="9" width="3" height="5" rx="1" fill="rgba(255,255,255,0.4)"/><rect x="6" y="5.5" width="3" height="8.5" rx="1" fill="rgba(255,255,255,0.4)"/><rect x="11" y="2" width="3" height="12" rx="1" fill="rgba(255,255,255,0.4)"/></svg>},
     {id:"ranking",label:"매출 랭킹",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1l1.5 3.5L13 5l-3 3 .5 4L7.5 10 4 12l.5-4L1.5 5l4-.5L7.5 1z" stroke="rgba(255,255,255,0.4)" strokeWidth="1.2" strokeLinejoin="round"/></svg>},
@@ -310,6 +311,206 @@ function ContractForm({initial,onSubmit,onCancel}){
 function ReportCard({report,targets,timeslot}){
   const[open,setOpen]=useState(false);const tms=[{key:"calls",label:"콜수",unit:"콜"},{key:"materials",label:"자료수",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"}];const others=METRICS.filter(m=>!tms.find(t=>t.key===m.key));const avg=Math.round(tms.reduce((s,m)=>{const t=targets[m.key];return t?s+Math.min(100,(report[m.key]||0)/t*100):s;},0)/tms.length);const cc=avg>=100?"#10b981":avg>=70?"#f59e0b":"#2563eb";
   return(<div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",overflow:"hidden",marginBottom:7}}><div onClick={()=>setOpen(v=>!v)} style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}><div style={{width:40,height:40,borderRadius:"50%",background:cc+"18",border:`2px solid ${cc}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontWeight:800,fontSize:12,color:cc}}>{avg}%</span></div><div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>{report.name}</div><div style={{fontSize:11,color:"#9ca3af"}}>{timeslot}</div></div><div style={{display:"flex",gap:10}}>{tms.map(m=>{const v=report[m.key]||0,t=targets[m.key];const pp=t?Math.min(100,Math.round(v/t*100)):0;return(<div key={m.key} style={{textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af"}}>{m.label}</div><div style={{fontSize:12,fontWeight:800,color:pp>=100?"#10b981":pp>=70?"#f59e0b":"#2563eb"}}>{pp}%</div></div>);})}</div><span style={{fontSize:11,color:"#c4c4c4"}}>{open?"▲":"▼"}</span></div>{open&&<div style={{borderTop:"1px solid #f3f4f6",padding:"12px 14px"}}><div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>{tms.map(m=>{const v=report[m.key]||0,t=targets[m.key];const pp=t?Math.min(100,Math.round(v/t*100)):0;return(<div key={m.key}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:11,fontWeight:600}}>{m.label}</span><span style={{fontSize:11,fontWeight:700,color:pp>=100?"#10b981":pp>=70?"#f59e0b":"#2563eb"}}>{v}/{t}{m.unit} ({pp}%)</span></div><div style={{background:"#e5e7eb",borderRadius:99,height:6}}><div style={{width:`${pp}%`,background:pp>=100?"#10b981":pp>=70?"#f59e0b":"#2563eb",borderRadius:99,height:"100%"}}/></div></div>);})}</div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>{others.map(m=>(<div key={m.key} style={{background:"#f8fafc",borderRadius:7,padding:"6px",textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af"}}>{m.label}</div><div style={{fontSize:16,fontWeight:800}}>{report[m.key]||0}</div></div>))}</div></div>}</div>);
+}
+
+// ══════════ 매출현황 캘린더 ══════════
+function RevenueCalendarTab({contracts,user,profiles}){
+  const[calY,setCalY]=useState(new Date().getFullYear());
+  const[calM,setCalM]=useState(new Date().getMonth());
+  const[selectedDay,setSelectedDay]=useState(null);
+  const[selectedManager,setSelectedManager]=useState("all");
+
+  const visibleContracts=useMemo(()=>user.isAdmin?contracts:contracts.filter(c=>c.manager===user.name),[contracts,user]);
+  const managers=useMemo(()=>[...new Set(visibleContracts.map(c=>c.manager).filter(Boolean))].sort(),[visibleContracts]);
+  const filteredContracts=useMemo(()=>selectedManager==="all"?visibleContracts:visibleContracts.filter(c=>c.manager===selectedManager),[visibleContracts,selectedManager]);
+
+  const monthPrefix=`${calY}-${String(calM+1).padStart(2,"0")}`;
+  const contractsByDay=useMemo(()=>{
+    const map={};
+    filteredContracts.forEach(c=>{
+      if(!c.startDate||!c.startDate.startsWith(monthPrefix))return;
+      const d=parseInt(c.startDate.slice(8));
+      if(!map[d])map[d]=[];
+      map[d].push(c);
+    });
+    return map;
+  },[filteredContracts,monthPrefix]);
+
+  const monthTotal=useMemo(()=>{
+    let count=0,amount=0;
+    filteredContracts.forEach(c=>{
+      if(!c.startDate||!c.startDate.startsWith(monthPrefix))return;
+      count++;
+      amount+=parseAmount(c.total);
+    });
+    return {count,amount};
+  },[filteredContracts,monthPrefix]);
+
+  const managerMonthStats=useMemo(()=>{
+    const map={};
+    visibleContracts.forEach(c=>{
+      if(!c.startDate||!c.startDate.startsWith(monthPrefix)||!c.manager)return;
+      if(!map[c.manager])map[c.manager]={name:c.manager,count:0,amount:0};
+      map[c.manager].count++;
+      map[c.manager].amount+=parseAmount(c.total);
+    });
+    return Object.values(map).sort((a,b)=>b.amount-a.amount);
+  },[visibleContracts,monthPrefix]);
+
+  const firstDay=new Date(calY,calM,1).getDay();
+  const dim=new Date(calY,calM+1,0).getDate();
+  const cells=[...Array(firstDay).fill(null),...Array.from({length:dim},(_,i)=>i+1)];
+  while(cells.length%7)cells.push(null);
+
+  const selDayContracts=useMemo(()=>selectedDay?filteredContracts.filter(c=>c.startDate===selectedDay).sort((a,b)=>parseAmount(b.total)-parseAmount(a.total)):[],[filteredContracts,selectedDay]);
+  const selDayTotal=selDayContracts.reduce((s,c)=>s+parseAmount(c.total),0);
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {/* 상단 요약 */}
+      <div style={{background:"linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%)",borderRadius:14,padding:"18px 22px",color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 8px 24px rgba(217,119,6,0.25)"}}>
+        <div>
+          <div style={{fontSize:11,opacity:0.85,fontWeight:600,marginBottom:2}}>💰 {calY}년 {calM+1}월 총 매출</div>
+          <div style={{fontSize:26,fontWeight:900,letterSpacing:-0.5}}>{fmtAmount(monthTotal.amount)}</div>
+          {selectedManager!=="all"&&<div style={{fontSize:11,opacity:0.9,fontWeight:600,marginTop:3}}>담당: {selectedManager}</div>}
+        </div>
+        <div style={{textAlign:"right",background:"rgba(255,255,255,0.18)",borderRadius:12,padding:"10px 16px",backdropFilter:"blur(8px)"}}>
+          <div style={{fontSize:11,opacity:0.9,fontWeight:600}}>계약 건수</div>
+          <div style={{fontSize:26,fontWeight:900}}>{monthTotal.count}<span style={{fontSize:14,fontWeight:700,marginLeft:2,opacity:0.85}}>건</span></div>
+        </div>
+      </div>
+
+      {/* 캘린더 */}
+      <div style={{background:"#fff",borderRadius:14,padding:18,border:"1px solid #e2e8f0"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <button onClick={()=>{let m=calM-1,y=calY;if(m<0){m=11;y--;}setCalM(m);setCalY(y);setSelectedDay(null);}} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:16}}>‹</button>
+          <div style={{fontWeight:800,fontSize:16,color:"#0f172a"}}>{calY}년 {calM+1}월</div>
+          <button onClick={()=>{let m=calM+1,y=calY;if(m>11){m=0;y++;}setCalM(m);setCalY(y);setSelectedDay(null);}} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:16}}>›</button>
+        </div>
+
+        {user.isAdmin&&managers.length>0&&(
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,justifyContent:"center"}}>
+            <button onClick={()=>setSelectedManager("all")} style={{border:`1.5px solid ${selectedManager==="all"?"#2563eb":"#e2e8f0"}`,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:selectedManager==="all"?"#eff6ff":"#fff",color:selectedManager==="all"?"#2563eb":"#6b7280"}}>전체</button>
+            {managers.map(m=>(
+              <button key={m} onClick={()=>setSelectedManager(m)} style={{border:`1.5px solid ${selectedManager===m?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:selectedManager===m?"#f5f3ff":"#fff",color:selectedManager===m?"#7c3aed":"#6b7280"}}>{m}</button>
+            ))}
+          </div>
+        )}
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:4}}>
+          {DAYS_KR.map((d,i)=>(<div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:i===0?"#ef4444":i===6?"#2563eb":"#9ca3af",padding:"5px 0"}}>{d}</div>))}
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+          {cells.map((day,i)=>{
+            if(!day)return <div key={i}/>;
+            const ds=`${monthPrefix}-${String(day).padStart(2,"0")}`;
+            const isToday=ds===todayStr;
+            const isSel=selectedDay===ds;
+            const dow=(firstDay+day-1)%7;
+            const dayContracts=contractsByDay[day]||[];
+            const dayTotal=dayContracts.reduce((s,c)=>s+parseAmount(c.total),0);
+            const hasContracts=dayContracts.length>0;
+
+            return(
+              <div key={i} onClick={()=>hasContracts&&setSelectedDay(isSel?null:ds)}
+                style={{
+                  minHeight:98,
+                  background:isSel?"linear-gradient(135deg,#fef9c3,#fef08a)":isToday?"#fef3c7":hasContracts?"#fffbeb":"#fff",
+                  border:`1.5px solid ${isSel?"#eab308":isToday?"#fbbf24":hasContracts?"#fde68a":"#e2e8f0"}`,
+                  borderRadius:9,
+                  padding:"6px 5px",
+                  cursor:hasContracts?"pointer":"default",
+                  overflow:"hidden",
+                  boxSizing:"border-box",
+                  transition:"all 0.15s",
+                  boxShadow:hasContracts?"0 2px 6px rgba(217,119,6,0.08)":"none"
+                }}>
+                <div style={{fontSize:11,fontWeight:isToday?800:500,color:isToday?"#b45309":dow===0?"#ef4444":dow===6?"#3b82f6":"#374151",marginBottom:3,textAlign:"center"}}>
+                  {isToday?<span style={{background:"#f59e0b",color:"#fff",borderRadius:"50%",padding:"1px 6px"}}>{day}</span>:day}
+                </div>
+                {hasContracts&&(
+                  <>
+                    <div style={{fontSize:10,fontWeight:800,color:"#b45309",textAlign:"center",marginBottom:4,background:"rgba(255,255,255,0.65)",borderRadius:5,padding:"1px 2px"}}>
+                      💰 {fmtAmount(dayTotal)}
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                      {dayContracts.slice(0,2).map((c,ci)=>(
+                        <div key={ci} title={`${c.name} (${c.manager||"미지정"}) · ${c.total||"-"}`}
+                          style={{fontSize:9,background:"#fff",color:"#92400e",borderRadius:4,padding:"2px 4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,border:"1px solid #fde68a"}}>
+                          {c.manager?<b style={{color:"#7c3aed"}}>{c.manager}·</b>:""}{c.name}
+                        </div>
+                      ))}
+                      {dayContracts.length>2&&<div style={{fontSize:9,color:"#b45309",textAlign:"center",fontWeight:700,marginTop:1}}>+{dayContracts.length-2}건</div>}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 선택된 날짜 상세 */}
+      {selectedDay&&selDayContracts.length>0&&(
+        <div style={{background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",overflow:"hidden"}}>
+          <div style={{padding:"13px 20px",borderBottom:"1px solid #fde68a",background:"linear-gradient(90deg,#fffbeb,#fef3c7)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
+              <span style={{fontWeight:800,fontSize:14,color:"#92400e"}}>📅 {new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span>
+              <span style={{fontSize:12,color:"#b45309",fontWeight:700,background:"#fef3c7",borderRadius:99,padding:"3px 10px",border:"1px solid #fbbf24"}}>{selDayContracts.length}건 · {fmtAmount(selDayTotal)}</span>
+            </div>
+            <button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:16}}>✕</button>
+          </div>
+          <div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>
+            {selDayContracts.map(c=>(
+              <div key={c.id} style={{background:"#f8fafc",borderRadius:11,padding:"12px 14px",border:"1px solid #e2e8f0"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                  {c.manager?<Avatar name={c.manager} img={profiles[c.manager]} size={34} border="2px solid #fff"/>:<div style={{width:34,height:34,borderRadius:"50%",background:"#e5e7eb",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#9ca3af"}}>?</div>}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:13,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+                    <div style={{fontSize:11,color:c.manager?"#7c3aed":"#9ca3af",fontWeight:600,marginTop:1}}>{c.manager?`👤 ${c.manager}`:"담당자 미지정"}</div>
+                  </div>
+                  {c.total&&<div style={{background:"linear-gradient(135deg,#fbbf24,#f59e0b)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:800,whiteSpace:"nowrap"}}>{c.total}</div>}
+                </div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                  {c.phone&&<Badge label={`📞 ${c.phone}`} color="#6b7280" bg="#f3f4f6"/>}
+                  {c.endDate&&<Badge label={`종료: ${c.endDate}`} color="#2563eb" bg="#eff6ff"/>}
+                  {c.link&&<a href={c.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#2563eb",textDecoration:"none",background:"#eff6ff",borderRadius:6,padding:"2px 7px",fontWeight:600}}>🔗 링크</a>}
+                </div>
+                {c.notes&&<div style={{marginTop:6,fontSize:11,color:"#6b7280",background:"#fff",borderRadius:6,padding:"5px 8px",borderLeft:"3px solid #fde68a"}}>📌 {c.notes}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 이달 담당자별 매출 요약 (관리자 & 전체 필터 시) */}
+      {user.isAdmin&&selectedManager==="all"&&managerMonthStats.length>0&&(
+        <div style={{background:"#fff",borderRadius:12,padding:"14px 18px",border:"1px solid #e2e8f0"}}>
+          <div style={{fontWeight:700,fontSize:13,color:"#111827",marginBottom:10}}>📊 이달 담당자별 매출</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+            {managerMonthStats.map((s,i)=>(
+              <div key={s.name} style={{display:"flex",alignItems:"center",gap:10,background:i===0?"#fffbeb":"#f8fafc",borderRadius:10,padding:"9px 12px",border:i===0?"1px solid #fde68a":"1px solid #e2e8f0"}}>
+                <div style={{fontSize:16}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}`}</div>
+                <Avatar name={s.name} img={profiles[s.name]} size={28} border="2px solid #fff"/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+                  <div style={{fontSize:11,color:"#b45309",fontWeight:700}}>{fmtAmount(s.amount)} <span style={{color:"#9ca3af",fontWeight:500}}>({s.count}건)</span></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {filteredContracts.filter(c=>c.startDate?.startsWith(monthPrefix)).length===0&&(
+        <div style={{background:"#fff",borderRadius:12,padding:"40px 20px",border:"1px solid #e2e8f0",textAlign:"center"}}>
+          <div style={{fontSize:32,marginBottom:8}}>📭</div>
+          <div style={{fontSize:13,color:"#9ca3af"}}>이 달 계약이 없습니다</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function RankingTab({contracts,profiles,accounts}){
@@ -530,7 +731,7 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
             <div style={{fontWeight:700,fontSize:13,marginBottom:6}}>📌 메뉴 순서 설정</div>
             <p style={{fontSize:11,color:"#9ca3af",marginBottom:12}}>▲▼ 버튼으로 순서를 바꾸세요</p>
             {(()=>{
-              const NAV_LABELS={list:"📋 목록",calendar:"📅 캘린더",contracts:"🤝 계약관리",report:"📊 업무보고",ranking:"🏆 매출 랭킹"};
+              const NAV_LABELS={list:"📋 목록",calendar:"📅 캘린더",revenue:"💰 매출현황 캘린더",contracts:"🤝 계약관리",report:"📊 업무보고",ranking:"🏆 매출 랭킹"};
               const move=async(idx,dir)=>{
                 const arr=[...navOrder];const swap=idx+dir;
                 if(swap<0||swap>=arr.length)return;
@@ -539,7 +740,7 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
               };
               return navOrder.map((id,i)=>(
                 <div key={id} style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",borderRadius:9,padding:"9px 12px",marginBottom:5,border:"1px solid #e2e8f0"}}>
-                  <span style={{fontSize:12,fontWeight:600,flex:1,color:"#374151"}}>{NAV_LABELS[id]}</span>
+                  <span style={{fontSize:12,fontWeight:600,flex:1,color:"#374151"}}>{NAV_LABELS[id]||id}</span>
                   <button onClick={()=>move(i,-1)} disabled={i===0} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 7px",cursor:i===0?"not-allowed":"pointer",color:i===0?"#d1d5db":"#374151",fontSize:11}}>▲</button>
                   <button onClick={()=>move(i,1)} disabled={i===navOrder.length-1} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 7px",cursor:i===navOrder.length-1?"not-allowed":"pointer",color:i===navOrder.length-1?"#d1d5db":"#374151",fontSize:11}}>▼</button>
                 </div>
@@ -554,7 +755,7 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
 
 function MainApp({user,onLogout}){
   const[tasks,setTasks]=useState([]);const[loadingTasks,setLoadingTasks]=useState(true);
-  const[navOrder,setNavOrder]=useState(["list","calendar","contracts","report","ranking"]);
+  const[navOrder,setNavOrder]=useState(["list","calendar","revenue","contracts","report","ranking"]);
   const[editTaskData,setEditTaskData]=useState(null);const[form,setForm]=useState(EF(user.isAdmin));const[showForm,setShowForm]=useState(false);
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
@@ -596,7 +797,8 @@ function MainApp({user,onLogout}){
   const updateProfile=async(name,img)=>{const p=await st.get("profiles:all")||{};p[name]=img;await st.set("profiles:all",p);setProfiles({...p});};
   const loadProjectCategories=async()=>{const p=await st.get("config:projects")||[];setProjectCategories(p);};
   const loadAccounts=async()=>{const a=await st.get("accounts:all")||[];setAccounts(a);};
-  const loadSettings=async()=>{const t=await st.get("wt:targets");if(t)setTargets(t);const w=await st.get("wt:webhook");if(w)setWebhookUrl(w);const no=await st.get("config:navOrder");if(no)setNavOrder(no);const ts=await st.get("wt:ts:fixed")||[];setTimeslots(ts);if(ts.length>0){setSelTs(ts[ts.length-1]);setMyTs(ts[ts.length-1]);}};
+  const loadSettings=async()=>{const t=await st.get("wt:targets");if(t)setTargets(t);const w=await st.get("wt:webhook");if(w)setWebhookUrl(w);const no=await st.get("config:navOrder");if(no){// 기존 저장값에 revenue가 없으면 자동 추가
+    if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no];if(idx>=0)newArr.splice(idx+1,0,"revenue");else newArr.push("revenue");await st.set("config:navOrder",newArr);setNavOrder(newArr);}else setNavOrder(no);}const ts=await st.get("wt:ts:fixed")||[];setTimeslots(ts);if(ts.length>0){setSelTs(ts[ts.length-1]);setMyTs(ts[ts.length-1]);}};
   const addTimeslot=async()=>{const ts=newTs.trim();if(!ts)return;const list=await st.get("wt:ts:fixed")||[];if(!list.includes(ts)){list.push(ts);await st.set("wt:ts:fixed",list);setTimeslots(list);}setSelTs(ts);setMyTs(ts);setNewTs("");};
   const removeTimeslot=async ts=>{const list=(await st.get("wt:ts:fixed")||[]).filter(t=>t!==ts);await st.set("wt:ts:fixed",list);setTimeslots(list);if(selTs===ts)setSelTs(list[list.length-1]||"");if(myTs===ts)setMyTs(list[list.length-1]||"");};
   const loadReports=async ts=>{setLoadingR(true);const keys=await st.list(`wr:${todayStr}:${san(ts)}:`);const rows=[];for(const k of keys){const r=await st.get(k);if(r)rows.push(r);}setTsReports(rows);setLoadingR(false);};
@@ -617,7 +819,8 @@ function MainApp({user,onLogout}){
   const totalPages=useMemo(()=>Math.ceil(filteredContracts.length/10),[filteredContracts]);
   const pagedContracts=useMemo(()=>filteredContracts.slice((contractPage-1)*10,contractPage*10),[filteredContracts,contractPage]);
   const calTasksExp=useMemo(()=>expandForMonth(filtered,calY,calM),[filtered,calY,calM]);
-  const calCE=useMemo(()=>filterCE(allCE.filter(e=>e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`))),[allCE,calY,calM,filterCE]);
+  // 📅 캘린더: 온보딩 제외 (관리전화 + 리포트만)
+  const calCE=useMemo(()=>filterCE(allCE.filter(e=>e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`)&&e.type!=="온보딩")),[allCE,calY,calM,filterCE]);
   const tasksByDay=useMemo(()=>{const m={};if(calFilter!=="contracts")calTasksExp.forEach(t=>{if(t.due){const d=parseInt(t.due.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].t.push(t);}});if(calFilter!=="tasks")calCE.forEach(e=>{const d=parseInt(e.date.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].e.push(e);});return m;},[calTasksExp,calCE,calFilter]);
   const selDayTasks=useMemo(()=>calTasksExp.filter(t=>t.due===selectedDay),[calTasksExp,selectedDay]);
   const selDayCE=useMemo(()=>calCE.filter(e=>e.date===selectedDay),[calCE,selectedDay]);
@@ -635,7 +838,7 @@ function MainApp({user,onLogout}){
       <div style={{flex:1,minWidth:0,overflowY:"auto"}}>
         <div style={{background:"#fff",padding:"12px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #e2e8f0",position:"sticky",top:0,zIndex:50}}>
           <div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>
-            {tab==="list"&&"📋 작업 목록"}{tab==="calendar"&&"📅 캘린더"}{tab==="contracts"&&"🤝 계약 관리"}{tab==="report"&&"📊 업무 보고"}{tab==="ranking"&&"🏆 매출 랭킹"}{tab==="admin"&&"🔒 관리자 설정"}
+            {tab==="list"&&"📋 작업 목록"}{tab==="calendar"&&"📅 캘린더"}{tab==="revenue"&&"💰 매출현황 캘린더"}{tab==="contracts"&&"🤝 계약 관리"}{tab==="report"&&"📊 업무 보고"}{tab==="ranking"&&"🏆 매출 랭킹"}{tab==="admin"&&"🔒 관리자 설정"}
           </div>
           <div style={{display:"flex",gap:8}}>
             {tab==="list"&&<button onClick={()=>{setEditTaskData(null);setForm(EF(user.isAdmin));setShowForm(v=>!v);}} style={{background:"#2563eb",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ 새 작업</button>}
@@ -643,7 +846,7 @@ function MainApp({user,onLogout}){
           </div>
         </div>
         <div style={{padding:"18px 22px"}}>
-          {tab!=="admin"&&tab!=="ranking"&&(
+          {tab!=="admin"&&tab!=="ranking"&&tab!=="revenue"&&(
             <div style={{background:"#fff",borderRadius:12,padding:"12px 18px",marginBottom:16,border:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:18}}>
               <div style={{flex:1}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:11,color:"#64748b"}}>전체 작업 진행률</span><span style={{fontSize:11,fontWeight:700,color:"#2563eb"}}>{done}/{tasks.length} 완료 ({pct}%)</span></div>
@@ -773,6 +976,8 @@ function MainApp({user,onLogout}){
               )}
             </div>
           )}
+          {/* ══ REVENUE CALENDAR ══ */}
+          {tab==="revenue"&&<RevenueCalendarTab contracts={contracts} user={user} profiles={profiles}/>}
           {/* ══ CONTRACTS ══ */}
           {tab==="contracts"&&(
             <div>
@@ -828,40 +1033,4 @@ function MainApp({user,onLogout}){
                 </div>
                 <div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid #e2e8f0"}}>
                   <div style={{fontWeight:700,fontSize:12,marginBottom:10}}>✏️ 내 실적 입력</div>
-                  {timeslots.length>0?(<><div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10,alignItems:"center"}}>{timeslots.map(ts=><button key={ts} onClick={()=>setMyTs(ts)} style={{border:`2px solid ${myTs===ts?"#2563eb":"#e2e8f0"}`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",background:myTs===ts?"#eff6ff":"#fff",color:myTs===ts?"#2563eb":"#374151"}}>{ts}</button>)}</div><div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,marginBottom:10}}>{METRICS.map(m=>(<div key={m.key}><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>{m.label} ({m.unit}){targets[m.key]&&<span style={{color:"#2563eb"}}> · 목표 {targets[m.key]}</span>}</label><input type="number" min="0" value={myR[m.key]} onChange={e=>setMyR(r=>({...r,[m.key]:e.target.value}))} placeholder="0" style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>))}</div><button onClick={submitReport} disabled={submitting||!myTs} style={{width:"100%",background:myTs?"#2563eb":"#e5e7eb",color:myTs?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,cursor:myTs?"pointer":"not-allowed"}}>{submitting?"저장 중…":"실적 제출"}</button>{submitMsg&&<p style={{fontSize:11,color:submitMsg.startsWith("✓")?"#10b981":"#ef4444",textAlign:"center",margin:"6px 0 0",fontWeight:600}}>{submitMsg}</p>}</>):<p style={{fontSize:12,color:"#9ca3af",textAlign:"center",padding:"10px 0"}}>관리자가 타임을 먼저 추가해야 합니다</p>}
-                </div>
-              </div>
-              <div>
-                {selTs&&<div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid #e2e8f0",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontWeight:700,fontSize:12}}>👥 {selTs} 팀 현황 ({tsReports.length}명)</span><button onClick={()=>loadReports(selTs)} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"3px 8px",fontSize:11,cursor:"pointer"}}>🔄</button></div>{loadingR?<div style={{textAlign:"center",padding:"16px",color:"#9ca3af"}}>불러오는 중…</div>:tsReports.length===0?<div style={{textAlign:"center",padding:"16px",color:"#9ca3af",background:"#f8fafc",borderRadius:8}}>아직 제출된 실적이 없습니다</div>:tsReports.map((r,i)=><ReportCard key={i} report={r} targets={targets} timeslot={selTs}/>)}</div>}
-              </div>
-            </div>
-          )}
-          {/* ══ RANKING ══ */}
-          {tab==="ranking"&&<RankingTab contracts={contracts} profiles={profiles} accounts={accounts}/>}
-          {/* ══ ADMIN ══ */}
-          {tab==="admin"&&user.isAdmin&&(
-            <AdminTab
-              projectCategories={projectCategories} setProjectCategories={setProjectCategories}
-              targets={targets} setTargets={setTargets}
-              accounts={accounts} setAccounts={setAccounts}
-              webhookUrl={webhookUrl} setWebhookUrl={setWebhookUrl}
-              allData={allData} loadAllData={loadAllData} loadingAll={loadingAll}
-              contracts={contracts}
-              navOrder={navOrder} setNavOrder={setNavOrder}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function App(){
-  const[user,setUser]=useState(null);const[loading,setLoading]=useState(true);
-  useEffect(()=>{const u=ses.get();if(u)setUser(u);setLoading(false);},[]);
-  const handleLogout=()=>{ses.del();setUser(null);};
-  const handleLogin=u=>{ses.set(u);setUser(u);};
-  if(loading)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,sans-serif"}}><p style={{color:"#9ca3af"}}>불러오는 중…</p></div>;
-  if(!user)return <LoginScreen onLogin={handleLogin}/>;
-  return <MainApp user={user} onLogout={handleLogout}/>;
-}
+                  {timeslots.length>0?(<><div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10,alignItems:"center"}}>{timeslots.map(ts=><button key={ts} onClick={()=>setMyTs(ts)} style={{border:`2px solid ${myTs===ts?"#2563eb":"#e2e8f0"}`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",background:myTs===ts?"#eff6ff":"#fff",color:myTs===ts?"#2563eb":"#374151"}}>{ts}</button>)}</div><div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,marginBottom:10}}>{METRICS.map(m=>(<div key={m.key}><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>{m.label} ({m.unit}){targets[m.key]&&<span style={{color:"#2563eb"}}> · 목표 {targets[m.key]}</span>}</label><input type="number" min="0" value={myR[m.key]} onChange={e=>setMyR(r=>({...r,[m.key]:e.target.value}))} placeholder="0" style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",boxSizing:"border-box"}}/></div>))}</div><button onClick={submitReport} disabled={submitting||!myTs} style={{width:"100%",background:myTs?"#2563eb":"#e5e7eb",color:myTs?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,cursor:myTs?"pointer":"not-allowed"}}>{submitting?"저장 중…":"실적 제출"}</button>{submitMsg&&<p style={{fontSize:11,color:submitMsg.startsWith("✓")?"#10b981":"#ef4444",textAlign:"center",margin:"6px 0 0",fontWeight:600}}>{submitMsg}</p>}</>):<p style={{fontSize:12,color:"#9ca3af",textAlign:"center",padding:"10px 0"}}>
