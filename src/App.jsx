@@ -3,6 +3,8 @@ import*as XLSX from"xlsx";
 import{doc,getDoc,setDoc,deleteDoc,getDocs,collection}from'firebase/firestore';
 import{db}from'./firebase';
 const METRICS=[{key:"calls",label:"콜수",unit:"콜"},{key:"callTime",label:"콜시간",unit:"분"},{key:"materials",label:"자료수",unit:"개"},{key:"toss",label:"토스",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"},{key:"positive",label:"긍정백톡",unit:"개"},{key:"negative",label:"부정백톡",unit:"개"}];
+// 최종마감 전용 추가 항목
+const FINAL_METRICS=[{key:"dailySales",label:"일매출",unit:"원"},{key:"connRate",label:"도입률-연결",unit:""},{key:"rate30s",label:"도입률-30초이상",unit:""}];
 const DEF_TARGETS={calls:200,materials:25,retarget:4};
 const ADMIN_PW="admin123";
 const todayStr=new Date().toISOString().slice(0,10);
@@ -33,6 +35,106 @@ const repeatLabel=t=>{if(!t.repeat||t.repeat==="none")return null;if(t.repeat===
 const isActiveOnDate=(t,ds)=>{if(!t.due||t.due>ds)return false;const dow=new Date(ds+"T00:00:00").getDay();if(!t.repeat||t.repeat==="none")return t.due===ds;if(t.repeat==="weekly")return new Date(t.due+"T00:00:00").getDay()===dow;if(t.repeat==="monthly")return parseInt(t.due.slice(8))===new Date(ds+"T00:00:00").getDate();if(t.repeat==="weekdays")return dow>=1&&dow<=5;if(t.repeat==="custom")return(t.repeatDays||[]).includes(dow);return false;};
 const getWeekDays=()=>{const now=new Date();const dow=now.getDay();const mon=new Date(now);mon.setDate(now.getDate()-(dow===0?6:dow-1));return Array.from({length:5},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d.toISOString().slice(0,10);});};
 const expandForMonth=(tasks,y,m)=>{const dim=new Date(y,m+1,0).getDate(),res=[];const mp=`${y}-${String(m+1).padStart(2,"0")}`;tasks.forEach(t=>{if(!t.repeat||t.repeat==="none"){if(!t.due||t.due.startsWith(mp))res.push(t);return;}const sd=t.due;if(t.repeat==="weekly"){const dow=new Date(t.due+"T00:00:00").getDay();for(let d=1;d<=dim;d++){const date=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;if(date<sd)continue;if(new Date(y,m,d).getDay()===dow)res.push({...t,id:t.id+"-w"+d,due:date,_ir:true});}}else if(t.repeat==="monthly"){const day=parseInt(t.due.slice(8));if(day<=dim){const date=`${y}-${String(m+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;if(date>=sd)res.push({...t,due:date,_ir:true});}}else if(t.repeat==="weekdays"){for(let d=1;d<=dim;d++){const date=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;if(date<sd)continue;const dow=new Date(y,m,d).getDay();if(dow>=1&&dow<=5)res.push({...t,id:t.id+"-wd"+d,due:date,_ir:true});}}else if(t.repeat==="custom"){const days=t.repeatDays||[];for(let d=1;d<=dim;d++){const date=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;if(date<sd)continue;if(days.includes(new Date(y,m,d).getDay()))res.push({...t,id:t.id+"-c"+d,due:date,_ir:true});}}});return res;};
+
+// ── 주차 계산 유틸 (월~금 기준, 월별 캘린더 기준) ──
+const getWeekOfMonth=(dateStr)=>{
+  const d=new Date(dateStr+"T00:00:00");
+  const y=d.getFullYear(),m=d.getMonth();
+  const firstDay=new Date(y,m,1).getDay(); // 0=일
+  const firstMon=firstDay===0?1:8-firstDay; // 첫 번째 월요일 날짜
+  const day=d.getDate();
+  if(day<firstMon)return 1;
+  return Math.floor((day-firstMon)/7)+2;
+};
+const getWeekLabel=(dateStr)=>{
+  const d=new Date(dateStr+"T00:00:00");
+  return`${d.getFullYear()}년 ${d.getMonth()+1}월 ${getWeekOfMonth(dateStr)}주차`;
+};
+
+// ── 주차별 엑셀 다운로드 (최종마감 데이터 기반) ──
+const downloadWeeklyExcel=(allData)=>{
+  // 최종마감 데이터만 필터
+  const finalRows=[];
+  Object.entries(allData).forEach(([date,tsByDate])=>{
+    Object.entries(tsByDate).forEach(([ts,reps])=>{
+      if(ts==="최종마감"){
+        reps.forEach(r=>{
+          finalRows.push({...r,date});
+        });
+      }
+    });
+  });
+  if(finalRows.length===0){alert("최종마감 데이터가 없습니다.");return;}
+
+  // 주차별 그룹핑
+  const weekMap={};
+  finalRows.forEach(r=>{
+    const wk=getWeekLabel(r.date);
+    if(!weekMap[wk])weekMap[wk]={};
+    if(!weekMap[wk][r.name])weekMap[wk][r.name]=[];
+    weekMap[wk][r.name].push(r);
+  });
+
+  const wb=XLSX.utils.book_new();
+  const allMetrics=[...METRICS,...FINAL_METRICS];
+  const metricKeys=allMetrics.map(m=>m.key);
+  const metricLabels=allMetrics.map(m=>m.label+(m.unit?`(${m.unit})`:""));
+
+  // ── 시트1: 주차별 사원별 업무량 총합 ──
+  const sumRows=[["주차","사원",...metricLabels]];
+  const sortedWeeks=Object.keys(weekMap).sort();
+  sortedWeeks.forEach(wk=>{
+    const names=Object.keys(weekMap[wk]).sort();
+    names.forEach(name=>{
+      const records=weekMap[wk][name];
+      const totals=metricKeys.map(k=>records.reduce((s,r)=>s+(Number(r[k])||0),0));
+      sumRows.push([wk,name,...totals]);
+    });
+    // 주차 합계 행
+    const allNames=Object.keys(weekMap[wk]);
+    const wkTotals=metricKeys.map(k=>allNames.reduce((s,name)=>s+weekMap[wk][name].reduce((ss,r)=>ss+(Number(r[k])||0),0),0));
+    sumRows.push([wk,"【주차 합계】",...wkTotals]);
+    sumRows.push([]); // 빈 줄
+  });
+  const ws1=XLSX.utils.aoa_to_sheet(sumRows);
+  XLSX.utils.book_append_sheet(wb,ws1,"주차별_사원별_총합");
+
+  // ── 시트2: 주차별 사원별 업무량 평균 ──
+  const avgRows=[["주차","사원",...metricLabels,"보고일수"]];
+  sortedWeeks.forEach(wk=>{
+    const names=Object.keys(weekMap[wk]).sort();
+    names.forEach(name=>{
+      const records=weekMap[wk][name];
+      const cnt=records.length;
+      const avgs=metricKeys.map(k=>{
+        const tot=records.reduce((s,r)=>s+(Number(r[k])||0),0);
+        return cnt>0?Math.round((tot/cnt)*100)/100:0;
+      });
+      avgRows.push([wk,name,...avgs,cnt]);
+    });
+    avgRows.push([]);
+  });
+  const ws2=XLSX.utils.aoa_to_sheet(avgRows);
+  XLSX.utils.book_append_sheet(wb,ws2,"주차별_사원별_평균");
+
+  // ── 시트3: 전체 사원 주차별 평균 ──
+  const teamRows=[["주차",...metricLabels,"참여인원"]];
+  sortedWeeks.forEach(wk=>{
+    const allRecords=[];
+    Object.values(weekMap[wk]).forEach(recs=>allRecords.push(...recs));
+    const cnt=allRecords.length;
+    const avgs=metricKeys.map(k=>{
+      const tot=allRecords.reduce((s,r)=>s+(Number(r[k])||0),0);
+      return cnt>0?Math.round((tot/cnt)*100)/100:0;
+    });
+    const memberCount=Object.keys(weekMap[wk]).length;
+    teamRows.push([wk,...avgs,memberCount]);
+  });
+  const ws3=XLSX.utils.aoa_to_sheet(teamRows);
+  XLSX.utils.book_append_sheet(wb,ws3,"전체_주차별_평균");
+
+  XLSX.writeFile(wb,"주차별_업무량_분석.xlsx");
+};
 
 const ACOLORS=["#2563eb","#7c3aed","#db2777","#ea580c","#16a34a","#0891b2"];
 function Avatar({name,img,size=32,onClick,border}){
@@ -310,7 +412,32 @@ function ContractForm({initial,onSubmit,onCancel}){
 
 function ReportCard({report,targets,timeslot}){
   const[open,setOpen]=useState(false);const tms=[{key:"calls",label:"콜수",unit:"콜"},{key:"materials",label:"자료수",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"}];const others=METRICS.filter(m=>!tms.find(t=>t.key===m.key));const avg=Math.round(tms.reduce((s,m)=>{const t=targets[m.key];return t?s+Math.min(100,(report[m.key]||0)/t*100):s;},0)/tms.length);const cc=avg>=100?"#10b981":avg>=70?"#f59e0b":"#2563eb";
-  return(<div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",overflow:"hidden",marginBottom:7}}><div onClick={()=>setOpen(v=>!v)} style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}><div style={{width:40,height:40,borderRadius:"50%",background:cc+"18",border:`2px solid ${cc}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontWeight:800,fontSize:12,color:cc}}>{avg}%</span></div><div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>{report.name}</div><div style={{fontSize:11,color:"#9ca3af"}}>{timeslot}</div></div><div style={{display:"flex",gap:10}}>{tms.map(m=>{const v=report[m.key]||0,t=targets[m.key];const pp=t?Math.min(100,Math.round(v/t*100)):0;return(<div key={m.key} style={{textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af"}}>{m.label}</div><div style={{fontSize:12,fontWeight:800,color:pp>=100?"#10b981":pp>=70?"#f59e0b":"#2563eb"}}>{pp}%</div></div>);})}</div><span style={{fontSize:11,color:"#c4c4c4"}}>{open?"▲":"▼"}</span></div>{open&&<div style={{borderTop:"1px solid #f3f4f6",padding:"12px 14px"}}><div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>{tms.map(m=>{const v=report[m.key]||0,t=targets[m.key];const pp=t?Math.min(100,Math.round(v/t*100)):0;return(<div key={m.key}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:11,fontWeight:600}}>{m.label}</span><span style={{fontSize:11,fontWeight:700,color:pp>=100?"#10b981":pp>=70?"#f59e0b":"#2563eb"}}>{v}/{t}{m.unit} ({pp}%)</span></div><div style={{background:"#e5e7eb",borderRadius:99,height:6}}><div style={{width:`${pp}%`,background:pp>=100?"#10b981":pp>=70?"#f59e0b":"#2563eb",borderRadius:99,height:"100%"}}/></div></div>);})}</div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>{others.map(m=>(<div key={m.key} style={{background:"#f8fafc",borderRadius:7,padding:"6px",textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af"}}>{m.label}</div><div style={{fontSize:16,fontWeight:800}}>{report[m.key]||0}</div></div>))}</div></div>}</div>);
+  const isFinal=timeslot==="최종마감";
+  return(<div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",overflow:"hidden",marginBottom:7}}><div onClick={()=>setOpen(v=>!v)} style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}><div style={{width:40,height:40,borderRadius:"50%",background:cc+"18",border:`2px solid ${cc}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontWeight:800,fontSize:12,color:cc}}>{avg}%</span></div><div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>{report.name}</div><div style={{fontSize:11,color:"#9ca3af"}}>{timeslot}</div></div><div style={{display:"flex",gap:10}}>{tms.map(m=>{const v=report[m.key]||0,t=targets[m.key];const pp=t?Math.min(100,Math.round(v/t*100)):0;return(<div key={m.key} style={{textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af"}}>{m.label}</div><div style={{fontSize:12,fontWeight:800,color:pp>=100?"#10b981":pp>=70?"#f59e0b":"#2563eb"}}>{pp}%</div></div>);})}</div><span style={{fontSize:11,color:"#c4c4c4"}}>{open?"▲":"▼"}</span></div>
+    {open&&<div style={{borderTop:"1px solid #f3f4f6",padding:"12px 14px"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>{tms.map(m=>{const v=report[m.key]||0,t=targets[m.key];const pp=t?Math.min(100,Math.round(v/t*100)):0;return(<div key={m.key}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:11,fontWeight:600}}>{m.label}</span><span style={{fontSize:11,fontWeight:700,color:pp>=100?"#10b981":pp>=70?"#f59e0b":"#2563eb"}}>{v}/{t}{m.unit} ({pp}%)</span></div><div style={{background:"#e5e7eb",borderRadius:99,height:6}}><div style={{width:`${pp}%`,background:pp>=100?"#10b981":pp>=70?"#f59e0b":"#2563eb",borderRadius:99,height:"100%"}}/></div></div>);})}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:isFinal?10:0}}>{others.map(m=>(<div key={m.key} style={{background:"#f8fafc",borderRadius:7,padding:"6px",textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af"}}>{m.label}</div><div style={{fontSize:16,fontWeight:800}}>{report[m.key]||0}</div></div>))}</div>
+      {isFinal&&(
+        <div style={{background:"#f5f3ff",borderRadius:10,padding:"10px 12px",border:"1px solid #e9d5ff"}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#7c3aed",marginBottom:8}}>📊 최종마감 추가 항목</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            <div style={{background:"#fff",borderRadius:8,padding:"8px",textAlign:"center",border:"1px solid #e9d5ff"}}>
+              <div style={{fontSize:10,color:"#9ca3af",marginBottom:2}}>일매출</div>
+              <div style={{fontSize:14,fontWeight:800,color:"#7c3aed"}}>{report.dailySales?Number(report.dailySales).toLocaleString()+"원":"0원"}</div>
+            </div>
+            <div style={{background:"#fff",borderRadius:8,padding:"8px",textAlign:"center",border:"1px solid #e9d5ff"}}>
+              <div style={{fontSize:10,color:"#9ca3af",marginBottom:2}}>도입률-연결</div>
+              <div style={{fontSize:14,fontWeight:800,color:"#2563eb"}}>{report.connRate||0}</div>
+            </div>
+            <div style={{background:"#fff",borderRadius:8,padding:"8px",textAlign:"center",border:"1px solid #e9d5ff"}}>
+              <div style={{fontSize:10,color:"#9ca3af",marginBottom:2}}>도입률-30초↑</div>
+              <div style={{fontSize:14,fontWeight:800,color:"#10b981"}}>{report.rate30s||0}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>}
+  </div>);
 }
 
 // ══════════ 매출현황 캘린더 ══════════
@@ -716,9 +843,15 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
             <div style={{fontWeight:700,fontSize:13,marginBottom:14}}>📂 업무보고 누적 데이터</div>
             <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
               <button onClick={loadAllData} disabled={loadingAll} style={{background:"#2563eb",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{loadingAll?"불러오는 중…":"📂 데이터 불러오기"}</button>
-              {Object.keys(allData).length>0&&<button onClick={()=>{const wb=XLSX.utils.book_new();Object.entries(allData).sort().forEach(([date,tsByDate])=>{Object.entries(tsByDate).forEach(([ts,reps])=>{const headers=["이름","콜수","콜시간(분)","자료수","토스","재통픽스","긍정백톡","부정백톡"];const rows=reps.map(r=>[r.name,r.calls||0,r.callTime||0,r.materials||0,r.toss||0,r.retarget||0,r.positive||0,r.negative||0]);const tot=["합계",...METRICS.map(m=>reps.reduce((s,r)=>s+(r[m.key]||0),0))];const ws=XLSX.utils.aoa_to_sheet([headers,...rows,tot]);XLSX.utils.book_append_sheet(wb,ws,`${date} ${ts}`.slice(0,31));});});XLSX.writeFile(wb,"업무보고_전체.xlsx");}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>📥 엑셀 저장</button>}
+              {Object.keys(allData).length>0&&(
+                <>
+                  <button onClick={()=>{const wb=XLSX.utils.book_new();Object.entries(allData).sort().forEach(([date,tsByDate])=>{Object.entries(tsByDate).forEach(([ts,reps])=>{const headers=["이름","콜수","콜시간(분)","자료수","토스","재통픽스","긍정백톡","부정백톡"];const rows=reps.map(r=>[r.name,r.calls||0,r.callTime||0,r.materials||0,r.toss||0,r.retarget||0,r.positive||0,r.negative||0]);const tot=["합계",...METRICS.map(m=>reps.reduce((s,r)=>s+(r[m.key]||0),0))];const ws=XLSX.utils.aoa_to_sheet([headers,...rows,tot]);XLSX.utils.book_append_sheet(wb,ws,`${date} ${ts}`.slice(0,31));});});XLSX.writeFile(wb,"업무보고_전체.xlsx");}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>📥 전체 엑셀</button>
+                  {/* ── 주차별 분석 엑셀 다운로드 버튼 ── */}
+                  <button onClick={()=>downloadWeeklyExcel(allData)} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>📊 주차별 분석 엑셀</button>
+                </>
+              )}
             </div>
-            {Object.entries(allData).sort().reverse().map(([date,tsByDate])=>(<div key={date} style={{marginBottom:14}}><div style={{fontWeight:700,fontSize:12,padding:"6px 10px",background:"#f3f4f6",borderRadius:7,marginBottom:7}}>📅 {date}</div>{Object.entries(tsByDate).map(([ts,reps])=>(<div key={ts} style={{marginBottom:8}}><div style={{fontWeight:600,fontSize:11,color:"#7c3aed",marginBottom:4}}>⏰ {ts} ({reps.length}명)</div><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:480}}><thead><tr style={{background:"#f8fafc"}}><th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #e2e8f0"}}>이름</th>{METRICS.map(m=><th key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>{m.label}</th>)}</tr></thead><tbody>{reps.map((r,i)=>(<tr key={i} style={{borderBottom:"1px solid #f3f4f6"}}><td style={{padding:"5px 8px",fontWeight:700}}>{r.name}</td>{METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center"}}>{r[m.key]||0}</td>)}</tr>))}<tr style={{background:"#eff6ff",fontWeight:700}}><td style={{padding:"5px 8px",color:"#2563eb"}}>합계</td>{METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#2563eb"}}>{reps.reduce((s,r)=>s+(r[m.key]||0),0)}</td>)}</tr></tbody></table></div></div>))}</div>))}
+            {Object.entries(allData).sort().reverse().map(([date,tsByDate])=>(<div key={date} style={{marginBottom:14}}><div style={{fontWeight:700,fontSize:12,padding:"6px 10px",background:"#f3f4f6",borderRadius:7,marginBottom:7}}>📅 {date}</div>{Object.entries(tsByDate).map(([ts,reps])=>(<div key={ts} style={{marginBottom:8}}><div style={{fontWeight:600,fontSize:11,color:"#7c3aed",marginBottom:4}}>⏰ {ts} ({reps.length}명)</div><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:480}}><thead><tr style={{background:"#f8fafc"}}><th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #e2e8f0"}}>이름</th>{METRICS.map(m=><th key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>{m.label}</th>)}{ts==="최종마감"&&FINAL_METRICS.map(m=><th key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#7c3aed",fontWeight:600,borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>{m.label}</th>)}</tr></thead><tbody>{reps.map((r,i)=>(<tr key={i} style={{borderBottom:"1px solid #f3f4f6"}}><td style={{padding:"5px 8px",fontWeight:700}}>{r.name}</td>{METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center"}}>{r[m.key]||0}</td>)}{ts==="최종마감"&&FINAL_METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#7c3aed",fontWeight:600}}>{m.key==="dailySales"?(Number(r[m.key])||0).toLocaleString()+"원":r[m.key]||0}</td>)}</tr>))}<tr style={{background:"#eff6ff",fontWeight:700}}><td style={{padding:"5px 8px",color:"#2563eb"}}>합계</td>{METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#2563eb"}}>{reps.reduce((s,r)=>s+(r[m.key]||0),0)}</td>)}{ts==="최종마감"&&FINAL_METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#7c3aed"}}>{m.key==="dailySales"?reps.reduce((s,r)=>s+(Number(r[m.key])||0),0).toLocaleString()+"원":reps.reduce((s,r)=>s+(r[m.key]||0),0)}</td>)}</tr></tbody></table></div></div>))}</div>))}
             {Object.keys(allData).length===0&&!loadingAll&&<p style={{fontSize:12,color:"#9ca3af",textAlign:"center",padding:"14px 0"}}>버튼을 눌러 데이터를 불러오세요</p>}
           </div>
         )}
@@ -765,7 +898,9 @@ function MainApp({user,onLogout}){
   const[tab,setTab]=useState("list");
   const[projectCategories,setProjectCategories]=useState([]);
   const[timeslots,setTimeslots]=useState([]);const[selTs,setSelTs]=useState("");const[tsReports,setTsReports]=useState([]);
-  const[myR,setMyR]=useState({calls:"",callTime:"",materials:"",toss:"",retarget:"",positive:"",negative:""});const[myTs,setMyTs]=useState("");const[newTs,setNewTs]=useState("");
+  // ── 수정: dailySales, connRate, rate30s 추가 ──
+  const[myR,setMyR]=useState({calls:"",callTime:"",materials:"",toss:"",retarget:"",positive:"",negative:"",dailySales:"",connRate:"",rate30s:""});
+  const[myTs,setMyTs]=useState("");const[newTs,setNewTs]=useState("");
   const[targets,setTargets]=useState(DEF_TARGETS);
   const[loadingR,setLoadingR]=useState(false);const[submitting,setSubmitting]=useState(false);const[submitMsg,setSubmitMsg]=useState("");
   const[webhookUrl,setWebhookUrl]=useState("");
@@ -811,7 +946,35 @@ function MainApp({user,onLogout}){
   const addTimeslot=async()=>{const ts=newTs.trim();if(!ts)return;const list=await st.get("wt:ts:fixed")||[];if(!list.includes(ts)){list.push(ts);await st.set("wt:ts:fixed",list);setTimeslots(list);}setSelTs(ts);setMyTs(ts);setNewTs("");};
   const removeTimeslot=async ts=>{const list=(await st.get("wt:ts:fixed")||[]).filter(t=>t!==ts);await st.set("wt:ts:fixed",list);setTimeslots(list);if(selTs===ts)setSelTs(list[list.length-1]||"");if(myTs===ts)setMyTs(list[list.length-1]||"");};
   const loadReports=async ts=>{setLoadingR(true);const keys=await st.list(`wr:${todayStr}:${san(ts)}:`);const rows=[];for(const k of keys){const r=await st.get(k);if(r)rows.push(r);}setTsReports(rows);setLoadingR(false);};
-  const submitReport=async()=>{if(!myTs)return;setSubmitting(true);setSubmitMsg("");const data={name:user.name,timeslot:myTs,...Object.fromEntries(METRICS.map(m=>[m.key,parseInt(myR[m.key])||0]))};const ok=await st.set(`wr:${todayStr}:${san(myTs)}:${san(user.name)}`,data);if(ok){const wh=await st.get("wt:webhook");if(wh)await sendNotif(wh,user.name,myTs,data,targets);setSelTs(myTs);await loadReports(myTs);setSubmitMsg("✓ 제출 완료!");}else setSubmitMsg("❌ 오류 발생");setSubmitting(false);};
+
+  // ── 수정: 재제출(덮어쓰기) + 최종마감 추가 항목 포함 ──
+  const submitReport=async()=>{
+    if(!myTs)return;
+    setSubmitting(true);
+    setSubmitMsg("");
+    const isFinal=myTs==="최종마감";
+    const data={
+      name:user.name,
+      timeslot:myTs,
+      ...Object.fromEntries(METRICS.map(m=>[m.key,parseInt(myR[m.key])||0])),
+      ...(isFinal?{
+        dailySales:parseInt((myR.dailySales||"").toString().replace(/[^0-9]/g,""))||0,
+        connRate:parseInt(myR.connRate)||0,
+        rate30s:parseInt(myR.rate30s)||0,
+      }:{})
+    };
+    // 같은 타임+이름 키로 덮어쓰기 → Firebase setDoc이 이미 덮어쓰기 방식이라 그대로 동작
+    const ok=await st.set(`wr:${todayStr}:${san(myTs)}:${san(user.name)}`,data);
+    if(ok){
+      const wh=await st.get("wt:webhook");
+      if(wh)await sendNotif(wh,user.name,myTs,data,targets);
+      setSelTs(myTs);
+      await loadReports(myTs);
+      setSubmitMsg("✓ 제출 완료! (수정된 경우 덮어쓰기됩니다)");
+    }else setSubmitMsg("❌ 오류 발생");
+    setSubmitting(false);
+  };
+
   const loadAllData=async()=>{setLoadingAll(true);const keys=await st.list("wr:");const byDate={};for(const k of keys){const r=await st.get(k);if(r){const date=k.split(":")[1]||todayStr;const ts=r.timeslot||"미분류";if(!byDate[date])byDate[date]={};if(!byDate[date][ts])byDate[date][ts]=[];byDate[date][ts].push(r);}}setAllData(byDate);setLoadingAll(false);};
   const filterCE=useCallback(evts=>user.isAdmin?evts:evts.filter(e=>!e.manager||e.manager===user.name),[user]);
   const owners=useMemo(()=>[...new Set(tasks.filter(t=>t._sk!=="tasks:_pub"&&t._sk!=="tasks:_prv").map(t=>t.owner).filter(Boolean))],[tasks]);
@@ -828,7 +991,6 @@ function MainApp({user,onLogout}){
   const totalPages=useMemo(()=>Math.ceil(filteredContracts.length/10),[filteredContracts]);
   const pagedContracts=useMemo(()=>filteredContracts.slice((contractPage-1)*10,contractPage*10),[filteredContracts,contractPage]);
   const calTasksExp=useMemo(()=>expandForMonth(filtered,calY,calM),[filtered,calY,calM]);
-  // 📅 캘린더: 온보딩 제외 (관리전화 + 리포트만 표시)
   const calCE=useMemo(()=>filterCE(allCE.filter(e=>e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`)&&e.type!=="온보딩")),[allCE,calY,calM,filterCE]);
   const tasksByDay=useMemo(()=>{const m={};if(calFilter!=="contracts")calTasksExp.forEach(t=>{if(t.due){const d=parseInt(t.due.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].t.push(t);}});if(calFilter!=="tasks")calCE.forEach(e=>{const d=parseInt(e.date.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].e.push(e);});return m;},[calTasksExp,calCE,calFilter]);
   const selDayTasks=useMemo(()=>calTasksExp.filter(t=>t.due===selectedDay),[calTasksExp,selectedDay]);
@@ -1032,7 +1194,7 @@ function MainApp({user,onLogout}){
                   <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:timeslots.length?8:0}}>
                     {timeslots.map(ts=>(
                       <div key={ts} style={{display:"flex",alignItems:"center",gap:2}}>
-                        <button onClick={()=>setSelTs(ts)} style={{border:`2px solid ${selTs===ts?"#7c3aed":"#e2e8f0"}`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",background:selTs===ts?"#f5f3ff":"#fff",color:selTs===ts?"#7c3aed":"#374151"}}>{ts}</button>
+                        <button onClick={()=>setSelTs(ts)} style={{border:`2px solid ${selTs===ts?(ts==="최종마감"?"#7c3aed":"#7c3aed"):"#e2e8f0"}`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",background:selTs===ts?(ts==="최종마감"?"#f5f3ff":"#f5f3ff"):"#fff",color:selTs===ts?"#7c3aed":"#374151"}}>{ts}</button>
                         {user.isAdmin&&<button onClick={()=>removeTimeslot(ts)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:11}}>✕</button>}
                       </div>
                     ))}
@@ -1064,8 +1226,36 @@ function MainApp({user,onLogout}){
                           </div>
                         ))}
                       </div>
+                      {/* ── 최종마감일 때만 추가 항목 표시 ── */}
+                      {myTs==="최종마감"&&(
+                        <div style={{background:"#f5f3ff",borderRadius:10,padding:"12px",marginBottom:10,border:"1px solid #e9d5ff"}}>
+                          <div style={{fontSize:12,fontWeight:700,color:"#7c3aed",marginBottom:8}}>📊 최종마감 추가 항목</div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                            <div style={{gridColumn:"1/-1"}}>
+                              <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>일매출 (원)</label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={myR.dailySales?(parseInt(myR.dailySales.toString().replace(/[^0-9]/g,""))||0).toLocaleString()+"원":""}
+                                onChange={e=>{const raw=e.target.value.replace(/[^0-9]/g,"");setMyR(r=>({...r,dailySales:raw}));}}
+                                placeholder="예: 500000"
+                                style={{width:"100%",border:"1px solid #e9d5ff",borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff"}}
+                              />
+                              {myR.dailySales&&<div style={{fontSize:10,color:"#7c3aed",marginTop:2,fontWeight:600}}>{Number(myR.dailySales).toLocaleString()}원</div>}
+                            </div>
+                            <div>
+                              <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>도입률-연결</label>
+                              <input type="number" min="0" value={myR.connRate} onChange={e=>setMyR(r=>({...r,connRate:e.target.value}))} placeholder="0" style={{width:"100%",border:"1px solid #e9d5ff",borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                            </div>
+                            <div>
+                              <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>도입률-30초이상</label>
+                              <input type="number" min="0" value={myR.rate30s} onChange={e=>setMyR(r=>({...r,rate30s:e.target.value}))} placeholder="0" style={{width:"100%",border:"1px solid #e9d5ff",borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <button onClick={submitReport} disabled={submitting||!myTs} style={{width:"100%",background:myTs?"#2563eb":"#e5e7eb",color:myTs?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,cursor:myTs?"pointer":"not-allowed"}}>
-                        {submitting?"저장 중…":"실적 제출"}
+                        {submitting?"저장 중…":"실적 제출 (재제출 시 자동 덮어쓰기)"}
                       </button>
                       {submitMsg&&<p style={{fontSize:11,color:submitMsg.startsWith("✓")?"#10b981":"#ef4444",textAlign:"center",margin:"6px 0 0",fontWeight:600}}>{submitMsg}</p>}
                     </>
