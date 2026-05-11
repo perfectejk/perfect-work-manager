@@ -55,19 +55,135 @@ function ContractMemoModal({contract,user,onClose}){
   return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',sans-serif",padding:"20px"}} onClick={onClose}><div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.25)"}}><div style={{padding:"20px 22px 16px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}><span style={{fontWeight:800,fontSize:16,color:"#0f172a"}}>{contract.name}</span><Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/></div><div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{contract.manager&&<span style={{fontSize:11,color:"#7c3aed",fontWeight:600}}>👤 {contract.manager}</span>}{contract.phone&&<span style={{fontSize:11,color:"#6b7280"}}>📞 {contract.phone}</span>}{contract.total&&<span style={{fontSize:11,color:"#2563eb",fontWeight:600}}>💰 {contract.total}</span>}<span style={{fontSize:11,color:"#9ca3af"}}>📅 {contract.startDate} ~ {contract.endDate}</span></div>{contract.link&&<a href={contract.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#2563eb",marginTop:3,display:"block"}}>🔗 {contract.link}</a>}{contract.products&&<div style={{fontSize:11,color:"#374151",marginTop:4,background:"#f8fafc",borderRadius:6,padding:"5px 8px",whiteSpace:"pre-line"}}>📦 {contract.products}</div>}{contract.notes&&<div style={{fontSize:11,color:"#6b7280",marginTop:4}}>📌 {contract.notes}</div>}</div><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#9ca3af",flexShrink:0,marginLeft:10}}>✕</button></div></div><div style={{flex:1,overflowY:"auto",padding:"14px 22px",display:"flex",flexDirection:"column",gap:10}}>{loading?<div style={{textAlign:"center",padding:"20px",color:"#9ca3af",fontSize:12}}>불러오는 중…</div>:memos.length===0?<div style={{textAlign:"center",padding:"30px 0",color:"#d1d5db"}}><div style={{fontSize:28,marginBottom:6}}>📝</div><div style={{fontSize:12,color:"#9ca3af"}}>아직 메모가 없습니다<br/>첫 번째 메모를 남겨보세요!</div></div>:memos.map((m)=>(<div key={m.id} style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",border:"1px solid #e2e8f0"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}><div style={{display:"flex",gap:7,alignItems:"center"}}><Avatar name={m.author} size={20} border="1px solid #e5e7eb"/><span style={{fontSize:11,fontWeight:700,color:"#374151"}}>{m.author}</span><span style={{fontSize:10,color:"#9ca3af"}}>{m.date}</span></div>{(user.isAdmin||user.name===m.author)&&<button onClick={()=>deleteMemo(m.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:11,padding:"0 2px"}}>✕</button>}</div><div style={{fontSize:12,color:"#1e293b",whiteSpace:"pre-wrap",lineHeight:1.6}}>{m.text}</div></div>))}<div ref={bottomRef}/></div><div style={{padding:"12px 22px 18px",borderTop:"1px solid #f1f5f9",flexShrink:0}}><div style={{display:"flex",gap:8,alignItems:"flex-end"}}><textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addMemo();}}} placeholder="메모 입력 (Enter 저장, Shift+Enter 줄바꿈)" rows={2} style={{flex:1,border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:12,outline:"none",resize:"none",fontFamily:"inherit",lineHeight:1.5}}/><button onClick={addMemo} disabled={saving||!input.trim()} style={{background:input.trim()?"#2563eb":"#e5e7eb",color:input.trim()?"#fff":"#9ca3af",border:"none",borderRadius:10,padding:"10px 16px",fontSize:12,fontWeight:700,cursor:input.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",alignSelf:"stretch"}}>{saving?"저장중":"저장"}</button></div><div style={{fontSize:10,color:"#9ca3af",marginTop:4}}>작성자: {user.name} · {todayStr}</div></div></div></div>);
 }
 function LoginScreen({onLogin}){
-  const[name,setName]=useState("");const[pw,setPw]=useState("");const[isAdmin,setIsAdmin]=useState(false);const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
-  const canvasRef=useRef();
-  useEffect(()=>{
-    const link=document.createElement('link');link.rel='stylesheet';link.href='https://fonts.googleapis.com/css2?family=Zen+Dots&family=Orbitron:wght@900&display=swap';document.head.appendChild(link);
-    const canvas=canvasRef.current;if(!canvas)return;const ctx=canvas.getContext('2d');
-    function resize(){canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;}resize();
-    function draw(){const W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);const bg=ctx.createRadialGradient(W*0.3,H*0.3,0,W*0.5,H*0.5,H*1.1);bg.addColorStop(0,'#112050');bg.addColorStop(0.4,'#162860');bg.addColorStop(0.7,'#101e50');bg.addColorStop(1,'#0a1438');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);const stars=[{x:0.04,y:0.06,r:1.8,op:0.95},{x:0.10,y:0.14,r:1,op:0.65},{x:0.17,y:0.05,r:2.2,op:0.9},{x:0.24,y:0.20,r:1,op:0.5},{x:0.31,y:0.08,r:1.5,op:0.75},{x:0.44,y:0.06,r:2.3,op:0.95},{x:0.51,y:0.17,r:1,op:0.6},{x:0.57,y:0.04,r:1.6,op:0.85},{x:0.64,y:0.21,r:1,op:0.55},{x:0.71,y:0.08,r:1.9,op:0.8},{x:0.84,y:0.05,r:1.5,op:0.85},{x:0.96,y:0.07,r:2,op:0.9},{x:0.08,y:0.32,r:1,op:0.45},{x:0.30,y:0.42,r:1.7,op:0.7},{x:0.48,y:0.44,r:1.3,op:0.6},{x:0.62,y:0.38,r:1.7,op:0.8},{x:0.80,y:0.40,r:1.3,op:0.6},{x:0.94,y:0.35,r:1.7,op:0.7}];stars.forEach(s=>{ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(215,232,255,${s.op})`;ctx.fill();if(s.r>=1.8){const g=ctx.createRadialGradient(s.x*W,s.y*H,0,s.x*W,s.y*H,s.r*7);g.addColorStop(0,`rgba(190,215,255,${s.op*0.32})`);g.addColorStop(1,'rgba(0,0,0,0)');ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r*7,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();ctx.strokeStyle=`rgba(200,220,255,${s.op*0.35})`;ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(s.x*W-s.r*6,s.y*H);ctx.lineTo(s.x*W+s.r*6,s.y*H);ctx.stroke();ctx.beginPath();ctx.moveTo(s.x*W,s.y*H-s.r*6);ctx.lineTo(s.x*W,s.y*H+s.r*6);ctx.stroke();}});const ey=H*1.06,er=H*0.66;const eg=ctx.createRadialGradient(W*0.5,ey,er*0.1,W*0.5,ey,er);eg.addColorStop(0,'#102060');eg.addColorStop(0.5,'#0c1848');eg.addColorStop(1,'#080f30');ctx.beginPath();ctx.arc(W*0.5,ey,er,0,Math.PI*2);ctx.fillStyle=eg;ctx.fill();const atm=ctx.createRadialGradient(W*0.5,ey,er-14,W*0.5,ey,er+38);atm.addColorStop(0,'rgba(50,140,255,0)');atm.addColorStop(0.25,'rgba(70,170,255,0.6)');atm.addColorStop(0.55,'rgba(90,190,255,0.25)');atm.addColorStop(1,'rgba(0,100,220,0)');ctx.beginPath();ctx.arc(W*0.5,ey,er+38,0,Math.PI*2);ctx.fillStyle=atm;ctx.fill();}
-    draw();window.addEventListener('resize',()=>{resize();draw();});
-    const ids=['ls-t1','ls-t2','ls-t3','ls-t4'];ids.forEach((id,i)=>{setTimeout(()=>{const el=document.getElementById(id);if(!el)return;el.style.transition='opacity 0.65s cubic-bezier(0.22,1,0.36,1), transform 0.65s cubic-bezier(0.22,1,0.36,1)';el.style.opacity='1';el.style.transform='translateX(0)';},i*500+200);});
-  },[]);
-  const go=async()=>{if(!name.trim())return setErr("이름을 입력하세요");if(!pw.trim())return setErr("비밀번호를 입력하세요");setLoading(true);if(isAdmin){if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:true});}else{const accounts=await st.get("accounts:all")||[];const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:false});}setLoading(false);};
-  const lineStyle={fontFamily:"'Zen Dots',sans-serif",fontSize:18,color:"rgba(180,210,255,0.75)",letterSpacing:5,lineHeight:2.4,display:"block",opacity:0,transform:"translateX(-50px)"};
-  return(<div style={{minHeight:"100vh",position:"relative",overflow:"hidden",display:"flex",alignItems:"center",fontFamily:"'Inter',sans-serif"}}><canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%"}}/><div style={{position:"relative",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",width:"100%",padding:"0 52px",gap:80}}><div style={{flex:"none"}}><span id="ls-t1" style={lineStyle}>PROFESSIONAL</span><span id="ls-t2" style={lineStyle}>MARKETING</span><span id="ls-t3" style={lineStyle}>MANAGEMENT</span><div id="ls-t4" style={{fontFamily:"'Orbitron',sans-serif",fontSize:92,fontWeight:900,color:"#fff",letterSpacing:2,marginTop:18,textShadow:"0 0 50px rgba(100,160,255,0.5)",opacity:0,transform:"translateX(-50px)"}}>PRO.</div></div><div style={{width:310,flexShrink:0,position:"relative",paddingTop:38}}><div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:72,height:72,borderRadius:"50%",background:"linear-gradient(135deg,#2a5bbf,#4a7ee8)",border:"3px solid rgba(150,190,255,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,boxShadow:"0 4px 20px rgba(40,100,220,0.35)"}}><svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="10" r="5" stroke="rgba(210,230,255,0.9)" strokeWidth="1.8"/><path d="M4 26c0-5.5 4.5-9 10-9s10 3.5 10 9" stroke="rgba(210,230,255,0.9)" strokeWidth="1.8" strokeLinecap="round"/></svg></div><div style={{background:"rgba(8,20,60,0.82)",border:"1.5px solid rgba(100,150,255,0.28)",borderRadius:20,padding:"44px 24px 24px",backdropFilter:"blur(28px)"}}><div style={{display:"flex",background:"rgba(5,15,50,0.7)",borderRadius:10,padding:4,gap:4,marginBottom:16}}>{[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(<button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,border:"none",borderRadius:8,padding:"9px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',sans-serif",color:"#fff",background:isAdmin===v?"rgba(50,100,210,0.8)":"transparent"}}>{l}</button>))}</div>{[{v:name,sv:setName,ph:"이름을 입력하세요",type:"text"},{v:pw,sv:setPw,ph:"비밀번호",type:"password"}].map((f,i)=>(<div key={i} style={{background:"rgba(5,15,55,0.6)",border:"1.5px solid rgba(90,140,230,0.25)",borderRadius:10,padding:"11px 14px",marginBottom:10}}><input type={f.type} value={f.v} onChange={e=>f.sv(e.target.value)} placeholder={f.ph} onKeyDown={e=>e.key==="Enter"&&go()} style={{background:"none",border:"none",outline:"none",fontSize:13,color:"#fff",width:"100%",fontFamily:"'Inter',sans-serif"}}/></div>))}{err&&<p style={{margin:"0 0 8px",fontSize:12,color:"#fca5a5",textAlign:"center"}}>{err}</p>}<button onClick={go} disabled={loading} style={{width:"100%",background:"rgba(30,75,200,0.75)",color:"#fff",border:"1px solid rgba(100,160,255,0.3)",borderRadius:10,padding:13,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Orbitron',sans-serif",letterSpacing:3}}>{loading?"확인 중…":"LOGIN"}</button></div></div></div></div>);
+  const[name,setName]=useState("");
+  const[pw,setPw]=useState("");
+  const[isAdmin,setIsAdmin]=useState(false);
+  const[err,setErr]=useState("");
+  const[loading,setLoading]=useState(false);
+
+  const go=async()=>{
+    if(!name.trim())return setErr("이름을 입력하세요");
+    if(!pw.trim())return setErr("비밀번호를 입력하세요");
+    setLoading(true);
+    if(isAdmin){
+      if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}
+      onLogin({name:name.trim(),isAdmin:true});
+    }else{
+      const accounts=await st.get("accounts:all")||[];
+      const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);
+      if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}
+      onLogin({name:name.trim(),isAdmin:false});
+    }
+    setLoading(false);
+  };
+
+  const iS={
+    width:"100%",
+    border:"1px solid #f0f1f3",
+    borderRadius:9,
+    padding:"10px 13px",
+    fontSize:13,
+    outline:"none",
+    background:"#fafbfc",
+    color:"#0f1117",
+    fontFamily:"'Pretendard',-apple-system,sans-serif",
+  };
+
+  return(
+    <div style={{minHeight:"100vh",display:"flex",background:"#f7f8fa",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+      {/* 왼쪽 브랜드 영역 */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",padding:"48px 56px"}}>
+        {/* 로고 */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:32}}>
+          <div style={{width:40,height:40,borderRadius:11,background:"linear-gradient(135deg,#8468D3,#0071CE)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:20,fontWeight:800,color:"#fff",fontStyle:"italic"}}>P</span>
+          </div>
+          <div>
+            <div style={{fontSize:14,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>PRO Marketing</div>
+            <div style={{fontSize:9,color:"#adb5bd",letterSpacing:"0.5px",textTransform:"uppercase",fontWeight:500}}>Management System</div>
+          </div>
+        </div>
+        {/* 카피 */}
+        <div style={{fontSize:32,fontWeight:800,color:"#0f1117",letterSpacing:"-1px",lineHeight:1.2,marginBottom:12}}>
+          영업팀을 위한<br/>스마트 업무관리
+        </div>
+        <div style={{fontSize:13,color:"#adb5bd",fontWeight:400,marginBottom:36,lineHeight:1.7}}>
+          계약 현황부터 매출 랭킹까지<br/>한 곳에서 관리하세요.
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {[
+            {color:"#0071CE",text:"팀 실적 실시간 관리"},
+            {color:"#8468D3",text:"계약 현황 추적"},
+            {color:"#10b981",text:"매출 랭킹 분석"},
+          ].map((item,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:9}}>
+              <div style={{width:5,height:5,borderRadius:"50%",background:item.color,flexShrink:0}}/>
+              <span style={{fontSize:12,color:"#6b7280",fontWeight:500}}>{item.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 오른쪽 로그인 폼 */}
+      <div style={{width:360,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",borderLeft:"1px solid #f0f1f3",flexShrink:0}}>
+        <div style={{width:"100%",padding:"40px 32px"}}>
+          <div style={{fontSize:20,fontWeight:800,color:"#0f1117",marginBottom:4,letterSpacing:"-0.5px"}}>로그인</div>
+          <div style={{fontSize:12,color:"#adb5bd",marginBottom:24,fontWeight:400}}>계정 정보를 입력하세요</div>
+
+          {/* 사원/관리자 탭 */}
+          <div style={{display:"flex",background:"#f7f8fa",borderRadius:10,padding:3,marginBottom:20,border:"1px solid #f0f1f3"}}>
+            {[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(
+              <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}}
+                style={{flex:1,padding:"8px",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
+                  background:isAdmin===v?"#0071CE":"transparent",
+                  color:isAdmin===v?"#fff":"#adb5bd",
+                  fontFamily:"'Pretendard',-apple-system,sans-serif",
+                  transition:"all 0.15s",
+                }}>
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {/* 이름 입력 */}
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>이름</div>
+            <input
+              type="text" value={name}
+              onChange={e=>setName(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&go()}
+              placeholder="이름을 입력하세요"
+              style={iS}
+            />
+          </div>
+
+          {/* 비밀번호 입력 */}
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>비밀번호</div>
+            <input
+              type="password" value={pw}
+              onChange={e=>setPw(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&go()}
+              placeholder="비밀번호를 입력하세요"
+              style={iS}
+            />
+          </div>
+
+          {/* 에러 메시지 */}
+          {err&&<p style={{margin:"0 0 12px",fontSize:12,color:"#e53e3e",fontWeight:500,textAlign:"center"}}>{err}</p>}
+
+          {/* 로그인 버튼 */}
+          <button onClick={go} disabled={loading}
+            style={{width:"100%",background:loading?"#93c5fd":"#0071CE",color:"#fff",border:"none",
+              borderRadius:10,padding:"13px",fontSize:13,fontWeight:700,cursor:loading?"not-allowed":"pointer",
+              letterSpacing:"1px",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"background 0.15s",
+            }}>
+            {loading?"확인 중…":"LOGIN"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navOrder,setNavOrder}){
   const myCount=user.isAdmin?contracts.length:contracts.filter(c=>c.manager===user.name).length;
