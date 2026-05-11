@@ -10,7 +10,7 @@ document.head.appendChild(link)
 
 const iconLink = document.createElement('link')
 iconLink.rel = 'stylesheet'
-iconLink.href = 'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css'
+iconLink.href = 'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css'
 document.head.appendChild(iconLink)
 
 // 공통 스타일
