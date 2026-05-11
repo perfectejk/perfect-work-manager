@@ -14,8 +14,8 @@ const S={todo:{label:"할 일",color:"#6b7280",bg:"#f3f4f6"},doing:{label:"진�
 const CE={온보딩:{color:"#6b7280",bg:"#f3f4f6"},관리전화:{color:"#2563eb",bg:"#eff6ff"},리포트:{color:"#7c3aed",bg:"#f5f3ff"}};
 const DAYS_KR=["일","월","화","수","목","금","토"];
 const EF=(isAdmin)=>({title:"",project:"",priority:"medium",status:"todo",due:"",memo:"",visibility:isAdmin?"public":"personal",repeat:"none",repeatDays:[]});
-const parseAmount=str=>{if(!str)return 0;const m=str.match(/(\d+(?:\.\d+)?)\s*만/);if(m)return parseFloat(m[1])*10000;const n=str.match(/(\d[\d,]*)/);if(n)return parseInt(n[1].replace(/,/g,""));return 0;};
-const fmtAmount=n=>{if(!n)return"0원";if(n>=10000)return`${Math.floor(n/10000)}만원`;return`${n.toLocaleString()}원`;};
+const parseAmount=str=>{if(!str)return 0;const m=str.match(/(\d+(?:\.\d+)?)\s*만/);if(m)return parseFloat(m[1])*10000;const n=str.match(/(\d[\d,]*(?:\.\d+)?)/);if(n)return parseFloat(n[1].replace(/,/g,""))||0;return 0;};
+const fmtAmount=n=>{if(!n)return"0원";if(n>=10000){const v=n/10000;return`${Number.isInteger(v)?v:v.toFixed(1)}만원`;}return`${n.toLocaleString()}원`;};
 const fkey=k=>k.replace(/\//g,'__').replace(/:/g,'--');
 const st={
   get:async(k)=>{try{const s=await getDoc(doc(db,'kv',fkey(k)));return s.exists()?JSON.parse(s.data().v):null;}catch{return null;}},
@@ -362,7 +362,7 @@ function MainApp({user,onLogout}){
                   const evts=genEvents(c);const isActive=c.endDate>=todayStr;
                   const nextCall=evts.filter(e=>e.type==="관리전화"&&e.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date))[0];
                   const rpt=evts.find(e=>e.type==="리포트");
-                  return(<div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",padding:"10px 14px",opacity:isActive?1:0.7,boxSizing:"border-box",cursor:"pointer",transition:"box-shadow 0.15s"}} onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,0.10)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"} onClick={()=>setMemoContract(c)}>
+                  return(<div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",padding:"10px 14px",opacity:isActive?1:0.7,boxSizing:"border-box",cursor:"pointer",transition:"box-shadow 0.15s",height:130,overflow:"hidden"}} onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,0.10)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"} onClick={()=>setMemoContract(c)}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:14,color:"#0f172a"}}>{c.name}</span><Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/></div>
