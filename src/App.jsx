@@ -186,15 +186,92 @@ function LoginScreen({onLogin}){
 function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navOrder,setNavOrder}){
   const myCount=user.isAdmin?contracts.length:contracts.filter(c=>c.manager===user.name).length;
   const NAV=[
-    {id:"list",label:"목록",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1.3" fill="white"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1.3" fill="white" opacity="0.4"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1.3" fill="white" opacity="0.4"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.3" fill="white"/></svg>},
-    {id:"calendar",label:"캘린더",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="2" width="13" height="12" rx="2" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3"/><path d="M5 1v2M10 1v2M1 6h13" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3" strokeLinecap="round"/></svg>},
-    {id:"revenue",label:"매출현황 캘린더",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="2" width="13" height="12" rx="2" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3"/><path d="M5 1v2M10 1v2" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3" strokeLinecap="round"/><path d="M3 11l2.5-2.5 2 1.5L11 6.5" stroke="rgba(251,191,36,0.9)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><circle cx="11" cy="6.5" r="1" fill="rgba(251,191,36,0.9)"/></svg>},
-    {id:"contracts",label:"계약관리",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="5.5" cy="4.5" r="2.5" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3"/><path d="M1.5 12c0-2.5 1.8-4 4-4s4 1.5 4 4" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3" strokeLinecap="round"/><path d="M11 7v5M9 9.5h4" stroke="rgba(255,255,255,0.4)" strokeWidth="1.3" strokeLinecap="round"/></svg>,badge:myCount>0?myCount:null,badgeColor:"rgba(167,139,250,0.35)",badgeTextColor:"#c4b5fd"},
-    {id:"report",label:"업무보고",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="9" width="3" height="5" rx="1" fill="rgba(255,255,255,0.4)"/><rect x="6" y="5.5" width="3" height="8.5" rx="1" fill="rgba(255,255,255,0.4)"/><rect x="11" y="2" width="3" height="12" rx="1" fill="rgba(255,255,255,0.4)"/></svg>},
-    {id:"ranking",label:"매출 랭킹",icon:<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1l1.5 3.5L13 5l-3 3 .5 4L7.5 10 4 12l.5-4L1.5 5l4-.5L7.5 1z" stroke="rgba(255,255,255,0.4)" strokeWidth="1.2" strokeLinejoin="round"/></svg>},
+    {id:"list",label:"목록",icon:"ti-layout-list"},
+    {id:"calendar",label:"캘린더",icon:"ti-calendar"},
+    {id:"revenue",label:"매출현황",icon:"ti-chart-line"},
+    {id:"contracts",label:"계약관리",icon:"ti-users",badge:myCount>0?myCount:null},
+    {id:"report",label:"업무보고",icon:"ti-clipboard-text"},
+    {id:"ranking",label:"매출 랭킹",icon:"ti-trophy"},
   ];
   const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean);
-  return(<div style={{width:200,minHeight:"100vh",background:"linear-gradient(160deg,#1e3a8a 0%,#1e40af 40%,rgba(59,130,246,0.45) 100%)",display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh",borderRight:"1px solid rgba(255,255,255,0.08)"}}><div style={{padding:"20px 16px 14px"}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><div style={{width:28,height:28,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1.2" fill="white"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1.2" fill="white" opacity="0.5"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1.2" fill="white" opacity="0.5"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" fill="white"/></svg></div><span style={{fontSize:11,fontWeight:800,color:"#fff"}}>PRO Marketing</span></div><div style={{fontSize:10,color:"rgba(255,255,255,0.35)"}}>{new Date().toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</div><div onClick={onOpenProfile} style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 12px",marginTop:12,border:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}><Avatar name={user.name} img={profiles[user.name]} size={30}/><div style={{minWidth:0}}><div style={{fontSize:10,color:"rgba(255,255,255,0.45)",fontWeight:600}}>{user.isAdmin?"관리자":"사원"}</div><div style={{fontSize:13,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div></div></div></div><div style={{padding:"0 8px",flex:1}}>{sortedNav.map(n=>(<button key={n.id} onClick={()=>setTab(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:9,padding:"10px 12px",borderRadius:10,border:tab===n.id?"1px solid rgba(255,255,255,0.18)":"1px solid transparent",background:tab===n.id?"rgba(255,255,255,0.15)":"transparent",cursor:"pointer",textAlign:"left",marginBottom:2}}>{n.icon}<span style={{fontSize:13,fontWeight:tab===n.id?600:500,color:tab===n.id?"#fff":"rgba(255,255,255,0.4)"}}>{n.label}</span>{n.badge&&<span style={{marginLeft:"auto",background:n.badgeColor,color:n.badgeTextColor,borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{n.badge}</span>}</button>))}{user.isAdmin&&(<button onClick={()=>setTab("admin")} style={{width:"100%",display:"flex",alignItems:"center",gap:9,padding:"10px 12px",borderRadius:10,border:tab==="admin"?"1px solid rgba(251,191,36,0.4)":"1px solid transparent",background:tab==="admin"?"rgba(251,191,36,0.15)":"transparent",cursor:"pointer",textAlign:"left",marginBottom:2,marginTop:4}}><svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="3" y="7" width="9" height="7" rx="1.5" stroke="rgba(251,191,36,0.7)" strokeWidth="1.3"/><path d="M5 7V5a2.5 2.5 0 015 0v2" stroke="rgba(251,191,36,0.7)" strokeWidth="1.3" strokeLinecap="round"/><circle cx="7.5" cy="10.5" r="1" fill="rgba(251,191,36,0.7)"/></svg><span style={{fontSize:13,fontWeight:tab==="admin"?600:500,color:tab==="admin"?"#fbbf24":"rgba(251,191,36,0.6)"}}>관리자 설정</span></button>)}</div><div style={{padding:"10px 8px 16px",borderTop:"1px solid rgba(255,255,255,0.07)"}}><button onClick={onLogout} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:9,cursor:"pointer"}}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5.5 12H3a1 1 0 01-1-1V3a1 1 0 011-1h2.5" stroke="rgba(255,255,255,0.7)" strokeWidth="1.3" strokeLinecap="round"/><path d="M9.5 10l3-3-3-3M12.5 7H5.5" stroke="rgba(255,255,255,0.7)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg><span style={{fontSize:12,color:"rgba(255,255,255,0.7)",fontWeight:500}}>로그아웃</span></button></div></div>);
+  const sideStyle={
+    width:220,minHeight:"100vh",
+    background:"#fff",
+    display:"flex",flexDirection:"column",flexShrink:0,
+    position:"sticky",top:0,height:"100vh",
+    borderRight:"1px solid #f0f1f3",
+    fontFamily:"'Pretendard',-apple-system,sans-serif",
+  };
+  return(
+    <div style={sideStyle}>
+      {/* 로고 */}
+      <div style={{padding:"20px 16px 16px",borderBottom:"1px solid #f0f1f3"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:16}}>
+          <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#8468D3,#0071CE)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:16,fontWeight:800,color:"#fff",fontStyle:"italic"}}>P</span>
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:"#0f1117",letterSpacing:"-0.2px"}}>PRO Marketing</div>
+            <div style={{fontSize:9,color:"#adb5bd",letterSpacing:"0.4px",textTransform:"uppercase",fontWeight:500}}>Management</div>
+          </div>
+        </div>
+        {/* 유저 정보 */}
+        <div onClick={onOpenProfile} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"#f7f8fa",borderRadius:9,border:"1px solid #f0f1f3",cursor:"pointer"}}>
+          <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#0071CE,#8468D3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden"}}>
+            {profiles[user.name]
+              ?<img src={profiles[user.name]} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={user.name}/>
+              :(user.name||"?").slice(0,1)}
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:600,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
+            <div style={{fontSize:9,color:"#adb5bd",fontWeight:500}}>{user.isAdmin?"관리자":"사원"}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 네비게이션 */}
+      <div style={{padding:"12px 10px",flex:1}}>
+        <div style={{fontSize:9,fontWeight:700,color:"#c1c7d0",letterSpacing:"1.2px",textTransform:"uppercase",padding:"0 8px",marginBottom:6}}>메인 메뉴</div>
+        {sortedNav.map(n=>(
+          <button key={n.id} onClick={()=>setTab(n.id)}
+            style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,border:"none",
+              background:tab===n.id?"#f0f7ff":"transparent",
+              cursor:"pointer",textAlign:"left",marginBottom:1,
+              fontFamily:"'Pretendard',-apple-system,sans-serif",
+            }}>
+            <i className={`ti ${n.icon}`} style={{fontSize:15,color:tab===n.id?"#0071CE":"#c1c7d0",flexShrink:0}}/>
+            <span style={{fontSize:12,fontWeight:tab===n.id?600:500,color:tab===n.id?"#0071CE":"#6b7280",flex:1}}>{n.label}</span>
+            {n.badge&&<span style={{background:"#8468D3",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{n.badge}</span>}
+          </button>
+        ))}
+
+        {/* 관리자 설정 */}
+        {user.isAdmin&&(
+          <>
+            <div style={{fontSize:9,fontWeight:700,color:"#c1c7d0",letterSpacing:"1.2px",textTransform:"uppercase",padding:"0 8px",margin:"12px 0 6px"}}>설정</div>
+            <button onClick={()=>setTab("admin")}
+              style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,border:"none",
+                background:tab==="admin"?"#fffbeb":"transparent",
+                cursor:"pointer",textAlign:"left",
+                fontFamily:"'Pretendard',-apple-system,sans-serif",
+              }}>
+              <i className="ti ti-lock" style={{fontSize:15,color:tab==="admin"?"#d97706":"#c1c7d0",flexShrink:0}}/>
+              <span style={{fontSize:12,fontWeight:tab==="admin"?600:500,color:tab==="admin"?"#d97706":"#6b7280"}}>관리자 설정</span>
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* 로그아웃 */}
+      <div style={{padding:"10px 10px 16px",borderTop:"1px solid #f0f1f3"}}>
+        <button onClick={onLogout}
+          style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"transparent",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+          <i className="ti ti-logout" style={{fontSize:14,color:"#c1c7d0"}}/>
+          <span style={{fontSize:12,color:"#adb5bd",fontWeight:500}}>로그아웃</span>
+        </button>
+      </div>
+    </div>
+  );
 }
 function TaskCard({task,onCycle,onDelete,onEdit,showOwner,canEdit}){
   const[exp,setExp]=useState(false);
