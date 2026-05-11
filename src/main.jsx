@@ -8,6 +8,11 @@ link.rel = 'stylesheet'
 link.href = 'https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css'
 document.head.appendChild(link)
 
+const iconLink = document.createElement('link')
+iconLink.rel = 'stylesheet'
+iconLink.href = 'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css'
+document.head.appendChild(iconLink)
+
 // 공통 스타일
 const style = document.createElement('style')
 style.textContent = `
