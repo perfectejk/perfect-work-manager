@@ -178,6 +178,8 @@ function MainApp({user,onLogout}){
   const[editTaskData,setEditTaskData]=useState(null);const[form,setForm]=useState(EF(user.isAdmin));const[showForm,setShowForm]=useState(false);
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
+  const[contractMonth,setContractMonth]=useState("all");
+  const[contractStatus,setContractStatus]=useState("all");
   const[memoContract,setMemoContract]=useState(null);
   const[contractSearch,setContractSearch]=useState("");
   const[completions,setCompletions]=useState({});
@@ -271,7 +273,15 @@ function MainApp({user,onLogout}){
   const allCEFiltered=useMemo(()=>filterCE(allCE.filter(e=>e.type==="관리전화"||e.type==="리포트")),[allCE,filterCE]);
   const allItems=useMemo(()=>[...filtered.map(t=>({...t,_itemType:"task"})),...allCEFiltered.map(e=>({...e,_itemType:"ce",due:e.date}))].sort((a,b)=>!a.due?1:!b.due?-1:a.due.localeCompare(b.due)),[filtered,allCEFiltered]);
   const managers=useMemo(()=>[...new Set(contracts.map(c=>c.manager).filter(Boolean))],[contracts]);
-  const filteredContracts=useMemo(()=>{let list=contractManager==="all"?visibleContracts:visibleContracts.filter(c=>c.manager===contractManager);if(contractSearch.trim())list=list.filter(c=>c.name?.toLowerCase().includes(contractSearch.trim().toLowerCase()));return list;},[visibleContracts,contractManager,contractSearch]);
+  const contractMonthOptions=useMemo(()=>{const set=new Set();visibleContracts.forEach(c=>{if(c.startDate){const[y,m]=c.startDate.split("-");set.add(`${y}-${m}`);}});return[...set].sort().reverse();},[visibleContracts]);
+  const filteredContracts=useMemo(()=>{
+    let list=contractManager==="all"?visibleContracts:visibleContracts.filter(c=>c.manager===contractManager);
+    if(contractMonth!=="all")list=list.filter(c=>c.startDate?.startsWith(contractMonth));
+    if(contractStatus==="active")list=list.filter(c=>c.endDate&&c.endDate>=todayStr);
+    else if(contractStatus==="ended")list=list.filter(c=>c.endDate&&c.endDate<todayStr);
+    if(contractSearch.trim())list=list.filter(c=>c.name?.toLowerCase().includes(contractSearch.trim().toLowerCase()));
+    return list;
+  },[visibleContracts,contractManager,contractMonth,contractStatus,contractSearch]);
   const totalPages=useMemo(()=>Math.ceil(filteredContracts.length/10),[filteredContracts]);
   const pagedContracts=useMemo(()=>filteredContracts.slice((contractPage-1)*10,contractPage*10),[filteredContracts,contractPage]);
   const calTasksExp=useMemo(()=>expandForMonth(filtered,calY,calM),[filtered,calY,calM]);
@@ -348,15 +358,44 @@ function MainApp({user,onLogout}){
           {tab==="contracts"&&(
             <div>
               {showCF&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}}/>}
-              <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
-                <div style={{position:"relative",flex:1,minWidth:180}}>
-                  <input value={contractSearch} onChange={e=>{setContractSearch(e.target.value);setContractPage(1);}} placeholder="🔍 상호명 검색..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:9,padding:"7px 12px 7px 12px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+                {/* 검색창 */}
+                <div style={{position:"relative"}}>
+                  <input value={contractSearch} onChange={e=>{setContractSearch(e.target.value);setContractPage(1);}} placeholder="🔍 상호명 검색..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:9,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
                   {contractSearch&&<button onClick={()=>{setContractSearch("");setContractPage(1);}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:14,padding:0}}>✕</button>}
                 </div>
-                {user.isAdmin&&(<div style={{display:"flex",gap:5,flexWrap:"wrap"}}><button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#2563eb":"#e2e8f0"}`,borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#eff6ff":"#fff",color:contractManager==="all"?"#2563eb":"#6b7280"}}>전체</button>{managers.map(m=>(<button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#7c3aed":"#6b7280"}}>{m}</button>))}</div>)}
+                {/* 월별 필터 */}
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>📅 월별:</span>
+                  <button onClick={()=>{setContractMonth("all");setContractPage(1);}} style={{border:`1.5px solid ${contractMonth==="all"?"#2563eb":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth==="all"?"#eff6ff":"#fff",color:contractMonth==="all"?"#2563eb":"#6b7280"}}>전체</button>
+                  {contractMonthOptions.map(mo=>{const[y,m]=mo.split("-");return(<button key={mo} onClick={()=>{setContractMonth(mo);setContractPage(1);}} style={{border:`1.5px solid ${contractMonth===mo?"#2563eb":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth===mo?"#eff6ff":"#fff",color:contractMonth===mo?"#2563eb":"#6b7280"}}>{parseInt(y)}년 {parseInt(m)}월</button>);})}
+                </div>
+                {/* 진행상태 필터 + 담당자 필터 */}
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>📋 상태:</span>
+                  {[{v:"all",l:"전체",c:"#6b7280"},{v:"active",l:"✅ 진행중",c:"#10b981"},{v:"ended",l:"⛔ 종료",c:"#9ca3af"}].map(({v,l,c})=>(
+                    <button key={v} onClick={()=>{setContractStatus(v);setContractPage(1);}} style={{border:`1.5px solid ${contractStatus===v?c:"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractStatus===v?c+"18":"#fff",color:contractStatus===v?c:"#6b7280"}}>{l}</button>
+                  ))}
+                  {user.isAdmin&&managers.length>0&&(<>
+                    <span style={{fontSize:11,fontWeight:600,color:"#6b7280",marginLeft:4,flexShrink:0}}>👤 담당자:</span>
+                    <button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#f5f3ff":"#fff",color:contractManager==="all"?"#7c3aed":"#6b7280"}}>전체</button>
+                    {managers.map(m=>(<button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#7c3aed":"#6b7280"}}>{m}</button>))}
+                  </>)}
+                </div>
+                {/* 필터 결과 요약 */}
+                {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span>
+                    <button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer"}}>✕ 필터 초기화</button>
+                  </div>
+                )}
               </div>
-              {contractSearch&&filteredContracts.length===0&&(<div style={{textAlign:"center",padding:"40px 0",color:"#9ca3af",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #e2e8f0"}}><div style={{fontSize:28,marginBottom:6}}>🔍</div><div>"{contractSearch}"에 해당하는 계약업체가 없습니다</div></div>)}
-              {filteredContracts.length===0&&!contractSearch&&!showCF?<div style={{textAlign:"center",padding:"48px 0",color:"#9ca3af",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #e2e8f0"}}>{user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div>
+              {filteredContracts.length===0&&!showCF?(
+                <div style={{textAlign:"center",padding:"40px 0",color:"#9ca3af",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #e2e8f0"}}>
+                  <div style={{fontSize:28,marginBottom:6}}>{contractSearch?"🔍":contractMonth!=="all"?"📅":"📭"}</div>
+                  <div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div>
+                </div>
+              )
               :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 {pagedContracts.map(c=>{
                   const evts=genEvents(c);const isActive=c.endDate>=todayStr;
