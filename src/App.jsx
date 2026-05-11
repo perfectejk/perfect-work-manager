@@ -512,7 +512,7 @@ function RevenueCalendarTab({contracts,user,profiles}){
   const selDayTotal=selDayContracts.reduce((s,c)=>s+parseAmount(c.total),0);
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     {/* 상단 헤더 카드 - N/R 분리 */}
-    <div style={{background:"linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%)",borderRadius:14,padding:"18px 22px",color:"#fff",boxShadow:"0 8px 24px rgba(217,119,6,0.25)"}}>
+    <div style={{background:"linear-gradient(135deg,#8468D3 0%,#0071CE 100%)",borderRadius:14,padding:"18px 22px",color:"#fff",boxShadow:"0 8px 24px rgba(217,119,6,0.25)"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
         <div><div style={{fontSize:11,opacity:0.85,fontWeight:600,marginBottom:2}}>💰 {calY}년 {calM+1}월 총 매출{selectedManager!=="all"&&` · ${selectedManager}`}</div><div style={{fontSize:28,fontWeight:900,letterSpacing:-0.5}}>{fmtAmount(monthTotal.amount)}</div></div>
         <div style={{textAlign:"right",background:"rgba(255,255,255,0.18)",borderRadius:12,padding:"10px 16px",backdropFilter:"blur(8px)"}}><div style={{fontSize:11,opacity:0.9,fontWeight:600}}>총 계약</div><div style={{fontSize:26,fontWeight:900}}>{monthTotal.count}<span style={{fontSize:14,fontWeight:700,marginLeft:2,opacity:0.85}}>건</span></div></div>
@@ -725,7 +725,7 @@ function MainApp({user,onLogout}){
       <Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)} navOrder={navOrder} setNavOrder={setNavOrder}/>
       <div style={{flex:1,minWidth:0,overflowY:"auto"}}>
         <div style={{background:"#fff",padding:"12px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #e2e8f0",position:"sticky",top:0,zIndex:50}}>
-          <div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{tab==="list"&&"📋 작업 목록"}{tab==="calendar"&&"📅 캘린더"}{tab==="revenue"&&"💰 매출현황 캘린더"}{tab==="contracts"&&"🤝 계약 관리"}{tab==="report"&&"📊 업무 보고"}{tab==="ranking"&&"🏆 매출 랭킹"}{tab==="admin"&&"🔒 관리자 설정"}</div>
+          <div style={{fontSize:15,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{tab==="list"&&"작업 목록"}{tab==="calendar"&&"캘린더"}{tab==="revenue"&&"매출현황 캘린더"}{tab==="contracts"&&"계약 관리"}{tab==="report"&&"업무 보고"}{tab==="ranking"&&"매출 랭킹"}{tab==="admin"&&"관리자 설정"}</div>
           <div style={{display:"flex",gap:8}}>
             {tab==="list"&&<button onClick={()=>{setEditTaskData(null);setForm(EF(user.isAdmin));setShowForm(v=>!v);}} style={{background:"#2563eb",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ 새 작업</button>}
             {tab==="contracts"&&user.isAdmin&&<button onClick={()=>{setEditContract(null);setShowCF(v=>!v);}} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ 계약 등록</button>}
