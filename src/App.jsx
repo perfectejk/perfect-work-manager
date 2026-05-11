@@ -90,98 +90,96 @@ function LoginScreen({onLogin}){
   };
 
   return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f7f8fa",fontFamily:"'Pretendard',-apple-system,sans-serif",padding:"40px 20px"}}>
-      <div style={{display:"flex",width:"100%",maxWidth:900,minHeight:520,background:"#fff",borderRadius:16,overflow:"hidden",border:"1px solid #f0f1f3",boxShadow:"0 4px 24px rgba(0,0,0,0.06)"}}>
+    <div style={{minHeight:"100vh",display:"flex",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
 
-        {/* 왼쪽 브랜드 영역 */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",padding:"48px 52px",background:"#f7f8fa",borderRight:"1px solid #f0f1f3"}}>
-          {/* 로고 */}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36}}>
-            <div style={{width:42,height:42,borderRadius:11,background:"linear-gradient(135deg,#8468D3,#0071CE)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <span style={{fontSize:22,fontWeight:800,color:"#fff",fontStyle:"italic"}}>P</span>
+      {/* 왼쪽 브랜드 영역 */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",padding:"48px 8vw",background:"#f7f8fa",borderRight:"1px solid #f0f1f3"}}>
+        {/* 로고 */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36}}>
+          <div style={{width:42,height:42,borderRadius:11,background:"linear-gradient(135deg,#8468D3,#0071CE)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:22,fontWeight:800,color:"#fff",fontStyle:"italic"}}>P</span>
+          </div>
+          <div>
+            <div style={{fontSize:15,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>PRO Marketing</div>
+            <div style={{fontSize:9,color:"#adb5bd",letterSpacing:"0.5px",textTransform:"uppercase",fontWeight:500}}>Management System</div>
+          </div>
+        </div>
+        {/* 카피 */}
+        <div style={{fontSize:40,fontWeight:800,color:"#0f1117",letterSpacing:"-1.5px",lineHeight:1.2,marginBottom:16}}>
+          영업팀을 위한<br/>스마트 업무관리
+        </div>
+        <div style={{fontSize:14,color:"#adb5bd",fontWeight:400,marginBottom:44,lineHeight:1.8}}>
+          계약 현황부터 매출 랭킹까지<br/>한 곳에서 관리하세요.
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {[
+            {color:"#0071CE",text:"팀 실적 실시간 관리"},
+            {color:"#8468D3",text:"계약 현황 추적"},
+            {color:"#10b981",text:"매출 랭킹 분석"},
+          ].map((item,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:9}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:item.color,flexShrink:0}}/>
+              <span style={{fontSize:13,color:"#6b7280",fontWeight:500}}>{item.text}</span>
             </div>
-            <div>
-              <div style={{fontSize:15,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>PRO Marketing</div>
-              <div style={{fontSize:9,color:"#adb5bd",letterSpacing:"0.5px",textTransform:"uppercase",fontWeight:500}}>Management System</div>
-            </div>
-          </div>
-          {/* 카피 */}
-          <div style={{fontSize:36,fontWeight:800,color:"#0f1117",letterSpacing:"-1.2px",lineHeight:1.2,marginBottom:14}}>
-            영업팀을 위한<br/>스마트 업무관리
-          </div>
-          <div style={{fontSize:13,color:"#adb5bd",fontWeight:400,marginBottom:40,lineHeight:1.8}}>
-            계약 현황부터 매출 랭킹까지<br/>한 곳에서 관리하세요.
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:11}}>
-            {[
-              {color:"#0071CE",text:"팀 실적 실시간 관리"},
-              {color:"#8468D3",text:"계약 현황 추적"},
-              {color:"#10b981",text:"매출 랭킹 분석"},
-            ].map((item,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:9}}>
-                <div style={{width:6,height:6,borderRadius:"50%",background:item.color,flexShrink:0}}/>
-                <span style={{fontSize:13,color:"#6b7280",fontWeight:500}}>{item.text}</span>
-              </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 오른쪽 로그인 폼 */}
+      <div style={{width:"38vw",minWidth:340,maxWidth:480,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",borderLeft:"1px solid #f0f1f3",flexShrink:0}}>
+        <div style={{width:"100%",padding:"40px 10%"}}>
+          <div style={{fontSize:22,fontWeight:800,color:"#0f1117",marginBottom:4,letterSpacing:"-0.5px"}}>로그인</div>
+          <div style={{fontSize:12,color:"#adb5bd",marginBottom:24,fontWeight:400}}>계정 정보를 입력하세요</div>
+
+          {/* 사원/관리자 탭 */}
+          <div style={{display:"flex",background:"#f7f8fa",borderRadius:10,padding:3,marginBottom:20,border:"1px solid #f0f1f3"}}>
+            {[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(
+              <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}}
+                style={{flex:1,padding:"8px",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
+                  background:isAdmin===v?"#0071CE":"transparent",
+                  color:isAdmin===v?"#fff":"#adb5bd",
+                  fontFamily:"'Pretendard',-apple-system,sans-serif",
+                  transition:"all 0.15s",
+                }}>
+                {l}
+              </button>
             ))}
           </div>
-        </div>
 
-        {/* 오른쪽 로그인 폼 */}
-        <div style={{width:340,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <div style={{width:"100%",padding:"40px 32px"}}>
-            <div style={{fontSize:22,fontWeight:800,color:"#0f1117",marginBottom:4,letterSpacing:"-0.5px"}}>로그인</div>
-            <div style={{fontSize:12,color:"#adb5bd",marginBottom:24,fontWeight:400}}>계정 정보를 입력하세요</div>
-
-            {/* 사원/관리자 탭 */}
-            <div style={{display:"flex",background:"#f7f8fa",borderRadius:10,padding:3,marginBottom:20,border:"1px solid #f0f1f3"}}>
-              {[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(
-                <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}}
-                  style={{flex:1,padding:"8px",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
-                    background:isAdmin===v?"#0071CE":"transparent",
-                    color:isAdmin===v?"#fff":"#adb5bd",
-                    fontFamily:"'Pretendard',-apple-system,sans-serif",
-                    transition:"all 0.15s",
-                  }}>
-                  {l}
-                </button>
-              ))}
-            </div>
-
-            {/* 이름 입력 */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>이름</div>
-              <input type="text" value={name}
-                onChange={e=>setName(e.target.value)}
-                onKeyDown={e=>e.key==="Enter"&&go()}
-                placeholder="이름을 입력하세요"
-                style={iS}/>
-            </div>
-
-            {/* 비밀번호 입력 */}
-            <div style={{marginBottom:20}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>비밀번호</div>
-              <input type="password" value={pw}
-                onChange={e=>setPw(e.target.value)}
-                onKeyDown={e=>e.key==="Enter"&&go()}
-                placeholder="비밀번호를 입력하세요"
-                style={iS}/>
-            </div>
-
-            {/* 에러 메시지 */}
-            {err&&<p style={{margin:"0 0 12px",fontSize:12,color:"#e53e3e",fontWeight:500,textAlign:"center"}}>{err}</p>}
-
-            {/* 로그인 버튼 */}
-            <button onClick={go} disabled={loading}
-              style={{width:"100%",background:loading?"#93c5fd":"#0071CE",color:"#fff",border:"none",
-                borderRadius:10,padding:"13px",fontSize:13,fontWeight:700,cursor:loading?"not-allowed":"pointer",
-                letterSpacing:"1px",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"background 0.15s",
-              }}>
-              {loading?"확인 중…":"LOGIN"}
-            </button>
+          {/* 이름 입력 */}
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>이름</div>
+            <input type="text" value={name}
+              onChange={e=>setName(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&go()}
+              placeholder="이름을 입력하세요"
+              style={iS}/>
           </div>
-        </div>
 
+          {/* 비밀번호 입력 */}
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>비밀번호</div>
+            <input type="password" value={pw}
+              onChange={e=>setPw(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&go()}
+              placeholder="비밀번호를 입력하세요"
+              style={iS}/>
+          </div>
+
+          {/* 에러 메시지 */}
+          {err&&<p style={{margin:"0 0 12px",fontSize:12,color:"#e53e3e",fontWeight:500,textAlign:"center"}}>{err}</p>}
+
+          {/* 로그인 버튼 */}
+          <button onClick={go} disabled={loading}
+            style={{width:"100%",background:loading?"#93c5fd":"#0071CE",color:"#fff",border:"none",
+              borderRadius:10,padding:"13px",fontSize:13,fontWeight:700,cursor:loading?"not-allowed":"pointer",
+              letterSpacing:"1px",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"background 0.15s",
+            }}>
+            {loading?"확인 중…":"LOGIN"}
+          </button>
+        </div>
       </div>
+
     </div>
   );
 }
