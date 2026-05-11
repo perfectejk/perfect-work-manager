@@ -93,7 +93,7 @@ function LoginScreen({onLogin}){
     <div style={{minHeight:"100vh",display:"flex",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
 
       {/* 왼쪽 브랜드 영역 */}
-      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",padding:"48px 12vw",background:"#f7f8fa",borderRight:"1px solid #f0f1f3"}}>
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",padding:"48px 6vw",background:"#f7f8fa",alignItems:"center",borderRight:"1px solid #f0f1f3"}}>
         {/* 로고 */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36}}>
           <div style={{width:42,height:42,borderRadius:11,background:"linear-gradient(135deg,#8468D3,#0071CE)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -126,8 +126,8 @@ function LoginScreen({onLogin}){
       </div>
 
       {/* 오른쪽 로그인 폼 */}
-      <div style={{width:"57vw",minWidth:510,maxWidth:720,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",borderLeft:"1px solid #f0f1f3",flexShrink:0}}>
-        <div style={{width:"100%",padding:"40px 10%"}}>
+      <div style={{width:"36vw",minWidth:340,maxWidth:440,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",borderLeft:"1px solid #f0f1f3",flexShrink:0}}>
+        <div style={{width:"100%",padding:"32px 7%"}}>
           <div style={{fontSize:22,fontWeight:800,color:"#0f1117",marginBottom:4,letterSpacing:"-0.5px"}}>로그인</div>
           <div style={{fontSize:12,color:"#adb5bd",marginBottom:24,fontWeight:400}}>계정 정보를 입력하세요</div>
 
