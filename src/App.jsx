@@ -46,7 +46,6 @@ function ProfileModal({user,profiles,onUpdateProfile,onClose,contracts}){const f
 const Badge=({label,color,bg})=><span style={{fontSize:11,fontWeight:600,color,background:bg,borderRadius:6,padding:"2px 7px",whiteSpace:"nowrap"}}>{label}</span>;
 function ContractMemoModal({contract,user,onClose}){
   const[memos,setMemos]=useState([]);const[input,setInput]=useState("");const[saving,setSaving]=useState(false);const[loading,setLoading]=useState(true);const bottomRef=useRef();
-  // linkedMemoId가 있으면 해당 계약 메모 키 사용 (이전 계약 메모 이어받기)
   const memoKey=`contract:memos:${contract.linkedMemoId||contract.id}`;
   useEffect(()=>{loadMemos();},[]);
   useEffect(()=>{if(bottomRef.current)bottomRef.current.scrollIntoView({behavior:"smooth"});},[memos]);
@@ -188,25 +187,20 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
   const[startDate,setStartDate]=useState(initial?.startDate||"");
   const[endDate,setEndDate]=useState(initial?.endDate||"");
   const[parseMsg,setParseMsg]=useState("");
-  // 이전 계약 연결
   const[linkedMemoId,setLinkedMemoId]=useState(initial?.linkedMemoId||"");
   const[showManualLink,setShowManualLink]=useState(false);
-  const[autoMatched,setAutoMatched]=useState(null); // 자동 매칭된 계약
-
+  const[autoMatched,setAutoMatched]=useState(null);
   const iS={border:"1px solid #e5e7eb",borderRadius:8,padding:"8px 12px",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"};
-
   const handleParse=()=>{
     const r=parseMemo(memo);
     setParsed(p=>({...p,...r}));
     setParseMsg("✓ 파싱 완료!");
-    // 상호명 완전 일치 검색
     if(r.name){
       const matched=allContracts.find(c=>c.name===r.name&&(!initial||c.id!==initial.id));
       if(matched){setAutoMatched(matched);setLinkedMemoId(matched.id);}
       else{setAutoMatched(null);}
     }
   };
-
   return(<div style={{background:"#fff",borderRadius:14,padding:22,border:"1px solid #e5e7eb",marginBottom:12}}>
     <p style={{margin:"0 0 14px",fontWeight:700,fontSize:15}}>{initial?.id?"✏️ 계약 수정":"➕ 계약업체 등록"}</p>
     {!initial?.id&&<div style={{marginBottom:14,background:"#f5f3ff",borderRadius:10,padding:14}}>
@@ -216,7 +210,6 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
         <button onClick={handleParse} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer"}}>🔍 자동 파싱</button>
         {parseMsg&&<span style={{fontSize:12,color:"#10b981",fontWeight:600}}>{parseMsg}</span>}
       </div>
-      {/* 자동 매칭 배너 */}
       {autoMatched&&(
         <div style={{marginTop:10,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:9,padding:"10px 14px"}}>
           <div style={{fontSize:12,fontWeight:700,color:"#92400e",marginBottom:6}}>📎 동일 상호명 계약 발견 — 이전 메모 이어받을까요?</div>
@@ -227,7 +220,6 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
           </div>
         </div>
       )}
-      {/* 수동 연결 버튼 */}
       {!autoMatched&&(
         <div style={{marginTop:8}}>
           <button onClick={()=>setShowManualLink(v=>!v)} style={{fontSize:11,color:"#6b7280",background:"none",border:"1px solid #e5e7eb",borderRadius:6,padding:"4px 10px",cursor:"pointer"}}>📎 이전 계약과 수동 연결</button>
@@ -246,7 +238,6 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
         </div>
       )}
     </div>}
-    {/* 신규/재연장 토글 */}
     <div style={{display:"flex",gap:8,marginBottom:14,justifyContent:"flex-start"}}>
       {[{v:false,l:"🆕 신규",c:"#2563eb"},{v:true,l:"🔄 재연장",c:"#7c3aed"}].map(({v,l,c})=>(
         <button key={String(v)} onClick={()=>setParsed(p=>({...p,isRenewal:v}))} style={{border:`2px solid ${parsed.isRenewal===v?c:"#e5e7eb"}`,borderRadius:9,padding:"6px 20px",fontSize:13,fontWeight:700,cursor:"pointer",background:parsed.isRenewal===v?c+"18":"#fff",color:parsed.isRenewal===v?c:"#9ca3af"}}>{l}</button>
@@ -276,7 +267,6 @@ function DailyAlertModal({items,onClose}){
           <div style={{fontSize:24}}>🔔</div>
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"14px 18px",display:"flex",flexDirection:"column",gap:14}}>
-          {/* 계약 관리 섹션 */}
           {contractItems.length>0&&(
             <div>
               <div style={{fontSize:12,fontWeight:800,color:"#2563eb",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
@@ -292,7 +282,6 @@ function DailyAlertModal({items,onClose}){
               </div>
             </div>
           )}
-          {/* 일반 일정 섹션 */}
           {taskItems.length>0&&(
             <div>
               <div style={{fontSize:12,fontWeight:800,color:"#7c3aed",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
@@ -389,15 +378,12 @@ function RevenueCalendarTab({contracts,user,profiles}){
   const filteredContracts=useMemo(()=>selectedManager==="all"?visibleContracts:visibleContracts.filter(c=>c.manager===selectedManager),[visibleContracts,selectedManager]);
   const monthPrefix=`${calY}-${String(calM+1).padStart(2,"0")}`;
   const contractsByDay=useMemo(()=>{const map={};filteredContracts.forEach(c=>{if(!c.startDate||!c.startDate.startsWith(monthPrefix))return;const d=parseInt(c.startDate.slice(8));if(!map[d])map[d]=[];map[d].push(c);});return map;},[filteredContracts,monthPrefix]);
-  // 상단 N/R 분리 집계
   const monthTotal=useMemo(()=>{let count=0,amount=0,newCount=0,newAmount=0,renCount=0,renAmount=0;filteredContracts.forEach(c=>{if(!c.startDate||!c.startDate.startsWith(monthPrefix))return;const a=parseAmount(c.total);count++;amount+=a;if(c.isRenewal){renCount++;renAmount+=a;}else{newCount++;newAmount+=a;}});return{count,amount,newCount,newAmount,renCount,renAmount};},[filteredContracts,monthPrefix]);
-  // 담당자별 N/R 분리 집계
   const managerMonthStats=useMemo(()=>{const map={};visibleContracts.forEach(c=>{if(!c.startDate||!c.startDate.startsWith(monthPrefix)||!c.manager)return;if(!map[c.manager])map[c.manager]={name:c.manager,count:0,amount:0,newCount:0,newAmount:0,renCount:0,renAmount:0};const a=parseAmount(c.total);map[c.manager].count++;map[c.manager].amount+=a;if(c.isRenewal){map[c.manager].renCount++;map[c.manager].renAmount+=a;}else{map[c.manager].newCount++;map[c.manager].newAmount+=a;}});return Object.values(map).sort((a,b)=>b.amount-a.amount);},[visibleContracts,monthPrefix]);
   const firstDay=new Date(calY,calM,1).getDay();const dim=new Date(calY,calM+1,0).getDate();const cells=[...Array(firstDay).fill(null),...Array.from({length:dim},(_,i)=>i+1)];while(cells.length%7)cells.push(null);
   const selDayContracts=useMemo(()=>selectedDay?filteredContracts.filter(c=>c.startDate===selectedDay).sort((a,b)=>parseAmount(b.total)-parseAmount(a.total)):[],[filteredContracts,selectedDay]);
   const selDayTotal=selDayContracts.reduce((s,c)=>s+parseAmount(c.total),0);
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {/* 상단 헤더 카드 - N/R 분리 */}
     <div style={{background:"linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%)",borderRadius:14,padding:"18px 22px",color:"#fff",boxShadow:"0 8px 24px rgba(217,119,6,0.25)"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
         <div><div style={{fontSize:11,opacity:0.85,fontWeight:600,marginBottom:2}}>💰 {calY}년 {calM+1}월 총 매출{selectedManager!=="all"&&` · ${selectedManager}`}</div><div style={{fontSize:28,fontWeight:900,letterSpacing:-0.5}}>{fmtAmount(monthTotal.amount)}</div></div>
@@ -424,7 +410,6 @@ function RevenueCalendarTab({contracts,user,profiles}){
       </div>
     </div>
     {selectedDay&&selDayContracts.length>0&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",overflow:"hidden"}}><div style={{padding:"13px 20px",borderBottom:"1px solid #fde68a",background:"linear-gradient(90deg,#fffbeb,#fef3c7)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:14,color:"#92400e"}}>📅 {new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span><span style={{fontSize:12,color:"#b45309",fontWeight:700,background:"#fef3c7",borderRadius:99,padding:"3px 10px",border:"1px solid #fbbf24"}}>{selDayContracts.length}건 · {fmtAmount(selDayTotal)}</span></div><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:16}}>✕</button></div><div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>{selDayContracts.map(c=>(<div key={c.id} style={{background:"#f8fafc",borderRadius:11,padding:"12px 14px",border:"1px solid #e2e8f0"}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>{c.manager?<Avatar name={c.manager} img={profiles[c.manager]} size={34} border="2px solid #fff"/>:<div style={{width:34,height:34,borderRadius:"50%",background:"#e5e7eb",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#9ca3af"}}>?</div>}<div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:5,marginBottom:1}}><span style={{fontSize:10,fontWeight:800,color:c.isRenewal?"#7c3aed":"#2563eb",background:c.isRenewal?"#f5f3ff":"#eff6ff",borderRadius:4,padding:"1px 5px"}}>{c.isRenewal?"R":"N"}</span><span style={{fontWeight:700,fontSize:13,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span></div><div style={{fontSize:11,color:c.manager?"#7c3aed":"#9ca3af",fontWeight:600}}>{c.manager?`👤 ${c.manager}`:"담당자 미지정"}</div></div>{c.total&&<div style={{background:"linear-gradient(135deg,#fbbf24,#f59e0b)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:800,whiteSpace:"nowrap"}}>{c.total}</div>}</div><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{c.phone&&<Badge label={`📞 ${c.phone}`} color="#6b7280" bg="#f3f4f6"/>}{c.endDate&&<Badge label={`종료: ${c.endDate}`} color="#2563eb" bg="#eff6ff"/>}{c.link&&<a href={c.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#2563eb",textDecoration:"none",background:"#eff6ff",borderRadius:6,padding:"2px 7px",fontWeight:600}}>🔗 링크</a>}</div>{c.notes&&<div style={{marginTop:6,fontSize:11,color:"#6b7280",background:"#fff",borderRadius:6,padding:"5px 8px",borderLeft:"3px solid #fde68a"}}>📌 {c.notes}</div>}</div>))}</div></div>)}
-    {/* 담당자별 매출 - N/R 분리 */}
     {user.isAdmin&&selectedManager==="all"&&managerMonthStats.length>0&&(<div style={{background:"#fff",borderRadius:12,padding:"14px 18px",border:"1px solid #e2e8f0"}}><div style={{fontWeight:700,fontSize:13,color:"#111827",marginBottom:10}}>📊 이달 담당자별 매출</div><div style={{display:"flex",flexDirection:"column",gap:8}}>{managerMonthStats.map((s,i)=>(<div key={s.name} style={{display:"flex",alignItems:"center",gap:10,background:i===0?"#fffbeb":"#f8fafc",borderRadius:10,padding:"10px 14px",border:i===0?"1px solid #fde68a":"1px solid #e2e8f0"}}><div style={{fontSize:16}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}`}</div><Avatar name={s.name} img={profiles[s.name]} size={28} border="2px solid #fff"/><div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:700,color:"#111827"}}>{s.name}</div><div style={{fontSize:11,color:"#b45309",fontWeight:700,marginTop:1}}>{fmtAmount(s.amount)} <span style={{color:"#9ca3af",fontWeight:400}}>({s.count}건)</span></div></div><div style={{display:"flex",gap:6,flexShrink:0}}><div style={{textAlign:"center",background:"#eff6ff",borderRadius:8,padding:"5px 10px"}}><div style={{fontSize:9,color:"#3b82f6",fontWeight:600,marginBottom:1}}>🆕 신규</div><div style={{fontSize:12,fontWeight:800,color:"#1d4ed8"}}>{s.newCount}건</div><div style={{fontSize:10,color:"#2563eb",fontWeight:600}}>{fmtAmount(s.newAmount)}</div></div><div style={{textAlign:"center",background:"#f5f3ff",borderRadius:8,padding:"5px 10px"}}><div style={{fontSize:9,color:"#7c3aed",fontWeight:600,marginBottom:1}}>🔄 재연장</div><div style={{fontSize:12,fontWeight:800,color:"#6d28d9"}}>{s.renCount}건</div><div style={{fontSize:10,color:"#7c3aed",fontWeight:600}}>{fmtAmount(s.renAmount)}</div></div></div></div>))}</div></div>)}
     {filteredContracts.filter(c=>c.startDate?.startsWith(monthPrefix)).length===0&&(<div style={{background:"#fff",borderRadius:12,padding:"40px 20px",border:"1px solid #e2e8f0",textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>📭</div><div style={{fontSize:13,color:"#9ca3af"}}>이 달 계약이 없습니다</div></div>)}
   </div>);
@@ -474,6 +459,12 @@ function MainApp({user,onLogout}){
   const[loadingDateR,setLoadingDateR]=useState(false);
   const[editingReport,setEditingReport]=useState(null);
   const[dailyAlertItems,setDailyAlertItems]=useState(null);
+  // ===== 관리자 업무량 분석 state =====
+  const[analysisStart,setAnalysisStart]=useState("");
+  const[analysisEnd,setAnalysisEnd]=useState("");
+  const[analysisMonth,setAnalysisMonth]=useState(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
+  const[analysisData,setAnalysisData]=useState(null);
+  const[loadingAnalysis,setLoadingAnalysis]=useState(false);
 
   useEffect(()=>{
     const link=document.createElement('link');link.rel='stylesheet';link.href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@700;900&display=swap';document.head.appendChild(link);
@@ -481,62 +472,37 @@ function MainApp({user,onLogout}){
   },[]);
   useEffect(()=>{if(selTs)loadReports(selTs);},[selTs]);
   useEffect(()=>{loadDateFinalReports(reportViewDate);},[reportViewDate]);
-
-  // 10시 / 15시30분 / 18시 알림 스케줄 (하루 3번)
   useEffect(()=>{
-    const ALERT_TIMES=[
-      {h:10,m:0,key:'alert10'},
-      {h:15,m:30,key:'alert1530'},
-      {h:18,m:0,key:'alert18'},
-    ];
+    const ALERT_TIMES=[{h:10,m:0,key:'alert10'},{h:15,m:30,key:'alert1530'},{h:18,m:0,key:'alert18'}];
     const timers=[];
     ALERT_TIMES.forEach(({h,m,key})=>{
       const storageKey=`dailyAlert:${todayStr}:${key}`;
-      if(sessionStorage.getItem(storageKey))return; // 이미 표시됨
-      const now=new Date();
-      const target=new Date(now);
-      target.setHours(h,m,0,0);
-      const trigger=()=>{
-        sessionStorage.setItem(storageKey,'1');
-        setDailyAlertItems('PENDING');
-      };
-      if(now>=target){
-        // 이미 지난 시간이면 즉시 (아직 안 본 경우만)
-        trigger();
-      } else {
-        const tid=setTimeout(trigger, target-now);
-        timers.push(tid);
-      }
+      if(sessionStorage.getItem(storageKey))return;
+      const now=new Date();const target=new Date(now);target.setHours(h,m,0,0);
+      const trigger=()=>{sessionStorage.setItem(storageKey,'1');setDailyAlertItems('PENDING');};
+      if(now>=target){trigger();}else{const tid=setTimeout(trigger,target-now);timers.push(tid);}
     });
     return()=>timers.forEach(clearTimeout);
   },[]);
-
-  // PENDING → 실제 아이템 계산 (tasks/contracts 로드 후)
   useEffect(()=>{
     if(dailyAlertItems!=='PENDING')return;
     const items=[];
-    // 오늘 마감 할일 (완료 제외)
     const myTasks=tasks.filter(t=>t.status!=="done"&&(user.isAdmin||t.owner===user.name));
     myTasks.forEach(t=>{
       if(t.deadline===todayStr){const dd=getDDayLabel(t.deadline);items.push({type:"task",title:t.title,sub:`마감 당일 · ${t.project||"프로젝트 없음"}`,dday:dd?.text,urgent:true});}
       else if(t.deadline&&getDDay(t.deadline)<=3&&getDDay(t.deadline)>0){const dd=getDDayLabel(t.deadline);items.push({type:"task",title:t.title,sub:`마감 임박 · ${t.project||""}`,dday:dd?.text,urgent:true});}
     });
-    // 오늘 계약 관리전화/리포트 (완료 체크된 항목 제외)
     const myContracts=user.isAdmin?contracts:contracts.filter(c=>c.manager===user.name);
     myContracts.forEach(c=>{
       const evts=genEvents(c);
       evts.forEach(e=>{
         if(e.date===todayStr&&(e.type==="관리전화"||e.type==="리포트")){
-          // completions에서 체크 여부 확인
           const isDone=!!completions[ceKey(e)];
-          if(!isDone){
-            items.push({type:"contract",ceType:e.type,title:c.name,sub:`${c.manager||"담당자 미지정"} · ${c.phone||""}`,urgent:false});
-          }
+          if(!isDone){items.push({type:"contract",ceType:e.type,title:c.name,sub:`${c.manager||"담당자 미지정"} · ${c.phone||""}`,urgent:false});}
         }
       });
     });
-    if(items.length>0)setDailyAlertItems(items);
-    else setDailyAlertItems(null);
+    if(items.length>0)setDailyAlertItems(items);else setDailyAlertItems(null);
   },[dailyAlertItems,tasks,contracts,completions]);
 
   const loadTasks=async()=>{setLoadingTasks(true);if(user.isAdmin){const keys=await st.list("tasks:");const all=[];for(const k of keys){const items=await st.get(k)||[];items.forEach(t=>all.push({...t,_sk:k}));}setTasks(all);}else{const mine=await st.get(`tasks:${user.name}`)||[];const pub=await st.get("tasks:_pub")||[];setTasks([...mine.map(t=>({...t,_sk:`tasks:${user.name}`})),...pub.map(t=>({...t,_sk:"tasks:_pub"}))]);}setLoadingTasks(false);};
@@ -564,21 +530,72 @@ function MainApp({user,onLogout}){
   const addTimeslot=async()=>{const ts=newTs.trim();if(!ts)return;const list=await st.get("wt:ts:fixed")||[];if(!list.includes(ts)){list.push(ts);await st.set("wt:ts:fixed",list);setTimeslots(list);}setSelTs(ts);setMyTs(ts);setNewTs("");};
   const removeTimeslot=async ts=>{const list=(await st.get("wt:ts:fixed")||[]).filter(t=>t!==ts);await st.set("wt:ts:fixed",list);setTimeslots(list);if(selTs===ts)setSelTs(list[list.length-1]||"");if(myTs===ts)setMyTs(list[list.length-1]||"");};
   const loadReports=async ts=>{setLoadingR(true);const keys=await st.list(`wr:${todayStr}:${san(ts)}:`);const rows=[];for(const k of keys){const r=await st.get(k);if(r)rows.push(r);}setTsReports(rows);setLoadingR(false);};
-  // 날짜별 최종마감 조회
   const loadDateFinalReports=async(dateStr)=>{
     setLoadingDateR(true);
     const keys=await st.list(`wr:${dateStr}:${san("최종마감")}:`);
-    const rows=[];
-    for(const k of keys){const r=await st.get(k);if(r)rows.push(r);}
-    setDateReports(rows);
-    setLoadingDateR(false);
+    const rows=[];for(const k of keys){const r=await st.get(k);if(r)rows.push(r);}
+    setDateReports(rows);setLoadingDateR(false);
   };
-  // 관리자 수정 저장
   const handleAdminSaveReport=async(updatedReport)=>{
     const key=`wr:${reportViewDate}:${san("최종마감")}:${san(updatedReport.name)}`;
-    await st.set(key,updatedReport);
-    await loadDateFinalReports(reportViewDate);
+    await st.set(key,updatedReport);await loadDateFinalReports(reportViewDate);
   };
+  // ===== 기간별 분석 함수 =====
+  const loadAnalysisData=async(startDate,endDate)=>{
+    if(!startDate||!endDate)return;
+    setLoadingAnalysis(true);setAnalysisData(null);
+    const byDate={};
+    const dates=[];let cur=new Date(startDate+"T00:00:00");const end=new Date(endDate+"T00:00:00");
+    while(cur<=end){dates.push(cur.toISOString().slice(0,10));cur.setDate(cur.getDate()+1);}
+    for(const date of dates){
+      // 최종마감 우선, 없으면 6시 타임
+      const finalKeys=await st.list(`wr:${date}:${san("최종마감")}:`);
+      let rows=[];
+      if(finalKeys.length>0){for(const k of finalKeys){const r=await st.get(k);if(r)rows.push({...r,_ts:"최종마감"});}}
+      else{const sixKeys=await st.list(`wr:${date}:${san("6시")}:`);for(const k of sixKeys){const r=await st.get(k);if(r)rows.push({...r,_ts:"6시"});}}
+      if(rows.length>0)byDate[date]=rows;
+    }
+    setAnalysisData(byDate);setLoadingAnalysis(false);
+  };
+  const loadAnalysisByMonth=async()=>{
+    if(!analysisMonth)return;
+    const[y,m]=analysisMonth.split("-");const dim=new Date(parseInt(y),parseInt(m),0).getDate();
+    await loadAnalysisData(`${analysisMonth}-01`,`${analysisMonth}-${String(dim).padStart(2,"0")}`);
+  };
+  const downloadAnalysisExcel=()=>{
+    if(!analysisData||Object.keys(analysisData).length===0){alert("먼저 데이터를 불러오세요.");return;}
+    const allMetrics=[...METRICS,...FINAL_METRICS];const metricKeys=allMetrics.map(m=>m.key);const metricLabels=allMetrics.map(m=>m.label+(m.unit?`(${m.unit})`:""));
+    const wb=XLSX.utils.book_new();const sortedDates=Object.keys(analysisData).sort();
+    const nameSet=new Set();sortedDates.forEach(d=>analysisData[d].forEach(r=>nameSet.add(r.name)));const names=[...nameSet].sort();
+    // 시트1: 일자별
+    const dailyRows=[["날짜","타임","사원",...metricLabels]];
+    sortedDates.forEach(date=>{const rows=analysisData[date];const ts=rows[0]?._ts||"-";rows.forEach(r=>{dailyRows.push([date,ts,r.name,...metricKeys.map(k=>k==="dailySales"?Number(r[k])||0:r[k]||0)]);});const tot=metricKeys.map(k=>rows.reduce((s,r)=>s+(Number(r[k])||0),0));dailyRows.push([date,"【합계】","",...tot]);dailyRows.push([]);});
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dailyRows),"일자별_업무량");
+    // 시트2: 총합 (지표별로 사원 × 날짜)
+    const sumAllRows=[];
+    allMetrics.forEach((metric,mi)=>{
+      if(mi>0)sumAllRows.push([]);sumAllRows.push([`▶ ${metric.label}${metric.unit?` (${metric.unit})`:""}`]);
+      sumAllRows.push(["사원",...sortedDates,"합계"]);
+      names.forEach(name=>{const vals=sortedDates.map(date=>{const r=analysisData[date]?.find(x=>x.name===name);return r?Number(r[metric.key])||0:0;});sumAllRows.push([name,...vals,vals.reduce((a,b)=>a+b,0)]);});
+      const totRow=sortedDates.map(date=>analysisData[date]?.reduce((s,r)=>s+(Number(r[metric.key])||0),0)||0);
+      sumAllRows.push(["【전체합계】",...totRow,totRow.reduce((a,b)=>a+b,0)]);
+    });
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sumAllRows),"총합_지표별");
+    // 시트3: 평균 (지표별로 사원 × 날짜)
+    const avgAllRows=[];
+    allMetrics.forEach((metric,mi)=>{
+      if(mi>0)avgAllRows.push([]);avgAllRows.push([`▶ ${metric.label}${metric.unit?` (${metric.unit})`:""}`]);
+      avgAllRows.push(["사원",...sortedDates,"평균"]);
+      names.forEach(name=>{const vals=sortedDates.map(date=>{const r=analysisData[date]?.find(x=>x.name===name);return r?Number(r[metric.key])||0:null;});const present=vals.filter(v=>v!==null);const avg=present.length>0?Math.round(present.reduce((a,b)=>a+b,0)/present.length*100)/100:0;avgAllRows.push([name,...vals.map(v=>v===null?"-":v),avg]);});
+      const teamAvgs=sortedDates.map(date=>{const rows=analysisData[date];if(!rows||rows.length===0)return"-";const tot=rows.reduce((s,r)=>s+(Number(r[metric.key])||0),0);return Math.round(tot/rows.length*100)/100;});
+      const teamAvgVals=teamAvgs.filter(v=>v!=="-");const teamAvgTotal=teamAvgVals.length>0?Math.round(teamAvgVals.reduce((a,b)=>a+b,0)/teamAvgVals.length*100)/100:0;
+      avgAllRows.push(["【전체평균】",...teamAvgs,teamAvgTotal]);
+    });
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(avgAllRows),"평균_지표별");
+    const label=analysisStart&&analysisEnd?`${analysisStart}~${analysisEnd}`:analysisMonth||"조회";
+    XLSX.writeFile(wb,`업무량분석_${label}.xlsx`);
+  };
+
   const submitReport=async()=>{
     if(!myTs)return;setSubmitting(true);setSubmitMsg("");
     const isFinal=myTs==="최종마감";
@@ -610,12 +627,7 @@ function MainApp({user,onLogout}){
   },[visibleContracts,contractManager,contractMonth,contractStatus,contractSearch]);
   const totalPages=useMemo(()=>Math.ceil(filteredContracts.length/10),[filteredContracts]);
   const pagedContracts=useMemo(()=>filteredContracts.slice((contractPage-1)*10,contractPage*10),[filteredContracts,contractPage]);
-  // 신규/재연장 매출 통계 (필터 적용된 목록 기준)
-  const renewalStats=useMemo(()=>{
-    const now={count:0,amount:0},ren={count:0,amount:0};
-    filteredContracts.forEach(c=>{const a=parseAmount(c.total);if(c.isRenewal){ren.count++;ren.amount+=a;}else{now.count++;now.amount+=a;}});
-    return{new:now,renewal:ren};
-  },[filteredContracts]);
+  const renewalStats=useMemo(()=>{const now={count:0,amount:0},ren={count:0,amount:0};filteredContracts.forEach(c=>{const a=parseAmount(c.total);if(c.isRenewal){ren.count++;ren.amount+=a;}else{now.count++;now.amount+=a;}});return{new:now,renewal:ren};},[filteredContracts]);
   const calTasksExp=useMemo(()=>expandForMonth(filtered,calY,calM),[filtered,calY,calM]);
   const calCE=useMemo(()=>filterCE(allCE.filter(e=>e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`)&&e.type!=="온보딩")),[allCE,calY,calM,filterCE]);
   const tasksByDay=useMemo(()=>{const m={};if(calFilter!=="contracts")calTasksExp.forEach(t=>{if(t.due){const d=parseInt(t.due.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].t.push(t);}});if(calFilter!=="tasks")calCE.forEach(e=>{const d=parseInt(e.date.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].e.push(e);});return m;},[calTasksExp,calCE,calFilter]);
@@ -660,21 +672,17 @@ function MainApp({user,onLogout}){
                 <select value={fProject} onChange={e=>setFProject(e.target.value)} style={iS2}><option value="all">전체 프로젝트</option>{projectCategories.map(p=><option key={p} value={p}>{p}</option>)}</select>
                 {hasFilter&&<button onClick={resetFilters} style={{border:"1px solid #fca5a5",borderRadius:7,padding:"5px 9px",fontSize:11,background:"#fff7f7",color:"#ef4444",cursor:"pointer"}}>초기화</button>}
               </div>
-              {/* 이번 주 - 진행률 바로 아래 */}
               <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",border:"1px solid #e2e8f0"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:12,fontWeight:700}}>이번 주</span></div><span style={{fontSize:10,color:"#94a3b8"}}>{weekDays[0].slice(5).replace("-","/")} – {weekDays[4].slice(5).replace("-","/")}</span></div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
                   {weekDays.map(ds=>{const isToday=ds===todayStr;const dow=new Date(ds+"T00:00:00").getDay();const dayTasks=filtered.filter(t=>isActiveOnDate(t,ds));const dayCE=filterCE(allCE.filter(e=>e.date===ds&&(e.type==="관리전화"||e.type==="리포트")));const all=[...dayCE,...dayTasks];return(<div key={ds} style={{background:isToday?"#eff6ff":"#f8fafc",border:`1.5px solid ${isToday?"#bfdbfe":"#e2e8f0"}`,borderRadius:10,padding:"8px 6px",minHeight:80,boxSizing:"border-box"}}><div style={{textAlign:"center",marginBottom:5}}>{isToday?<div style={{width:20,height:20,background:"#2563eb",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 2px",fontSize:10,fontWeight:800,color:"#fff"}}>{DAYS_KR[dow]}</div>:<div style={{fontSize:10,fontWeight:700,color:"#64748b"}}>{DAYS_KR[dow]}</div>}<div style={{fontSize:9,color:isToday?"#93c5fd":"#9ca3af"}}>{ds.slice(5).replace("-","/")}</div></div>{all.length===0&&<div style={{fontSize:9,color:"#d1d5db",textAlign:"center"}}>없음</div>}{all.slice(0,3).map((item,i)=>{if(item.type&&CE[item.type]){const ce=CE[item.type];return <div key={i} title={`[${item.type}] ${item.name}`} style={{fontSize:9,background:ce.bg,color:ce.color,borderRadius:3,padding:"1px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:700}}>[{item.type[0]}] {item.name}</div>;}return <div key={i} title={item.title} style={{fontSize:9,background:P[item.priority].bg,color:P[item.priority].color,borderRadius:3,padding:"1px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,textDecoration:item.status==="done"?"line-through":"none"}}>{item.title}</div>;})} {all.length>3&&<div style={{fontSize:9,color:"#9ca3af",textAlign:"center"}}>+{all.length-3}</div>}</div>);})}
                 </div>
               </div>
-              {/* 오늘 할 일 + 전체 할 일 나란히 */}
               <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
-                {/* 오늘 할 일 */}
                 <div style={{flex:"0 0 420px",maxWidth:420,background:"#fff",borderRadius:12,padding:"14px 16px",border:"1px solid #e2e8f0"}}>
                   <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}><span style={{fontSize:12,fontWeight:700}}>오늘 할 일</span><span style={{background:"#fef2f2",color:"#ef4444",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{todayTasks.length+todayCE.length}</span></div>
                   {todayTasks.length===0&&todayCE.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#9ca3af",fontSize:12}}>오늘 할 일이 없습니다 🎉</div>:<div style={{display:"flex",flexDirection:"column",gap:6}}>{todayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>toggleCE(e)} onMemo={()=>setMemoContract(c)}/>:null;})}{todayTasks.map(t=><TaskCard key={t.id+t._sk} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}
                 </div>
-                {/* 전체 할 일 - 옆 빈공간 채우기 */}
                 <div style={{flex:1,minWidth:0,background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",overflow:"hidden"}}>
                   <div onClick={()=>setShowAllTasks(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer"}}><div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:12,fontWeight:700}}>전체 할 일</span><span style={{background:"#f3f4f6",color:"#6b7280",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{allItems.length}개</span></div><span style={{fontSize:10,fontWeight:600,color:"#2563eb",background:"#eff6ff",borderRadius:6,padding:"3px 8px"}}>{showAllTasks?"숨기기 ▲":"전체보기 ▼"}</span></div>
                   {showAllTasks&&<div style={{borderTop:"1px solid #f1f5f9",padding:"10px 16px",display:"flex",flexDirection:"column",gap:6,maxHeight:600,overflowY:"auto"}}>{allItems.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#9ca3af",fontSize:12}}>작업이 없습니다</div>:allItems.map((item,i)=>{if(item._itemType==="ce"){const c=visibleContracts.find(x=>x.id===item.cid);return c?<ContractEventCard key={i} event={item} contract={c} isDone={!!completions[ceKey(item)]} onToggle={()=>toggleCE(item)} onMemo={()=>setMemoContract(c)}/>:null;}return <TaskCard key={item.id+item._sk} task={item} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||item.owner===user.name}/>;})}</div>}
@@ -697,59 +705,17 @@ function MainApp({user,onLogout}){
           {tab==="contracts"&&(
             <div>
               {showCF&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}} allContracts={contracts}/>}
-              {/* 신규/재연장 요약 */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-                <div style={{background:"linear-gradient(135deg,#eff6ff,#dbeafe)",borderRadius:12,padding:"12px 16px",border:"1px solid #bfdbfe"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div><div style={{fontSize:11,color:"#1e40af",fontWeight:700,marginBottom:2}}>🆕 신규 계약</div><div style={{fontSize:22,fontWeight:900,color:"#1d4ed8"}}>{renewalStats.new.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div>
-                    <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#3b82f6",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#1d4ed8"}}>{fmtAmount(renewalStats.new.amount)}</div></div>
-                  </div>
-                </div>
-                <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:12,padding:"12px 16px",border:"1px solid #ddd6fe"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div><div style={{fontSize:11,color:"#5b21b6",fontWeight:700,marginBottom:2}}>🔄 재연장</div><div style={{fontSize:22,fontWeight:900,color:"#6d28d9"}}>{renewalStats.renewal.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div>
-                    <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#7c3aed",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#6d28d9"}}>{fmtAmount(renewalStats.renewal.amount)}</div></div>
-                  </div>
-                </div>
+                <div style={{background:"linear-gradient(135deg,#eff6ff,#dbeafe)",borderRadius:12,padding:"12px 16px",border:"1px solid #bfdbfe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#1e40af",fontWeight:700,marginBottom:2}}>🆕 신규 계약</div><div style={{fontSize:22,fontWeight:900,color:"#1d4ed8"}}>{renewalStats.new.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#3b82f6",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#1d4ed8"}}>{fmtAmount(renewalStats.new.amount)}</div></div></div></div>
+                <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:12,padding:"12px 16px",border:"1px solid #ddd6fe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#5b21b6",fontWeight:700,marginBottom:2}}>🔄 재연장</div><div style={{fontSize:22,fontWeight:900,color:"#6d28d9"}}>{renewalStats.renewal.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#7c3aed",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#6d28d9"}}>{fmtAmount(renewalStats.renewal.amount)}</div></div></div></div>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
-                {/* 검색창 */}
-                <div style={{position:"relative"}}>
-                  <input value={contractSearch} onChange={e=>{setContractSearch(e.target.value);setContractPage(1);}} placeholder="🔍 상호명 검색..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:9,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                  {contractSearch&&<button onClick={()=>{setContractSearch("");setContractPage(1);}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:14,padding:0}}>✕</button>}
-                </div>
-                {/* 월별 필터 */}
-                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-                  <span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>📅 월별:</span>
-                  <button onClick={()=>{setContractMonth("all");setContractPage(1);}} style={{border:`1.5px solid ${contractMonth==="all"?"#2563eb":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth==="all"?"#eff6ff":"#fff",color:contractMonth==="all"?"#2563eb":"#6b7280"}}>전체</button>
-                  {contractMonthOptions.map(mo=>{const[y,m]=mo.split("-");return(<button key={mo} onClick={()=>{setContractMonth(mo);setContractPage(1);}} style={{border:`1.5px solid ${contractMonth===mo?"#2563eb":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth===mo?"#eff6ff":"#fff",color:contractMonth===mo?"#2563eb":"#6b7280"}}>{parseInt(y)}년 {parseInt(m)}월</button>);})}
-                </div>
-                {/* 진행상태 필터 + 담당자 필터 */}
-                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-                  <span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>📋 상태:</span>
-                  {[{v:"all",l:"전체",c:"#6b7280"},{v:"active",l:"✅ 진행중",c:"#10b981"},{v:"ended",l:"⛔ 종료",c:"#9ca3af"}].map(({v,l,c})=>(
-                    <button key={v} onClick={()=>{setContractStatus(v);setContractPage(1);}} style={{border:`1.5px solid ${contractStatus===v?c:"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractStatus===v?c+"18":"#fff",color:contractStatus===v?c:"#6b7280"}}>{l}</button>
-                  ))}
-                  {user.isAdmin&&managers.length>0&&(<>
-                    <span style={{fontSize:11,fontWeight:600,color:"#6b7280",marginLeft:4,flexShrink:0}}>👤 담당자:</span>
-                    <button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#f5f3ff":"#fff",color:contractManager==="all"?"#7c3aed":"#6b7280"}}>전체</button>
-                    {managers.map(m=>(<button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#7c3aed":"#6b7280"}}>{m}</button>))}
-                  </>)}
-                </div>
-                {/* 필터 결과 요약 */}
-                {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span>
-                    <button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer"}}>✕ 필터 초기화</button>
-                  </div>
-                )}
+                <div style={{position:"relative"}}><input value={contractSearch} onChange={e=>{setContractSearch(e.target.value);setContractPage(1);}} placeholder="🔍 상호명 검색..." style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:9,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff"}}/>{contractSearch&&<button onClick={()=>{setContractSearch("");setContractPage(1);}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#9ca3af",cursor:"pointer",fontSize:14,padding:0}}>✕</button>}</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>📅 월별:</span><button onClick={()=>{setContractMonth("all");setContractPage(1);}} style={{border:`1.5px solid ${contractMonth==="all"?"#2563eb":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth==="all"?"#eff6ff":"#fff",color:contractMonth==="all"?"#2563eb":"#6b7280"}}>전체</button>{contractMonthOptions.map(mo=>{const[y,m]=mo.split("-");return(<button key={mo} onClick={()=>{setContractMonth(mo);setContractPage(1);}} style={{border:`1.5px solid ${contractMonth===mo?"#2563eb":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth===mo?"#eff6ff":"#fff",color:contractMonth===mo?"#2563eb":"#6b7280"}}>{parseInt(y)}년 {parseInt(m)}월</button>);})}</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>📋 상태:</span>{[{v:"all",l:"전체",c:"#6b7280"},{v:"active",l:"✅ 진행중",c:"#10b981"},{v:"ended",l:"⛔ 종료",c:"#9ca3af"}].map(({v,l,c})=>(<button key={v} onClick={()=>{setContractStatus(v);setContractPage(1);}} style={{border:`1.5px solid ${contractStatus===v?c:"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractStatus===v?c+"18":"#fff",color:contractStatus===v?c:"#6b7280"}}>{l}</button>))}{user.isAdmin&&managers.length>0&&(<><span style={{fontSize:11,fontWeight:600,color:"#6b7280",marginLeft:4,flexShrink:0}}>👤 담당자:</span><button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#f5f3ff":"#fff",color:contractManager==="all"?"#7c3aed":"#6b7280"}}>전체</button>{managers.map(m=>(<button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#7c3aed":"#e2e8f0"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#7c3aed":"#6b7280"}}>{m}</button>))}</>)}</div>
+                {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span><button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer"}}>✕ 필터 초기화</button></div>)}
               </div>
-              {filteredContracts.length===0&&!showCF?(
-                <div style={{textAlign:"center",padding:"40px 0",color:"#9ca3af",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #e2e8f0"}}>
-                  <div style={{fontSize:28,marginBottom:6}}>{contractSearch?"🔍":contractMonth!=="all"?"📅":"📭"}</div>
-                  <div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div>
-                </div>
-              )
+              {filteredContracts.length===0&&!showCF?(<div style={{textAlign:"center",padding:"40px 0",color:"#9ca3af",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #e2e8f0"}}><div style={{fontSize:28,marginBottom:6}}>{contractSearch?"🔍":contractMonth!=="all"?"📅":"📭"}</div><div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div></div>)
               :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 {pagedContracts.map(c=>{
                   const evts=genEvents(c);const isActive=c.endDate>=todayStr;
@@ -757,15 +723,8 @@ function MainApp({user,onLogout}){
                   const rpt=evts.find(e=>e.type==="리포트");
                   return(<div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #e2e8f0",padding:"10px 14px",opacity:isActive?1:0.7,boxSizing:"border-box",cursor:"pointer",transition:"box-shadow 0.15s",height:130,overflow:"hidden"}} onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,0.10)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"} onClick={()=>setMemoContract(c)}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}><span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#7c3aed":"#2563eb",background:c.isRenewal?"#f5f3ff":"#eff6ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfdbfe"}`}}>{c.isRenewal?"R":"N"}</span><span style={{fontWeight:800,fontSize:14,color:"#0f172a"}}>{c.name}</span><Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/></div>
-                        <div style={{fontSize:11,color:"#64748b",marginTop:2}}>📅 {c.startDate} ~ {c.endDate}</div>
-                        {c.manager&&<div style={{fontSize:11,color:"#7c3aed",fontWeight:600,marginTop:1}}>👤 {c.manager}</div>}
-                      </div>
-                      <div style={{display:"flex",gap:3,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                        <button onClick={()=>setMemoContract(c)} title="메모" style={{background:"#f5f3ff",border:"1px solid #e9d5ff",color:"#7c3aed",cursor:"pointer",padding:"4px 7px",borderRadius:6,fontSize:11}}>📝</button>
-                        {user.isAdmin&&<><button onClick={()=>{setEditContract(c);setShowCF(true);}} style={{background:"none",border:"none",color:"#9ca3af",cursor:"pointer",padding:2,fontSize:12}}>✏️</button><button onClick={()=>deleteContract(c.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",padding:2,fontSize:12}}>✕</button></>}
-                      </div>
+                      <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}><span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#7c3aed":"#2563eb",background:c.isRenewal?"#f5f3ff":"#eff6ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfdbfe"}`}}>{c.isRenewal?"R":"N"}</span><span style={{fontWeight:800,fontSize:14,color:"#0f172a"}}>{c.name}</span><Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/></div><div style={{fontSize:11,color:"#64748b",marginTop:2}}>📅 {c.startDate} ~ {c.endDate}</div>{c.manager&&<div style={{fontSize:11,color:"#7c3aed",fontWeight:600,marginTop:1}}>👤 {c.manager}</div>}</div>
+                      <div style={{display:"flex",gap:3,flexShrink:0}} onClick={e=>e.stopPropagation()}><button onClick={()=>setMemoContract(c)} title="메모" style={{background:"#f5f3ff",border:"1px solid #e9d5ff",color:"#7c3aed",cursor:"pointer",padding:"4px 7px",borderRadius:6,fontSize:11}}>📝</button>{user.isAdmin&&<><button onClick={()=>{setEditContract(c);setShowCF(true);}} style={{background:"none",border:"none",color:"#9ca3af",cursor:"pointer",padding:2,fontSize:12}}>✏️</button><button onClick={()=>deleteContract(c.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",padding:2,fontSize:12}}>✕</button></>}</div>
                     </div>
                     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:6}}>{c.phone&&<span style={{fontSize:11,color:"#6b7280"}}>📞 {c.phone}</span>}{c.total&&<span style={{fontSize:11,color:"#2563eb",fontWeight:600}}>💰 {c.total}</span>}{c.link&&<a href={c.link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:11,color:"#2563eb"}}>🔗 링크</a>}</div>
                     <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{nextCall&&<Badge label={`📞 ${nextCall.date}`} color="#16a34a" bg="#dcfce7"/>}{rpt&&<Badge label={`📋 ${rpt.date}`} color="#7c3aed" bg="#f5f3ff"/>}{c.notes&&<Badge label={`📌 ${c.notes}`} color="#6b7280" bg="#f3f4f6"/>}</div>
@@ -802,7 +761,7 @@ function MainApp({user,onLogout}){
                   {selTs&&(<div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid #e2e8f0"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontWeight:700,fontSize:12}}>👥 {selTs} 팀 현황 ({tsReports.length}명)</span><button onClick={()=>loadReports(selTs)} style={{background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"3px 8px",fontSize:11,cursor:"pointer"}}>🔄</button></div>{loadingR?<div style={{textAlign:"center",padding:"16px",color:"#9ca3af"}}>불러오는 중…</div>:tsReports.length===0?<div style={{textAlign:"center",padding:"16px",color:"#9ca3af",background:"#f8fafc",borderRadius:8}}>아직 제출된 실적이 없습니다</div>:tsReports.map((r,i)=><ReportCard key={i} report={r} targets={targets} timeslot={selTs} isAdmin={user.isAdmin} onEdit={user.isAdmin&&selTs==="최종마감"?()=>setEditingReport(r):null}/>)}</div>)}
                 </div>
               </div>
-              {/* 날짜별 최종마감 조회 섹션 */}
+              {/* 날짜별 최종마감 조회 */}
               <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid #e2e8f0"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
                   <span style={{fontWeight:700,fontSize:13,color:"#0f172a"}}>📅 날짜별 최종마감 조회</span>
@@ -819,9 +778,7 @@ function MainApp({user,onLogout}){
                         <div style={{display:"flex",alignItems:"center",gap:8}}><Avatar name={r.name} size={28} border="2px solid #fff"/><span style={{fontWeight:700,fontSize:13,color:"#0f172a"}}>{r.name}</span></div>
                         {user.isAdmin&&<button onClick={()=>setEditingReport(r)} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>✏️ 수정</button>}
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:8}}>
-                        {METRICS.map(m=>(<div key={m.key} style={{background:"#fff",borderRadius:7,padding:"6px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}><div style={{fontSize:10,color:"#9ca3af",marginBottom:1}}>{m.label}</div><div style={{fontSize:13,fontWeight:700,color:"#374151"}}>{r[m.key]||0}<span style={{fontSize:9,color:"#9ca3af",marginLeft:1}}>{m.unit}</span></div></div>))}
-                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:8}}>{METRICS.map(m=>(<div key={m.key} style={{background:"#fff",borderRadius:7,padding:"6px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}><div style={{fontSize:10,color:"#9ca3af",marginBottom:1}}>{m.label}</div><div style={{fontSize:13,fontWeight:700,color:"#374151"}}>{r[m.key]||0}<span style={{fontSize:9,color:"#9ca3af",marginLeft:1}}>{m.unit}</span></div></div>))}</div>
                       <div style={{background:"#f5f3ff",borderRadius:8,padding:"8px 10px",border:"1px solid #e9d5ff",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
                         <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af",marginBottom:1}}>일매출</div><div style={{fontSize:13,fontWeight:800,color:"#7c3aed"}}>{r.dailySales?Number(r.dailySales).toLocaleString()+"원":"0원"}</div></div>
                         <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af",marginBottom:1}}>도입률-연결</div><div style={{fontSize:13,fontWeight:800,color:"#2563eb"}}>{r.connRate||0}</div></div>
@@ -831,6 +788,70 @@ function MainApp({user,onLogout}){
                   ))}
                 </div>}
               </div>
+              {/* ===== 관리자 전용: 기간별 업무량 분석 ===== */}
+              {user.isAdmin&&(
+                <div style={{background:"linear-gradient(135deg,#f0f5ff,#e8f4fd)",borderRadius:14,padding:18,border:"1px solid #dbeafe"}}>
+                  <div style={{fontWeight:800,fontSize:14,color:"#1e40af",marginBottom:6}}>📊 관리자 업무량 분석 · 엑셀 다운로드</div>
+                  <div style={{fontSize:11,color:"#6b7280",marginBottom:14,background:"rgba(255,255,255,0.6)",borderRadius:8,padding:"6px 10px"}}>
+                    집계 기준: 해당 날짜 <b>최종마감</b> 보고 있으면 최종마감 사용, 없으면 <b>6시</b> 타임 사용
+                  </div>
+                  {/* 월별 조회 */}
+                  <div style={{background:"#fff",borderRadius:10,padding:"12px 14px",marginBottom:10,border:"1px solid #bfdbfe"}}>
+                    <div style={{fontWeight:700,fontSize:12,color:"#1e40af",marginBottom:8}}>📅 월별 조회</div>
+                    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                      <input type="month" value={analysisMonth} onChange={e=>setAnalysisMonth(e.target.value)} style={{border:"1.5px solid #bfdbfe",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",background:"#fff"}}/>
+                      <button onClick={loadAnalysisByMonth} disabled={loadingAnalysis} style={{background:"#2563eb",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{loadingAnalysis?"불러오는 중…":"📂 불러오기"}</button>
+                    </div>
+                  </div>
+                  {/* 기간 직접 선택 */}
+                  <div style={{background:"#fff",borderRadius:10,padding:"12px 14px",marginBottom:14,border:"1px solid #bfdbfe"}}>
+                    <div style={{fontWeight:700,fontSize:12,color:"#1e40af",marginBottom:8}}>📆 기간 직접 선택</div>
+                    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11,color:"#6b7280"}}>시작</span><input type="date" value={analysisStart} onChange={e=>setAnalysisStart(e.target.value)} style={{border:"1.5px solid #bfdbfe",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",background:"#fff"}}/></div>
+                      <span style={{color:"#9ca3af",fontWeight:600}}>~</span>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11,color:"#6b7280"}}>종료</span><input type="date" value={analysisEnd} onChange={e=>setAnalysisEnd(e.target.value)} style={{border:"1.5px solid #bfdbfe",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",background:"#fff"}}/></div>
+                      <button onClick={()=>loadAnalysisData(analysisStart,analysisEnd)} disabled={!analysisStart||!analysisEnd||loadingAnalysis} style={{background:analysisStart&&analysisEnd?"#2563eb":"#e5e7eb",color:analysisStart&&analysisEnd?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:analysisStart&&analysisEnd?"pointer":"not-allowed"}}>{loadingAnalysis?"불러오는 중…":"📂 불러오기"}</button>
+                    </div>
+                  </div>
+                  {/* 결과 미리보기 + 다운로드 */}
+                  {analysisData&&(
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                        <div style={{fontSize:12,color:"#374151"}}><b style={{color:"#1e40af"}}>{Object.keys(analysisData).length}일</b> 데이터 · <b style={{color:"#2563eb"}}>{Object.values(analysisData).reduce((s,r)=>s+r.length,0)}건</b> 보고</div>
+                        <button onClick={downloadAnalysisExcel} style={{background:"linear-gradient(135deg,#10b981,#059669)",color:"#fff",border:"none",borderRadius:9,padding:"8px 18px",fontSize:13,fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(16,185,129,0.3)"}}>📥 엑셀 다운로드 (일자별 · 총합 · 평균)</button>
+                      </div>
+                      <div style={{background:"#fff",borderRadius:10,border:"1px solid #e2e8f0",overflow:"hidden",maxHeight:300,overflowY:"auto"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                          <thead>
+                            <tr style={{background:"#f0f5ff",position:"sticky",top:0}}>
+                              <th style={{padding:"7px 10px",textAlign:"left",color:"#1e40af",fontWeight:700,borderBottom:"2px solid #bfdbfe"}}>날짜</th>
+                              <th style={{padding:"7px 8px",textAlign:"left",color:"#1e40af",fontWeight:700,borderBottom:"2px solid #bfdbfe"}}>사원</th>
+                              <th style={{padding:"7px 8px",textAlign:"center",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #bfdbfe"}}>타임</th>
+                              {METRICS.map(m=><th key={m.key} style={{padding:"7px 8px",textAlign:"center",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #bfdbfe",whiteSpace:"nowrap"}}>{m.label}</th>)}
+                              <th style={{padding:"7px 8px",textAlign:"center",color:"#7c3aed",fontWeight:600,borderBottom:"2px solid #bfdbfe"}}>일매출</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.keys(analysisData).sort().reverse().map(date=>
+                              analysisData[date].map((r,i)=>(
+                                <tr key={`${date}-${i}`} style={{borderBottom:"1px solid #f1f5f9"}}>
+                                  {i===0&&<td rowSpan={analysisData[date].length} style={{padding:"6px 10px",fontWeight:700,color:"#374151",borderRight:"1px solid #f1f5f9",verticalAlign:"top",fontSize:10}}>{date}</td>}
+                                  <td style={{padding:"6px 8px",fontWeight:600}}>{r.name}</td>
+                                  <td style={{padding:"6px 8px",textAlign:"center",color:"#9ca3af",fontSize:10}}>{r._ts||"-"}</td>
+                                  {METRICS.map(m=><td key={m.key} style={{padding:"6px 8px",textAlign:"center"}}>{r[m.key]||0}</td>)}
+                                  <td style={{padding:"6px 8px",textAlign:"center",color:"#7c3aed",fontWeight:600}}>{r.dailySales?Number(r.dailySales).toLocaleString()+"원":"-"}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {!analysisData&&!loadingAnalysis&&<div style={{textAlign:"center",padding:"20px",color:"#9ca3af",fontSize:12}}>월을 선택하거나 기간을 입력 후 불러오기를 눌러주세요</div>}
+                  {loadingAnalysis&&<div style={{textAlign:"center",padding:"20px",color:"#2563eb",fontSize:12}}>데이터 불러오는 중…</div>}
+                </div>
+              )}
             </div>
           )}
           {tab==="ranking"&&<RankingTab contracts={contracts} profiles={profiles} accounts={accounts}/>}
