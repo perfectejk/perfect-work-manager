@@ -624,7 +624,7 @@ function MainApp({user,onLogout}){
       {editingReport&&<AdminEditReportModal report={editingReport} dateStr={reportViewDate} onClose={()=>setEditingReport(null)} onSave={handleAdminSaveReport}/>}
       {dailyAlertItems&&dailyAlertItems!=='PENDING'&&Array.isArray(dailyAlertItems)&&<DailyAlertModal items={dailyAlertItems} onClose={()=>setDailyAlertItems(null)}/>}
       <Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)} navOrder={navOrder} setNavOrder={setNavOrder}/>
-      <div style={{flex:1,minWidth:0,overflowY:"auto"}}>
+      <div style={{flex:1,minWidth:0,overflowY:"auto",paddingBottom:window.innerWidth<=768?"70px":"0"}}>
         <div style={{background:"#fff",padding:"12px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f0f1f3",position:"sticky",top:0,zIndex:50}}>
           <div style={{fontSize:15,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>
             {tab==="list"&&"작업 목록"}{tab==="calendar"&&"캘린더"}{tab==="revenue"&&"매출현황 캘린더"}{tab==="contracts"&&"계약 관리"}{tab==="report"&&"업무 보고"}{tab==="ranking"&&"매출 랭킹"}{tab==="admin"&&"관리자 설정"}
