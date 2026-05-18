@@ -684,10 +684,7 @@ function MainApp({user,onLogout}){
                       {submitMsg&&<p style={{fontSize:11,color:submitMsg.startsWith("✓")?"#10b981":"#ef4444",textAlign:"center",margin:"6px 0 0",fontWeight:600}}>{submitMsg}</p>}
                     </>):(<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"10px 0"}}>관리자가 타임을 먼저 추가해야 합니다</p>)}
                   </div>
-                </div>
                   {selTs&&(<div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid #f0f1f3"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{fontWeight:700,fontSize:12,color:"#0f1117"}}>{selTs} 팀 현황 ({tsReports.length}명)</span><button onClick={()=>loadReports(selTs)} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:7,padding:"3px 8px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>새로고침</button></div>{loadingR?<div style={{textAlign:"center",padding:"16px",color:"#adb5bd"}}>불러오는 중…</div>:tsReports.length===0?<div style={{textAlign:"center",padding:"16px",color:"#adb5bd",background:"#f7f8fa",borderRadius:8}}>아직 제출된 실적이 없습니다</div>:tsReports.map((r,i)=><ReportCard key={i} report={r} targets={targets} timeslot={selTs} isAdmin={user.isAdmin} onEdit={user.isAdmin&&selTs==="최종마감"?()=>setEditingReport(r):null}/>)}</div>)}
-                </div>
-              </div>
               <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid #f0f1f3"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
                   <span style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>날짜별 최종마감 조회</span>
