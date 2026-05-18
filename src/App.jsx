@@ -182,13 +182,11 @@ function LoginScreen({onLogin}){
 // ========== 사이드바 (새 디자인) ==========
 function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navOrder,setNavOrder}){
   const[isMobile,setIsMobile]=useState(window.innerWidth<=768);
- 
   useEffect(()=>{
     const handler=()=>setIsMobile(window.innerWidth<=768);
     window.addEventListener('resize',handler);
     return()=>window.removeEventListener('resize',handler);
   },[]);
- 
   const myCount=user.isAdmin?contracts.length:contracts.filter(c=>c.manager===user.name).length;
   const NAV=[
     {id:"list",label:"목록",icon:"ti-layout-list"},
@@ -199,36 +197,27 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
     {id:"ranking",label:"랭킹",icon:"ti-trophy"},
   ];
   const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean);
- 
-  // 모바일: 하단 탭바
   if(isMobile){
-    // 하단 탭바에 표시할 메뉴 (최대 5개)
-    const bottomNav=sortedNav.slice(0,5);
     return(
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #f0f1f3",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom)",paddingTop:8}}>
-        {bottomNav.map(n=>(
-          <button key={n.id} onClick={()=>setTab(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"8px 4px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",position:"relative"}}>
-            <i className={`ti ${n.icon}`} style={{fontSize:20,color:tab===n.id?"#0071CE":"#c1c7d0",marginBottom:2}}/>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #f0f1f3",display:"flex",alignItems:"center",zIndex:9999,paddingBottom:"env(safe-area-inset-bottom)",paddingTop:8,minHeight:60}}>
+        {sortedNav.slice(0,4).map(n=>(
+          <button key={n.id} onClick={()=>setTab(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",position:"relative"}}>
+            <i className={`ti ${n.icon}`} style={{fontSize:22,color:tab===n.id?"#0071CE":"#c1c7d0",marginBottom:3}}/>
             <span style={{fontSize:9,fontWeight:tab===n.id?700:500,color:tab===n.id?"#0071CE":"#adb5bd"}}>{n.label}</span>
-            {n.badge&&<span style={{position:"absolute",top:6,right:"50%",marginRight:-18,background:"#8468D3",color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:8,fontWeight:700}}>{n.badge}</span>}
+            {n.badge&&<span style={{position:"absolute",top:4,right:"50%",marginRight:-18,background:"#8468D3",color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:8,fontWeight:700}}>{n.badge}</span>}
           </button>
         ))}
-        {/* 더보기 버튼 (관리자용) */}
-        {user.isAdmin&&(
-          <button onClick={()=>setTab("admin")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"8px 4px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
-            <i className="ti ti-dots" style={{fontSize:20,color:tab==="admin"?"#d97706":"#c1c7d0",marginBottom:2}}/>
-            <span style={{fontSize:9,fontWeight:tab==="admin"?700:500,color:tab==="admin"?"#d97706":"#adb5bd"}}>설정</span>
-          </button>
-        )}
-        <button onClick={onLogout} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"8px 4px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
-          <i className="ti ti-logout" style={{fontSize:20,color:"#c1c7d0",marginBottom:2}}/>
-          <span style={{fontSize:9,fontWeight:500,color:"#adb5bd"}}>로그아웃</span>
+        <button onClick={()=>setTab("report")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+          <i className="ti ti-clipboard-text" style={{fontSize:22,color:tab==="report"?"#0071CE":"#c1c7d0",marginBottom:3}}/>
+          <span style={{fontSize:9,fontWeight:tab==="report"?700:500,color:tab==="report"?"#0071CE":"#adb5bd"}}>업무보고</span>
+        </button>
+        <button onClick={onLogout} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+          <i className="ti ti-logout" style={{fontSize:22,color:"#ef4444",marginBottom:3}}/>
+          <span style={{fontSize:9,fontWeight:500,color:"#ef4444"}}>로그아웃</span>
         </button>
       </div>
     );
   }
- 
-  // PC: 기존 사이드바
   return(
     <div style={{width:220,minHeight:"100vh",background:"#fff",display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh",borderRight:"1px solid #f0f1f3",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
       <div style={{padding:"20px 16px 16px",borderBottom:"1px solid #f0f1f3"}}>
