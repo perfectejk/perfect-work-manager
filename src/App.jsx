@@ -57,9 +57,80 @@ function ContractMemoModal({contract,user,onClose}){
 
 // ========== 로그인 화면 (새 디자인) ==========
 function LoginScreen({onLogin}){
-  const[name,setName]=useState("");const[pw,setPw]=useState("");const[isAdmin,setIsAdmin]=useState(false);const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
-  const go=async()=>{if(!name.trim())return setErr("이름을 입력하세요");if(!pw.trim())return setErr("비밀번호를 입력하세요");setLoading(true);if(isAdmin){if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:true});}else{const accounts=await st.get("accounts:all")||[];const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:false});}setLoading(false);};
+  const[name,setName]=useState("");
+  const[pw,setPw]=useState("");
+  const[isAdmin,setIsAdmin]=useState(false);
+  const[err,setErr]=useState("");
+  const[loading,setLoading]=useState(false);
+  const[isMobile,setIsMobile]=useState(window.innerWidth<=768);
+ 
+  useEffect(()=>{
+    const handler=()=>setIsMobile(window.innerWidth<=768);
+    window.addEventListener('resize',handler);
+    return()=>window.removeEventListener('resize',handler);
+  },[]);
+ 
+  const go=async()=>{
+    if(!name.trim())return setErr("이름을 입력하세요");
+    if(!pw.trim())return setErr("비밀번호를 입력하세요");
+    setLoading(true);
+    if(isAdmin){
+      if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}
+      onLogin({name:name.trim(),isAdmin:true});
+    }else{
+      const accounts=await st.get("accounts:all")||[];
+      const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);
+      if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}
+      onLogin({name:name.trim(),isAdmin:false});
+    }
+    setLoading(false);
+  };
+ 
   const iS={width:"100%",border:"1px solid #f0f1f3",borderRadius:9,padding:"10px 13px",fontSize:13,outline:"none",background:"#fafbfc",color:"#0f1117",fontFamily:"'Pretendard',-apple-system,sans-serif"};
+ 
+  // 모바일: 로그인 폼만 전체화면
+  if(isMobile){
+    return(
+      <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#f7f8fa",padding:"24px 20px"}}>
+        {/* 로고 */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:32}}>
+          <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#8468D3,#0071CE)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:24,fontWeight:800,color:"#fff",fontStyle:"italic"}}>P</span>
+          </div>
+          <div>
+            <div style={{fontSize:16,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>PRO Marketing</div>
+            <div style={{fontSize:10,color:"#adb5bd",letterSpacing:"0.5px",textTransform:"uppercase",fontWeight:500}}>Management System</div>
+          </div>
+        </div>
+ 
+        {/* 로그인 카드 */}
+        <div style={{width:"100%",maxWidth:400,background:"#fff",borderRadius:20,padding:"28px 24px",boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
+          <div style={{fontSize:20,fontWeight:800,color:"#0f1117",marginBottom:4,letterSpacing:"-0.5px"}}>로그인</div>
+          <div style={{fontSize:12,color:"#adb5bd",marginBottom:20,fontWeight:400}}>계정 정보를 입력하세요</div>
+ 
+          {/* 사원/관리자 토글 */}
+          <div style={{display:"flex",background:"#f7f8fa",borderRadius:10,padding:3,marginBottom:20,border:"1px solid #f0f1f3"}}>
+            {[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(
+              <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,padding:"10px",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",background:isAdmin===v?"#0071CE":"transparent",color:isAdmin===v?"#fff":"#adb5bd",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"all 0.15s"}}>{l}</button>
+            ))}
+          </div>
+ 
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>이름</div>
+            <input type="text" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="이름을 입력하세요" style={{...iS,padding:"12px 14px",fontSize:14}}/>
+          </div>
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>비밀번호</div>
+            <input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="비밀번호를 입력하세요" style={{...iS,padding:"12px 14px",fontSize:14}}/>
+          </div>
+          {err&&<p style={{margin:"0 0 14px",fontSize:12,color:"#e53e3e",fontWeight:500,textAlign:"center"}}>{err}</p>}
+          <button onClick={go} disabled={loading} style={{width:"100%",background:loading?"#93c5fd":"#0071CE",color:"#fff",border:"none",borderRadius:12,padding:"15px",fontSize:15,fontWeight:700,cursor:loading?"not-allowed":"pointer",letterSpacing:"1px",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"background 0.15s"}}>{loading?"확인 중…":"LOGIN"}</button>
+        </div>
+      </div>
+    );
+  }
+ 
+  // PC: 기존 2단 레이아웃
   return(
     <div style={{minHeight:"100vh",display:"flex",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
       <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",padding:"48px 6vw",background:"#f7f8fa",borderRight:"1px solid #f0f1f3"}}>
@@ -110,6 +181,14 @@ function LoginScreen({onLogin}){
 
 // ========== 사이드바 (새 디자인) ==========
 function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navOrder,setNavOrder}){
+  const[isMobile,setIsMobile]=useState(window.innerWidth<=768);
+ 
+  useEffect(()=>{
+    const handler=()=>setIsMobile(window.innerWidth<=768);
+    window.addEventListener('resize',handler);
+    return()=>window.removeEventListener('resize',handler);
+  },[]);
+ 
   const myCount=user.isAdmin?contracts.length:contracts.filter(c=>c.manager===user.name).length;
   const NAV=[
     {id:"list",label:"목록",icon:"ti-layout-list"},
@@ -117,9 +196,35 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
     {id:"revenue",label:"매출현황",icon:"ti-chart-line"},
     {id:"contracts",label:"계약관리",icon:"ti-users",badge:myCount>0?myCount:null},
     {id:"report",label:"업무보고",icon:"ti-clipboard-text"},
-    {id:"ranking",label:"매출 랭킹",icon:"ti-trophy"},
+    {id:"ranking",label:"랭킹",icon:"ti-trophy"},
   ];
   const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean);
+ 
+  // 모바일: 하단 탭바
+  if(isMobile){
+    // 하단 탭바에 표시할 메뉴 (최대 5개)
+    const bottomNav=sortedNav.slice(0,5);
+    return(
+      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #f0f1f3",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom)"}}>
+        {bottomNav.map(n=>(
+          <button key={n.id} onClick={()=>setTab(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"8px 4px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",position:"relative"}}>
+            <i className={`ti ${n.icon}`} style={{fontSize:20,color:tab===n.id?"#0071CE":"#c1c7d0",marginBottom:2}}/>
+            <span style={{fontSize:9,fontWeight:tab===n.id?700:500,color:tab===n.id?"#0071CE":"#adb5bd"}}>{n.label}</span>
+            {n.badge&&<span style={{position:"absolute",top:6,right:"50%",marginRight:-18,background:"#8468D3",color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:8,fontWeight:700}}>{n.badge}</span>}
+          </button>
+        ))}
+        {/* 더보기 버튼 (관리자용) */}
+        {user.isAdmin&&(
+          <button onClick={()=>setTab("admin")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"8px 4px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+            <i className="ti ti-dots" style={{fontSize:20,color:tab==="admin"?"#d97706":"#c1c7d0",marginBottom:2}}/>
+            <span style={{fontSize:9,fontWeight:tab==="admin"?700:500,color:tab==="admin"?"#d97706":"#adb5bd"}}>더보기</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+ 
+  // PC: 기존 사이드바
   return(
     <div style={{width:220,minHeight:"100vh",background:"#fff",display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh",borderRight:"1px solid #f0f1f3",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
       <div style={{padding:"20px 16px 16px",borderBottom:"1px solid #f0f1f3"}}>
