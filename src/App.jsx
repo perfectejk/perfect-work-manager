@@ -57,80 +57,9 @@ function ContractMemoModal({contract,user,onClose}){
 
 // ========== 로그인 화면 (새 디자인) ==========
 function LoginScreen({onLogin}){
-  const[name,setName]=useState("");
-  const[pw,setPw]=useState("");
-  const[isAdmin,setIsAdmin]=useState(false);
-  const[err,setErr]=useState("");
-  const[loading,setLoading]=useState(false);
-  const[isMobile,setIsMobile]=useState(window.innerWidth<=768);
- 
-  useEffect(()=>{
-    const handler=()=>setIsMobile(window.innerWidth<=768);
-    window.addEventListener('resize',handler);
-    return()=>window.removeEventListener('resize',handler);
-  },[]);
- 
-  const go=async()=>{
-    if(!name.trim())return setErr("이름을 입력하세요");
-    if(!pw.trim())return setErr("비밀번호를 입력하세요");
-    setLoading(true);
-    if(isAdmin){
-      if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}
-      onLogin({name:name.trim(),isAdmin:true});
-    }else{
-      const accounts=await st.get("accounts:all")||[];
-      const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);
-      if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}
-      onLogin({name:name.trim(),isAdmin:false});
-    }
-    setLoading(false);
-  };
- 
+  const[name,setName]=useState("");const[pw,setPw]=useState("");const[isAdmin,setIsAdmin]=useState(false);const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const go=async()=>{if(!name.trim())return setErr("이름을 입력하세요");if(!pw.trim())return setErr("비밀번호를 입력하세요");setLoading(true);if(isAdmin){if(pw!==ADMIN_PW){setErr("비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:true});}else{const accounts=await st.get("accounts:all")||[];const acc=accounts.find(a=>a.name===name.trim()&&a.password===pw);if(!acc){setErr("이름 또는 비밀번호가 틀렸습니다");setLoading(false);return;}onLogin({name:name.trim(),isAdmin:false});}setLoading(false);};
   const iS={width:"100%",border:"1px solid #f0f1f3",borderRadius:9,padding:"10px 13px",fontSize:13,outline:"none",background:"#fafbfc",color:"#0f1117",fontFamily:"'Pretendard',-apple-system,sans-serif"};
- 
-  // 모바일: 로그인 폼만 전체화면
-  if(isMobile){
-    return(
-      <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#f7f8fa",padding:"24px 20px"}}>
-        {/* 로고 */}
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:32}}>
-          <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#8468D3,#0071CE)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <span style={{fontSize:24,fontWeight:800,color:"#fff",fontStyle:"italic"}}>P</span>
-          </div>
-          <div>
-            <div style={{fontSize:16,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>PRO Marketing</div>
-            <div style={{fontSize:10,color:"#adb5bd",letterSpacing:"0.5px",textTransform:"uppercase",fontWeight:500}}>Management System</div>
-          </div>
-        </div>
- 
-        {/* 로그인 카드 */}
-        <div style={{width:"100%",maxWidth:400,background:"#fff",borderRadius:20,padding:"28px 24px",boxShadow:"0 4px 24px rgba(0,0,0,0.08)"}}>
-          <div style={{fontSize:20,fontWeight:800,color:"#0f1117",marginBottom:4,letterSpacing:"-0.5px"}}>로그인</div>
-          <div style={{fontSize:12,color:"#adb5bd",marginBottom:20,fontWeight:400}}>계정 정보를 입력하세요</div>
- 
-          {/* 사원/관리자 토글 */}
-          <div style={{display:"flex",background:"#f7f8fa",borderRadius:10,padding:3,marginBottom:20,border:"1px solid #f0f1f3"}}>
-            {[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(
-              <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,padding:"10px",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",background:isAdmin===v?"#0071CE":"transparent",color:isAdmin===v?"#fff":"#adb5bd",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"all 0.15s"}}>{l}</button>
-            ))}
-          </div>
- 
-          <div style={{marginBottom:14}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>이름</div>
-            <input type="text" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="이름을 입력하세요" style={{...iS,padding:"12px 14px",fontSize:14}}/>
-          </div>
-          <div style={{marginBottom:24}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>비밀번호</div>
-            <input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="비밀번호를 입력하세요" style={{...iS,padding:"12px 14px",fontSize:14}}/>
-          </div>
-          {err&&<p style={{margin:"0 0 14px",fontSize:12,color:"#e53e3e",fontWeight:500,textAlign:"center"}}>{err}</p>}
-          <button onClick={go} disabled={loading} style={{width:"100%",background:loading?"#93c5fd":"#0071CE",color:"#fff",border:"none",borderRadius:12,padding:"15px",fontSize:15,fontWeight:700,cursor:loading?"not-allowed":"pointer",letterSpacing:"1px",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"background 0.15s"}}>{loading?"확인 중…":"LOGIN"}</button>
-        </div>
-      </div>
-    );
-  }
- 
-  // PC: 기존 2단 레이아웃
   return(
     <div style={{minHeight:"100vh",display:"flex",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
       <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",padding:"48px 6vw",background:"#f7f8fa",borderRight:"1px solid #f0f1f3"}}>
@@ -194,12 +123,14 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
     {id:"revenue",label:"매출현황",icon:"ti-chart-line"},
     {id:"contracts",label:"계약관리",icon:"ti-users",badge:myCount>0?myCount:null},
     {id:"report",label:"업무보고",icon:"ti-clipboard-text"},
-    {id:"ranking",label:"랭킹",icon:"ti-trophy"},
+    {id:"ranking",label:"매출 랭킹",icon:"ti-trophy"},
   ];
   const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean);
+
+  // ===== 모바일: 하단 탭바 =====
   if(isMobile){
     return(
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #f0f1f3",display:"flex",alignItems:"center",zIndex:9999,paddingBottom:"env(safe-area-inset-bottom)",paddingTop:8,minHeight:60}}>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #f0f1f3",display:"flex",alignItems:"center",zIndex:9999,paddingBottom:"env(safe-area-inset-bottom)",paddingTop:8,minHeight:64}}>
         {sortedNav.slice(0,4).map(n=>(
           <button key={n.id} onClick={()=>setTab(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",position:"relative"}}>
             <i className={`ti ${n.icon}`} style={{fontSize:22,color:tab===n.id?"#0071CE":"#c1c7d0",marginBottom:3}}/>
@@ -211,6 +142,12 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
           <i className="ti ti-clipboard-text" style={{fontSize:22,color:tab==="report"?"#0071CE":"#c1c7d0",marginBottom:3}}/>
           <span style={{fontSize:9,fontWeight:tab==="report"?700:500,color:tab==="report"?"#0071CE":"#adb5bd"}}>업무보고</span>
         </button>
+        {user.isAdmin&&(
+          <button onClick={()=>setTab("admin")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+            <i className="ti ti-lock" style={{fontSize:22,color:tab==="admin"?"#d97706":"#c1c7d0",marginBottom:3}}/>
+            <span style={{fontSize:9,fontWeight:tab==="admin"?700:500,color:tab==="admin"?"#d97706":"#adb5bd"}}>설정</span>
+          </button>
+        )}
         <button onClick={onLogout} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
           <i className="ti ti-logout" style={{fontSize:22,color:"#ef4444",marginBottom:3}}/>
           <span style={{fontSize:9,fontWeight:500,color:"#ef4444"}}>로그아웃</span>
@@ -218,6 +155,8 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
       </div>
     );
   }
+
+  // ===== PC: 기존 사이드바 =====
   return(
     <div style={{width:220,minHeight:"100vh",background:"#fff",display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh",borderRight:"1px solid #f0f1f3",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
       <div style={{padding:"20px 16px 16px",borderBottom:"1px solid #f0f1f3"}}>
@@ -484,7 +423,7 @@ function RevenueCalendarTab({contracts,user,profiles}){
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><button onClick={()=>{let m=calM-1,y=calY;if(m<0){m=11;y--;}setCalM(m);setCalY(y);setSelectedDay(null);}} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:16}}>‹</button><div style={{fontWeight:800,fontSize:16,color:"#0f1117"}}>{calY}년 {calM+1}월</div><button onClick={()=>{let m=calM+1,y=calY;if(m>11){m=0;y++;}setCalM(m);setCalY(y);setSelectedDay(null);}} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:16}}>›</button></div>
       {user.isAdmin&&managers.length>0&&(<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,justifyContent:"center"}}><button onClick={()=>setSelectedManager("all")} style={{border:`1.5px solid ${selectedManager==="all"?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:selectedManager==="all"?"#f0f7ff":"#fff",color:selectedManager==="all"?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{managers.map(m=>(<button key={m} onClick={()=>setSelectedManager(m)} style={{border:`1.5px solid ${selectedManager===m?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:selectedManager===m?"#f5f3ff":"#fff",color:selectedManager===m?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{m}</button>))}</div>)}
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:4}}>{DAYS_KR.map((d,i)=>(<div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:i===0?"#ef4444":i===6?"#0071CE":"#adb5bd",padding:"5px 0"}}>{d}</div>))}</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>{cells.map((day,i)=>{if(!day)return <div key={i}/>;const ds=`${monthPrefix}-${String(day).padStart(2,"0")}`;const isToday=ds===todayStr;const isSel=selectedDay===ds;const dow=(firstDay+day-1)%7;const dayContracts=contractsByDay[day]||[];const dayTotal=dayContracts.reduce((s,c)=>s+parseAmount(c.total),0);const hasContracts=dayContracts.length>0;return(<div key={i} onClick={()=>hasContracts&&setSelectedDay(isSel?null:ds)} style={{minHeight:window.innerWidth<=768?110:98,background:isSel?"linear-gradient(135deg,#f0f5ff,#e8f4fd)":isToday?"#f0f7ff":hasContracts?"#f7f8fa":"#fff",border:`1.5px solid ${isSel?"#0071CE":isToday?"#bfd7f5":hasContracts?"#e2e8f0":"#f0f1f3"}`,borderRadius:9,padding:"6px 5px",cursor:hasContracts?"pointer":"default",overflow:"hidden",boxSizing:"border-box",transition:"all 0.15s"}}><div style={{fontSize:11,fontWeight:isToday?800:500,color:isToday?"#0071CE":dow===0?"#ef4444":dow===6?"#3b82f6":"#374151",marginBottom:3,textAlign:"center"}}>{isToday?<span style={{background:"#0071CE",color:"#fff",borderRadius:"50%",padding:"1px 6px"}}>{day}</span>:day}</div>{hasContracts&&(<><div style={{fontSize:10,fontWeight:800,color:"#0071CE",textAlign:"center",marginBottom:4,background:"rgba(255,255,255,0.8)",borderRadius:5,padding:"1px 2px"}}>{fmtAmount(dayTotal)}</div><div style={{display:"flex",flexDirection:"column",gap:2}}>{dayContracts.slice(0,2).map((c,ci)=>(<div key={ci} style={{fontSize:9,background:"#fff",color:"#374151",borderRadius:4,padding:"2px 4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,border:"1px solid #f0f1f3"}}><b style={{color:c.isRenewal?"#8468D3":"#0071CE",marginRight:2}}>{c.isRenewal?"R":"N"}</b>{c.manager?<b style={{color:"#8468D3"}}>{c.manager}·</b>:""}{c.name}</div>))}{dayContracts.length>2&&<div style={{fontSize:9,color:"#0071CE",textAlign:"center",fontWeight:700,marginTop:1}}>+{dayContracts.length-2}건</div>}</div></>)}</div>);})}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>{cells.map((day,i)=>{if(!day)return <div key={i}/>;const ds=`${monthPrefix}-${String(day).padStart(2,"0")}`;const isToday=ds===todayStr;const isSel=selectedDay===ds;const dow=(firstDay+day-1)%7;const dayContracts=contractsByDay[day]||[];const dayTotal=dayContracts.reduce((s,c)=>s+parseAmount(c.total),0);const hasContracts=dayContracts.length>0;return(<div key={i} onClick={()=>hasContracts&&setSelectedDay(isSel?null:ds)} style={{minHeight:98,background:isSel?"linear-gradient(135deg,#f0f5ff,#e8f4fd)":isToday?"#f0f7ff":hasContracts?"#f7f8fa":"#fff",border:`1.5px solid ${isSel?"#0071CE":isToday?"#bfd7f5":hasContracts?"#e2e8f0":"#f0f1f3"}`,borderRadius:9,padding:"6px 5px",cursor:hasContracts?"pointer":"default",overflow:"hidden",boxSizing:"border-box",transition:"all 0.15s"}}><div style={{fontSize:11,fontWeight:isToday?800:500,color:isToday?"#0071CE":dow===0?"#ef4444":dow===6?"#3b82f6":"#374151",marginBottom:3,textAlign:"center"}}>{isToday?<span style={{background:"#0071CE",color:"#fff",borderRadius:"50%",padding:"1px 6px"}}>{day}</span>:day}</div>{hasContracts&&(<><div style={{fontSize:10,fontWeight:800,color:"#0071CE",textAlign:"center",marginBottom:4,background:"rgba(255,255,255,0.8)",borderRadius:5,padding:"1px 2px"}}>{fmtAmount(dayTotal)}</div><div style={{display:"flex",flexDirection:"column",gap:2}}>{dayContracts.slice(0,2).map((c,ci)=>(<div key={ci} style={{fontSize:9,background:"#fff",color:"#374151",borderRadius:4,padding:"2px 4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,border:"1px solid #f0f1f3"}}><b style={{color:c.isRenewal?"#8468D3":"#0071CE",marginRight:2}}>{c.isRenewal?"R":"N"}</b>{c.manager?<b style={{color:"#8468D3"}}>{c.manager}·</b>:""}{c.name}</div>))}{dayContracts.length>2&&<div style={{fontSize:9,color:"#0071CE",textAlign:"center",fontWeight:700,marginTop:1}}>+{dayContracts.length-2}건</div>}</div></>)}</div>);})}
       </div>
     </div>
     {selectedDay&&selDayContracts.length>0&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}><div style={{padding:"13px 20px",borderBottom:"1px solid #f0f1f3",background:"linear-gradient(90deg,#f0f7ff,#f5f3ff)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:14,color:"#0f1117"}}>{new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span><span style={{fontSize:12,color:"#0071CE",fontWeight:700,background:"#f0f7ff",borderRadius:99,padding:"3px 10px",border:"1px solid #bfd7f5"}}>{selDayContracts.length}건 · {fmtAmount(selDayTotal)}</span></div><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:16}}>✕</button></div><div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>{selDayContracts.map(c=>(<div key={c.id} style={{background:"#f7f8fa",borderRadius:11,padding:"12px 14px",border:"1px solid #f0f1f3"}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>{c.manager?<Avatar name={c.manager} img={profiles[c.manager]} size={34} border="2px solid #fff"/>:<div style={{width:34,height:34,borderRadius:"50%",background:"#f0f1f3",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#adb5bd"}}>?</div>}<div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:5,marginBottom:1}}><span style={{fontSize:10,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:4,padding:"1px 5px"}}>{c.isRenewal?"R":"N"}</span><span style={{fontWeight:700,fontSize:13,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span></div><div style={{fontSize:11,color:c.manager?"#8468D3":"#adb5bd",fontWeight:600}}>{c.manager||"담당자 미지정"}</div></div>{c.total&&<div style={{background:"linear-gradient(135deg,#8468D3,#0071CE)",color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:800,whiteSpace:"nowrap"}}>{c.total}</div>}</div><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{c.phone&&<Badge label={c.phone} color="#6b7280" bg="#f3f4f6"/>}{c.endDate&&<Badge label={`종료: ${c.endDate}`} color="#0071CE" bg="#f0f7ff"/>}{c.link&&<a href={c.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0071CE",textDecoration:"none",background:"#f0f7ff",borderRadius:6,padding:"2px 7px",fontWeight:600}}>링크</a>}</div>{c.notes&&<div style={{marginTop:6,fontSize:11,color:"#6b7280",background:"#fff",borderRadius:6,padding:"5px 8px",borderLeft:"3px solid #e2e8f0"}}>{c.notes}</div>}</div>))}</div></div>)}
@@ -616,8 +555,8 @@ function MainApp({user,onLogout}){
       {memoContract&&<ContractMemoModal contract={memoContract} user={user} onClose={()=>setMemoContract(null)}/>}
       {editingReport&&<AdminEditReportModal report={editingReport} dateStr={reportViewDate} onClose={()=>setEditingReport(null)} onSave={handleAdminSaveReport}/>}
       {dailyAlertItems&&dailyAlertItems!=='PENDING'&&Array.isArray(dailyAlertItems)&&<DailyAlertModal items={dailyAlertItems} onClose={()=>setDailyAlertItems(null)}/>}
-      {window.innerWidth>768&&<Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)} navOrder={navOrder} setNavOrder={setNavOrder}/>}
-      <div style={{flex:1,minWidth:0,overflowY:"auto",paddingBottom:window.innerWidth<=768?"70px":"0"}}>
+      <Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)} navOrder={navOrder} setNavOrder={setNavOrder}/>
+      <div style={{flex:1,minWidth:0,overflowY:"auto",paddingBottom:window.innerWidth<=768?"80px":"0"}}>
         <div style={{background:"#fff",padding:"12px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f0f1f3",position:"sticky",top:0,zIndex:50}}>
           <div style={{fontSize:15,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>
             {tab==="list"&&"작업 목록"}{tab==="calendar"&&"캘린더"}{tab==="revenue"&&"매출현황 캘린더"}{tab==="contracts"&&"계약 관리"}{tab==="report"&&"업무 보고"}{tab==="ranking"&&"매출 랭킹"}{tab==="admin"&&"관리자 설정"}
@@ -646,14 +585,14 @@ function MainApp({user,onLogout}){
               </div>
               <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",border:"1px solid #f0f1f3"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>이번 주</span><span style={{fontSize:10,color:"#adb5bd"}}>{weekDays[0].slice(5).replace("-","/")} – {weekDays[4].slice(5).replace("-","/")}</span></div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,maxHeight:window.innerWidth<=768?180:9999,overflowY:window.innerWidth<=768?"auto":"visible"}}>
                   {weekDays.map(ds=>{const isToday=ds===todayStr;const dow=new Date(ds+"T00:00:00").getDay();const dayTasks=filtered.filter(t=>isActiveOnDate(t,ds));const dayCE=filterCE(allCE.filter(e=>e.date===ds&&(e.type==="관리전화"||e.type==="리포트")));const all=[...dayCE,...dayTasks];return(<div key={ds} style={{background:isToday?"#f0f7ff":"#f7f8fa",border:`1.5px solid ${isToday?"#bfd7f5":"#f0f1f3"}`,borderRadius:10,padding:"8px 6px",minHeight:80,boxSizing:"border-box"}}><div style={{textAlign:"center",marginBottom:5}}>{isToday?<div style={{width:20,height:20,background:"#0071CE",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 2px",fontSize:10,fontWeight:800,color:"#fff"}}>{DAYS_KR[dow]}</div>:<div style={{fontSize:10,fontWeight:700,color:"#adb5bd"}}>{DAYS_KR[dow]}</div>}<div style={{fontSize:9,color:isToday?"#93c5fd":"#adb5bd"}}>{ds.slice(5).replace("-","/")}</div></div>{all.length===0&&<div style={{fontSize:9,color:"#d1d5db",textAlign:"center"}}>없음</div>}{all.slice(0,3).map((item,i)=>{if(item.type&&CE[item.type]){const ce=CE[item.type];return <div key={i} title={`[${item.type}] ${item.name}`} style={{fontSize:9,background:ce.bg,color:ce.color,borderRadius:3,padding:"1px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:700}}>[{item.type[0]}] {item.name}</div>;}return <div key={i} title={item.title} style={{fontSize:9,background:P[item.priority].bg,color:P[item.priority].color,borderRadius:3,padding:"1px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,textDecoration:item.status==="done"?"line-through":"none"}}>{item.title}</div>;})} {all.length>3&&<div style={{fontSize:9,color:"#adb5bd",textAlign:"center"}}>+{all.length-3}</div>}</div>);})}
                 </div>
               </div>
               <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
                 <div style={{flex:"0 0 420px",maxWidth:420,background:"#fff",borderRadius:12,padding:"14px 16px",border:"1px solid #f0f1f3"}}>
                   <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>오늘 할 일</span><span style={{background:"#fef2f2",color:"#ef4444",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{todayTasks.length+todayCE.length}</span></div>
-                  {todayTasks.length===0&&todayCE.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>오늘 할 일이 없습니다</div>:<div style={{display:"flex",flexDirection:"column",gap:6}}>{todayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>toggleCE(e)} onMemo={()=>setMemoContract(c)}/>:null;})}{todayTasks.map(t=><TaskCard key={t.id+t._sk} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}
+                  {todayTasks.length===0&&todayCE.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>오늘 할 일이 없습니다</div>:<div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:window.innerWidth<=768?300:9999,overflowY:window.innerWidth<=768?"auto":"visible"}}>{todayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>toggleCE(e)} onMemo={()=>setMemoContract(c)}/>:null;})}{todayTasks.map(t=><TaskCard key={t.id+t._sk} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}
                 </div>
                 <div style={{flex:1,minWidth:0,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}>
                   <div onClick={()=>setShowAllTasks(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer"}}><div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>전체 할 일</span><span style={{background:"#f7f8fa",color:"#6b7280",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{allItems.length}개</span></div><span style={{fontSize:10,fontWeight:600,color:"#0071CE",background:"#f0f7ff",borderRadius:6,padding:"3px 8px"}}>{showAllTasks?"숨기기 ▲":"전체보기 ▼"}</span></div>
@@ -668,7 +607,7 @@ function MainApp({user,onLogout}){
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><button onClick={()=>{let m=calM-1,y=calY;if(m<0){m=11;y--;}setCalM(m);setCalY(y);setSelectedDay(null);}} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:7,padding:"5px 12px",cursor:"pointer",fontSize:16}}>‹</button><div style={{fontWeight:800,fontSize:15,color:"#0f1117"}}>{calY}년 {calM+1}월</div><button onClick={()=>{let m=calM+1,y=calY;if(m>11){m=0;y++;}setCalM(m);setCalY(y);setSelectedDay(null);}} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:7,padding:"5px 12px",cursor:"pointer",fontSize:16}}>›</button></div>
                 <div style={{display:"flex",gap:5,marginBottom:12,justifyContent:"center"}}>{[["all","전체"],["tasks","일반 일정"],["contracts","계약업체"]].map(([v,l])=>(<button key={v} onClick={()=>setCalFilter(v)} style={{border:`1.5px solid ${calFilter===v?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:calFilter===v?"#f0f7ff":"#fff",color:calFilter===v?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>))}</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:3}}>{DAYS_KR.map((d,i)=>(<div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:i===0?"#ef4444":i===6?"#0071CE":"#adb5bd",padding:"4px 0"}}>{d}</div>))}</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>{cells.map((day,i)=>{if(!day)return <div key={i}/>;const ds=`${calY}-${String(calM+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;const isToday=ds===todayStr;const isSel=selectedDay===ds;const dow=(firstDay+day-1)%7;const cell=tasksByDay[day]||{t:[],e:[]};const allCellItems=[...cell.e.map(e=>({...e,_ce:true})),...cell.t];return(<div key={i} onClick={()=>setSelectedDay(isSel?null:ds)} style={{minHeight:window.innerWidth<=768?100:82,background:isSel?"#f0f7ff":isToday?"#f0f9ff":"#fff",border:`1.5px solid ${isSel?"#0071CE":isToday?"#93c5fd":"#f0f1f3"}`,borderRadius:8,padding:"5px 4px",cursor:"pointer",overflow:"hidden",boxSizing:"border-box"}}><div style={{fontSize:11,fontWeight:isToday?800:500,color:isToday?"#0071CE":dow===0?"#ef4444":dow===6?"#3b82f6":"#374151",marginBottom:2,textAlign:"center"}}>{isToday?<span style={{background:"#0071CE",color:"#fff",borderRadius:"50%",padding:"1px 5px"}}>{day}</span>:day}</div><div style={{display:"flex",flexDirection:"column",gap:2}}>{allCellItems.slice(0,3).map((item,ti)=>{const iD=item._ce?!!completions[ceKey(item)]:item.status==="done";const label=item._ce?`[${item.type[0]}] ${item.name}`:`${item._ir?"반복 ":""}${item.title}`;const bg=item._ce?CE[item.type].bg:P[item.priority].bg;const color=item._ce?CE[item.type].color:P[item.priority].color;return <div key={ti} title={label} style={{fontSize:9,background:bg,color,borderRadius:3,padding:"1px 3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:item._ce?700:600,textDecoration:iD?"line-through":"none",opacity:iD?0.6:1}}>{label}</div>;})} {allCellItems.length>3&&<div style={{fontSize:9,color:"#adb5bd",textAlign:"center"}}>+{allCellItems.length-3}</div>}</div></div>);})} </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>{cells.map((day,i)=>{if(!day)return <div key={i}/>;const ds=`${calY}-${String(calM+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;const isToday=ds===todayStr;const isSel=selectedDay===ds;const dow=(firstDay+day-1)%7;const cell=tasksByDay[day]||{t:[],e:[]};const allCellItems=[...cell.e.map(e=>({...e,_ce:true})),...cell.t];return(<div key={i} onClick={()=>setSelectedDay(isSel?null:ds)} style={{height:82,background:isSel?"#f0f7ff":isToday?"#f0f9ff":"#fff",border:`1.5px solid ${isSel?"#0071CE":isToday?"#93c5fd":"#f0f1f3"}`,borderRadius:8,padding:"5px 4px",cursor:"pointer",overflow:"hidden",boxSizing:"border-box"}}><div style={{fontSize:11,fontWeight:isToday?800:500,color:isToday?"#0071CE":dow===0?"#ef4444":dow===6?"#3b82f6":"#374151",marginBottom:2,textAlign:"center"}}>{isToday?<span style={{background:"#0071CE",color:"#fff",borderRadius:"50%",padding:"1px 5px"}}>{day}</span>:day}</div><div style={{display:"flex",flexDirection:"column",gap:2}}>{allCellItems.slice(0,3).map((item,ti)=>{const iD=item._ce?!!completions[ceKey(item)]:item.status==="done";const label=item._ce?`[${item.type[0]}] ${item.name}`:`${item._ir?"반복 ":""}${item.title}`;const bg=item._ce?CE[item.type].bg:P[item.priority].bg;const color=item._ce?CE[item.type].color:P[item.priority].color;return <div key={ti} title={label} style={{fontSize:9,background:bg,color,borderRadius:3,padding:"1px 3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:item._ce?700:600,textDecoration:iD?"line-through":"none",opacity:iD?0.6:1}}>{label}</div>;})} {allCellItems.length>3&&<div style={{fontSize:9,color:"#adb5bd",textAlign:"center"}}>+{allCellItems.length-3}</div>}</div></div>);})} </div>
               </div>
               {selectedDay&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}><div style={{padding:"12px 18px",borderBottom:"1px solid #f0f1f3",background:selectedDay===todayStr?"#f0f7ff":"#f7f8fa",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>{new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span>{selectedDay===todayStr&&<span style={{fontSize:10,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:99,padding:"2px 7px"}}>오늘</span>}</div><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#adb5bd"}}>{selDayTasks.length+selDayCE.length}개</span><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:15}}>✕</button></div></div><div style={{padding:"14px 18px"}}>{selDayTasks.length===0&&selDayCE.length===0?<div style={{textAlign:"center",padding:"16px 0",color:"#adb5bd",fontSize:12}}>이 날 일정이 없어요</div>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:7}}>{selDayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>toggleCE(e)} onMemo={()=>setMemoContract(c)}/>:null;})}{selDayTasks.map(t=><TaskCard key={t.id+(t._sk||"")} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}</div></div>)}
             </div>
@@ -688,9 +627,9 @@ function MainApp({user,onLogout}){
                 {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span><button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>필터 초기화</button></div>)}
               </div>
               {filteredContracts.length===0&&!showCF?(<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}><div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div></div>)
-              :<div style={{display:"grid",gridTemplateColumns:window.innerWidth<=768?"1fr":"1fr 1fr",gap:10}}>
+              :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 {pagedContracts.map(c=>{const evts=genEvents(c);const isActive=c.endDate>=todayStr;const nextCall=evts.filter(e=>e.type==="관리전화"&&e.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date))[0];const rpt=evts.find(e=>e.type==="리포트");
-                  return(<div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"10px 14px",opacity:isActive?1:0.7,boxSizing:"border-box",cursor:"pointer",transition:"box-shadow 0.15s",minHeight:130,overflow:"hidden"}} onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(0,113,206,0.10)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"} onClick={()=>setMemoContract(c)}>
+                  return(<div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"10px 14px",opacity:isActive?1:0.7,boxSizing:"border-box",cursor:"pointer",transition:"box-shadow 0.15s",height:130,overflow:"hidden"}} onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(0,113,206,0.10)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"} onClick={()=>setMemoContract(c)}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
                       <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}><span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfd7f5"}`}}>{c.isRenewal?"R":"N"}</span><span style={{fontWeight:800,fontSize:14,color:"#0f1117"}}>{c.name}</span><Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/></div><div style={{fontSize:11,color:"#adb5bd",marginTop:2}}>{c.startDate} ~ {c.endDate}</div>{c.manager&&<div style={{fontSize:11,color:"#8468D3",fontWeight:600,marginTop:1}}>{c.manager}</div>}</div>
                       <div style={{display:"flex",gap:3,flexShrink:0}} onClick={e=>e.stopPropagation()}><button onClick={()=>setMemoContract(c)} title="메모" style={{background:"#f5f3ff",border:"1px solid #e9d5ff",color:"#8468D3",cursor:"pointer",padding:"4px 7px",borderRadius:6,fontSize:11,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>메모</button>{user.isAdmin&&<><button onClick={()=>{setEditContract(c);setShowCF(true);}} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",padding:2,fontSize:12}}>✏️</button><button onClick={()=>deleteContract(c.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",padding:2,fontSize:12}}>✕</button></>}</div>
