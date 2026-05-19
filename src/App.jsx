@@ -274,32 +274,55 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
   ];
   const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean);
 
-  // ===== 모바일: 하단 탭바 =====
+  // ===== 모바일: 드로어 메뉴 =====
+  const[drawerOpen,setDrawerOpen]=useState(false);
   if(isMobile){
     return(
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #f0f1f3",display:"flex",alignItems:"center",zIndex:9999,paddingBottom:"env(safe-area-inset-bottom)",paddingTop:14,minHeight:96}}>
-        {sortedNav.slice(0,4).map(n=>(
-          <button key={n.id} onClick={()=>setTab(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",position:"relative"}}>
-            <i className={`ti ${n.icon}`} style={{fontSize:30,color:tab===n.id?"#0071CE":"#c1c7d0",marginBottom:4}}/>
-            <span style={{fontSize:11,fontWeight:tab===n.id?700:500,color:tab===n.id?"#0071CE":"#adb5bd"}}>{n.label}</span>
-            {n.badge&&<span style={{position:"absolute",top:4,right:"50%",marginRight:-18,background:"#8468D3",color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:8,fontWeight:700}}>{n.badge}</span>}
-          </button>
-        ))}
-        <button onClick={()=>setTab("report")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
-          <i className="ti ti-clipboard-text" style={{fontSize:30,color:tab==="report"?"#0071CE":"#c1c7d0",marginBottom:4}}/>
-          <span style={{fontSize:11,fontWeight:tab==="report"?700:500,color:tab==="report"?"#0071CE":"#adb5bd"}}>업무보고</span>
-        </button>
-        {user.isAdmin&&(
-          <button onClick={()=>setTab("admin")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
-            <i className="ti ti-lock" style={{fontSize:30,color:tab==="admin"?"#d97706":"#c1c7d0",marginBottom:4}}/>
-            <span style={{fontSize:11,fontWeight:tab==="admin"?700:500,color:tab==="admin"?"#d97706":"#adb5bd"}}>설정</span>
-          </button>
+      <>
+        {/* 드로어 오버레이 */}
+        {drawerOpen&&(
+          <div onClick={()=>setDrawerOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:9998}}/>
         )}
-        <button onClick={onLogout} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"6px 2px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
-          <i className="ti ti-logout" style={{fontSize:30,color:"#ef4444",marginBottom:4}}/>
-          <span style={{fontSize:11,fontWeight:500,color:"#ef4444"}}>로그아웃</span>
-        </button>
-      </div>
+        {/* 드로어 패널 */}
+        <div style={{position:"fixed",top:0,right:0,bottom:0,width:230,background:"#fff",zIndex:9999,transform:drawerOpen?"translateX(0)":"translateX(100%)",transition:"transform 0.25s ease",display:"flex",flexDirection:"column",paddingTop:60,padding:"60px 10px 20px",boxShadow:drawerOpen?"-4px 0 24px rgba(0,0,0,0.12)":"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+          <div style={{flex:1,display:"flex",flexDirection:"column",gap:2}}>
+            {sortedNav.map(n=>(
+              <button key={n.id} onClick={()=>{setTab(n.id);setDrawerOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:10,border:"none",background:tab===n.id?"#f0f7ff":"transparent",cursor:"pointer",textAlign:"left",fontFamily:"'Pretendard',-apple-system,sans-serif",position:"relative"}}>
+                <i className={`ti ${n.icon}`} style={{fontSize:20,color:tab===n.id?"#0071CE":"#c1c7d0",flexShrink:0}}/>
+                <span style={{fontSize:13,fontWeight:tab===n.id?700:500,color:tab===n.id?"#0071CE":"#6b7280",flex:1}}>{n.label}</span>
+                {n.badge&&<span style={{background:"#8468D3",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{n.badge}</span>}
+              </button>
+            ))}
+            {user.isAdmin&&(
+              <button onClick={()=>{setTab("admin");setDrawerOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:10,border:"none",background:tab==="admin"?"#fffbeb":"transparent",cursor:"pointer",textAlign:"left",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+                <i className="ti ti-lock" style={{fontSize:20,color:tab==="admin"?"#d97706":"#c1c7d0",flexShrink:0}}/>
+                <span style={{fontSize:13,fontWeight:tab==="admin"?700:500,color:tab==="admin"?"#d97706":"#6b7280"}}>관리자 설정</span>
+              </button>
+            )}
+          </div>
+          <div style={{borderTop:"1px solid #f0f1f3",paddingTop:12,display:"flex",flexDirection:"column",gap:4}}>
+            <button onClick={()=>{onOpenProfile();setDrawerOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#0071CE,#8468D3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0,overflow:"hidden"}}>
+                {profiles[user.name]?<img src={profiles[user.name]} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={user.name}/>:(user.name||"?").slice(0,1)}
+              </div>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:600,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
+                <div style={{fontSize:10,color:"#adb5bd"}}>{user.isAdmin?"관리자":"사원"}</div>
+              </div>
+            </button>
+            <button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+              <i className="ti ti-logout" style={{fontSize:20,color:"#ef4444",flexShrink:0}}/>
+              <span style={{fontSize:13,color:"#ef4444",fontWeight:500}}>로그아웃</span>
+            </button>
+          </div>
+        </div>
+        {/* 상단 메뉴 버튼만 렌더 (Sidebar는 null 반환 안 함) */}
+        <div style={{position:"fixed",top:0,right:0,zIndex:9997,padding:"10px 14px"}}>
+          <button onClick={()=>setDrawerOpen(v=>!v)} style={{width:38,height:38,borderRadius:10,border:"1px solid #f0f1f3",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+            <i className={`ti ${drawerOpen?"ti-x":"ti-menu-2"}`} style={{fontSize:20,color:"#374151"}}/>
+          </button>
+        </div>
+      </>
     );
   }
 
@@ -703,7 +726,7 @@ function MainApp({user,onLogout}){
       {editingReport&&<AdminEditReportModal report={editingReport} dateStr={reportViewDate} onClose={()=>setEditingReport(null)} onSave={handleAdminSaveReport}/>}
       {dailyAlertItems&&dailyAlertItems!=='PENDING'&&Array.isArray(dailyAlertItems)&&<DailyAlertModal items={dailyAlertItems} onClose={()=>setDailyAlertItems(null)}/>}
       <Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)} navOrder={navOrder} setNavOrder={setNavOrder}/>
-      <div style={{flex:1,minWidth:0,overflowY:"auto",paddingBottom:window.innerWidth<=768?"100px":"0"}}>
+      <div style={{flex:1,minWidth:0,overflowY:"auto",paddingBottom:0}}>
         <div style={{background:"#fff",padding:"12px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f0f1f3",position:"sticky",top:0,zIndex:50}}>
           <div style={{fontSize:15,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>
             {tab==="list"&&"작업 목록"}{tab==="calendar"&&"캘린더"}{tab==="revenue"&&"매출현황 캘린더"}{tab==="contracts"&&"계약 관리"}{tab==="report"&&"업무 보고"}{tab==="ranking"&&"매출 랭킹"}{tab==="admin"&&"관리자 설정"}
