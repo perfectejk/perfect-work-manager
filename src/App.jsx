@@ -664,7 +664,7 @@ function MainApp({user,onLogout}){
           )}
           {tab==="report"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   <div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid #f0f1f3"}}>
                     <div style={{fontWeight:700,fontSize:12,marginBottom:10,color:"#0f1117"}}>보고 타임</div>
@@ -707,6 +707,8 @@ function MainApp({user,onLogout}){
                   {loadingAnalysis&&<div style={{textAlign:"center",padding:"20px",color:"#0071CE",fontSize:12}}>데이터 불러오는 중…</div>}
                 </div>
               )}
+                </div>
+              </div>
             </div>
           )}
           {tab==="ranking"&&<RankingTab contracts={contracts} profiles={profiles} accounts={accounts}/>}
