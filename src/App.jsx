@@ -702,7 +702,54 @@ function MainApp({user,onLogout}){
                   <div style={{fontSize:11,color:"#6b7280",marginBottom:14,background:"rgba(255,255,255,0.6)",borderRadius:8,padding:"6px 10px"}}>집계 기준: 해당 날짜 <b>최종마감</b> 보고 있으면 최종마감 사용, 없으면 <b>6시</b> 타임 사용</div>
                   <div style={{background:"#fff",borderRadius:10,padding:"12px 14px",marginBottom:10,border:"1px solid #bfdbfe"}}><div style={{fontWeight:700,fontSize:12,color:"#1e40af",marginBottom:8}}>월별 조회</div><div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><input type="month" value={analysisMonth} onChange={e=>setAnalysisMonth(e.target.value)} style={{border:"1.5px solid #bfdbfe",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/><button onClick={loadAnalysisByMonth} disabled={loadingAnalysis} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{loadingAnalysis?"불러오는 중…":"불러오기"}</button></div></div>
                   <div style={{background:"#fff",borderRadius:10,padding:"12px 14px",marginBottom:14,border:"1px solid #bfdbfe"}}><div style={{fontWeight:700,fontSize:12,color:"#1e40af",marginBottom:8}}>기간 직접 선택</div><div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11,color:"#6b7280"}}>시작</span><input type="date" value={analysisStart} onChange={e=>setAnalysisStart(e.target.value)} style={{border:"1.5px solid #bfdbfe",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/></div><span style={{color:"#adb5bd",fontWeight:600}}>~</span><div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11,color:"#6b7280"}}>종료</span><input type="date" value={analysisEnd} onChange={e=>setAnalysisEnd(e.target.value)} style={{border:"1.5px solid #bfdbfe",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/></div><button onClick={()=>loadAnalysisData(analysisStart,analysisEnd)} disabled={!analysisStart||!analysisEnd||loadingAnalysis} style={{background:analysisStart&&analysisEnd?"#0071CE":"#e5e7eb",color:analysisStart&&analysisEnd?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:analysisStart&&analysisEnd?"pointer":"not-allowed",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{loadingAnalysis?"불러오는 중…":"불러오기"}</button></div></div>
-                  {analysisData&&(<div><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}><div style={{fontSize:12,color:"#374151"}}><b style={{color:"#1e40af"}}>{Object.keys(analysisData).length}일</b> 데이터 · <b style={{color:"#0071CE"}}>{Object.values(analysisData).reduce((s,r)=>s+r.length,0)}건</b> 보고</div><button onClick={downloadAnalysisExcel} style={{background:"linear-gradient(135deg,#10b981,#059669)",color:"#fff",border:"none",borderRadius:9,padding:"8px 18px",fontSize:13,fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(16,185,129,0.3)",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>엑셀 다운로드</button></div></div>)}
+                  {analysisData&&(<div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                      <div style={{fontSize:12,color:"#374151"}}>
+                        <b style={{color:"#1e40af"}}>{Object.keys(analysisData).length}일</b> 데이터 · <b style={{color:"#0071CE"}}>{Object.values(analysisData).reduce((s,r)=>s+r.length,0)}건</b> 보고
+                      </div>
+                      <button onClick={downloadAnalysisExcel} style={{background:"linear-gradient(135deg,#10b981,#059669)",color:"#fff",border:"none",borderRadius:9,padding:"8px 18px",fontSize:13,fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(16,185,129,0.3)",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>엑셀 다운로드</button>
+                    </div>
+                    {/* ===== 미리보기 테이블 ===== */}
+                    <div style={{background:"#fff",borderRadius:10,border:"1px solid #bfdbfe",overflow:"hidden",marginTop:4}}>
+                      <div style={{background:"#eff6ff",padding:"8px 14px",fontWeight:700,fontSize:12,color:"#1e40af",borderBottom:"1px solid #bfdbfe"}}>📊 데이터 미리보기</div>
+                      <div style={{overflowX:"auto",maxHeight:340,overflowY:"auto"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+                          <thead style={{position:"sticky",top:0,background:"#f0f7ff",zIndex:1}}>
+                            <tr>
+                              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#374151",borderBottom:"1px solid #bfdbfe",whiteSpace:"nowrap"}}>날짜</th>
+                              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#374151",borderBottom:"1px solid #bfdbfe",whiteSpace:"nowrap"}}>타임</th>
+                              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#374151",borderBottom:"1px solid #bfdbfe",whiteSpace:"nowrap"}}>사원</th>
+                              {METRICS.map(m=><th key={m.key} style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#374151",borderBottom:"1px solid #bfdbfe",whiteSpace:"nowrap"}}>{m.label}</th>)}
+                              <th style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#8468D3",borderBottom:"1px solid #bfdbfe",whiteSpace:"nowrap"}}>일매출</th>
+                              <th style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#0071CE",borderBottom:"1px solid #bfdbfe",whiteSpace:"nowrap"}}>연결률</th>
+                              <th style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#10b981",borderBottom:"1px solid #bfdbfe",whiteSpace:"nowrap"}}>30초↑</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.keys(analysisData).sort().map((date,di)=>{
+                              const rows=analysisData[date];
+                              const ts=rows[0]?._ts||"-";
+                              return rows.map((r,ri)=>(
+                                <tr key={date+r.name} style={{background:di%2===0?"#fff":"#f7f8fa",borderBottom:"1px solid #f0f1f3"}}>
+                                  {ri===0&&<td rowSpan={rows.length} style={{padding:"6px 10px",fontWeight:700,color:"#1e40af",verticalAlign:"middle",borderRight:"1px solid #e0eefe",whiteSpace:"nowrap"}}>{date}</td>}
+                                  {ri===0&&<td rowSpan={rows.length} style={{padding:"6px 8px",color:"#6b7280",verticalAlign:"middle",borderRight:"1px solid #e0eefe",whiteSpace:"nowrap",textAlign:"center"}}><span style={{background:"#eff6ff",color:"#2563eb",borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:600}}>{ts}</span></td>}
+                                  <td style={{padding:"6px 10px",fontWeight:600,color:"#0f1117",whiteSpace:"nowrap"}}>{r.name}</td>
+                                  {METRICS.map(m=><td key={m.key} style={{padding:"6px 8px",textAlign:"center",color:"#374151"}}>{r[m.key]||0}</td>)}
+                                  <td style={{padding:"6px 8px",textAlign:"center",color:"#8468D3",fontWeight:600}}>{r.dailySales?Number(r.dailySales).toLocaleString()+"원":"0원"}</td>
+                                  <td style={{padding:"6px 8px",textAlign:"center",color:"#0071CE"}}>{r.connRate||0}</td>
+                                  <td style={{padding:"6px 8px",textAlign:"center",color:"#10b981"}}>{r.rate30s||0}</td>
+                                </tr>
+                              ));
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{background:"#f0f7ff",padding:"6px 14px",fontSize:10,color:"#6b7280",borderTop:"1px solid #bfdbfe"}}>
+                        ※ 날짜별로 최종마감 보고 우선, 없으면 6시 타임 표시 · 좌우 스크롤 가능
+                      </div>
+                    </div>
+                  </div>)}
+
                   {!analysisData&&!loadingAnalysis&&<div style={{textAlign:"center",padding:"20px",color:"#adb5bd",fontSize:12}}>월을 선택하거나 기간을 입력 후 불러오기를 눌러주세요</div>}
                   {loadingAnalysis&&<div style={{textAlign:"center",padding:"20px",color:"#0071CE",fontSize:12}}>데이터 불러오는 중…</div>}
                 </div>
