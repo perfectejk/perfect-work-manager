@@ -752,6 +752,7 @@ function MainApp({user,onLogout}){
             </div>
           </div>
         )}
+         <div style={{padding:"18px 22px"}}>
           {tab==="list"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               {showForm&&<TaskForm form={form} setForm={setForm} onSubmit={submitTask} onCancel={()=>{setShowForm(false);setEditTaskData(null);setForm(EF(user.isAdmin));}} isEdit={!!editTaskData} isAdminUser={user.isAdmin} projectCategories={projectCategories}/>}
