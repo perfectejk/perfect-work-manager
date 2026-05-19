@@ -590,9 +590,6 @@ function MainApp({user,onLogout}){
         <div style={{padding:"18px 22px"}}>
           {tab!=="admin"&&tab!=="ranking"&&tab!=="revenue"&&(
             <div style={{background:"#fff",borderRadius:12,padding:"12px 18px",marginBottom:16,border:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:18}}>
-        <div style={{padding:"18px 22px"}}>
-          {tab!=="admin"&&tab!=="ranking"&&tab!=="revenue"&&(
-            <div style={{background:"#fff",borderRadius:12,padding:"12px 18px",marginBottom:16,border:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:18}}>
               <div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:11,color:"#adb5bd"}}>전체 작업 진행률</span><span style={{fontSize:11,fontWeight:700,color:"#0071CE"}}>{done}/{tasks.length} 완료 ({pct}%)</span></div><div style={{background:"#f0f1f3",borderRadius:99,height:5}}><div style={{width:`${pct}%`,background:"linear-gradient(90deg,#8468D3,#0071CE)",borderRadius:99,height:"100%",transition:"width .4s"}}/></div></div>
               <div style={{display:"flex",gap:14,flexShrink:0}}>{Object.entries(S).map(([k,v])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:v.color}}>{tasks.filter(t=>t.status===k).length}</div><div style={{fontSize:10,color:"#adb5bd"}}>{v.label}</div></div>))}<div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:"#8468D3"}}>{visibleContracts.length}</div><div style={{fontSize:10,color:"#adb5bd"}}>계약</div></div></div>
             </div>
