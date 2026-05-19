@@ -704,8 +704,9 @@ function MainApp({user,onLogout}){
   const managers=useMemo(()=>[...new Set(contracts.map(c=>c.manager).filter(Boolean))],[contracts]);
   const contractMonthOptions=useMemo(()=>{const set=new Set();visibleContracts.forEach(c=>{if(c.startDate){const[y,m]=c.startDate.split("-");set.add(`${y}-${m}`);}});return[...set].sort().reverse();},[visibleContracts]);
   const filteredContracts=useMemo(()=>{let list=contractManager==="all"?visibleContracts:visibleContracts.filter(c=>c.manager===contractManager);if(contractMonth!=="all")list=list.filter(c=>c.startDate?.startsWith(contractMonth));if(contractStatus==="active")list=list.filter(c=>!c.cancelled&&c.endDate&&c.endDate>=todayStr);else if(contractStatus==="ended")list=list.filter(c=>!c.cancelled&&c.endDate&&c.endDate<todayStr);else if(contractStatus==="cancelled")list=list.filter(c=>!!c.cancelled);else list=list.filter(c=>!c.cancelled);if(contractSearch.trim())list=list.filter(c=>c.name?.toLowerCase().includes(contractSearch.trim().toLowerCase()));return list;},[visibleContracts,contractManager,contractMonth,contractStatus,contractSearch]);
-  const totalPages=useMemo(()=>Math.ceil(filteredContracts.length/10),[filteredContracts]);
-  const pagedContracts=useMemo(()=>filteredContracts.slice((contractPage-1)*10,contractPage*10),[filteredContracts,contractPage]);
+  const contractsPerPage=window.innerWidth<=768?5:20;
+  const totalPages=useMemo(()=>Math.ceil(filteredContracts.length/contractsPerPage),[filteredContracts,contractsPerPage]);
+  const pagedContracts=useMemo(()=>filteredContracts.slice((contractPage-1)*contractsPerPage,contractPage*contractsPerPage),[filteredContracts,contractPage,contractsPerPage]);
   const renewalStats=useMemo(()=>{const now={count:0,amount:0},ren={count:0,amount:0};filteredContracts.forEach(c=>{const a=parseAmount(c.total);if(c.isRenewal){ren.count++;ren.amount+=a;}else{now.count++;now.amount+=a;}});return{new:now,renewal:ren};},[filteredContracts]);
   const calTasksExp=useMemo(()=>expandForMonth(filtered,calY,calM),[filtered,calY,calM]);
   const calCE=useMemo(()=>filterCE(allCE.filter(e=>e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`)&&e.type!=="온보딩")),[allCE,calY,calM,filterCE]);
@@ -727,22 +728,30 @@ function MainApp({user,onLogout}){
       {dailyAlertItems&&dailyAlertItems!=='PENDING'&&Array.isArray(dailyAlertItems)&&<DailyAlertModal items={dailyAlertItems} onClose={()=>setDailyAlertItems(null)}/>}
       <Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)} navOrder={navOrder} setNavOrder={setNavOrder}/>
       <div style={{flex:1,minWidth:0,overflowY:"auto",paddingBottom:0}}>
-        <div style={{background:"#fff",padding:"12px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f0f1f3",position:"sticky",top:0,zIndex:50}}>
-          <div style={{fontSize:15,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>
-            {tab==="list"&&"작업 목록"}{tab==="calendar"&&"캘린더"}{tab==="revenue"&&"매출현황 캘린더"}{tab==="contracts"&&"계약 관리"}{tab==="report"&&"업무 보고"}{tab==="ranking"&&"매출 랭킹"}{tab==="admin"&&"관리자 설정"}
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            {tab==="list"&&<button onClick={()=>{setEditTaskData(null);setForm(EF(user.isAdmin));setShowForm(v=>!v);}} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 새 작업</button>}
-            {tab==="contracts"&&user.isAdmin&&<button onClick={()=>{setEditContract(null);setShowCF(v=>!v);}} style={{background:"#8468D3",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 계약 등록</button>}
-          </div>
-        </div>
-        <div style={{padding:"18px 22px"}}>
-          {tab!=="admin"&&tab!=="ranking"&&tab!=="revenue"&&(
-            <div style={{background:"#fff",borderRadius:12,padding:"12px 18px",marginBottom:16,border:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:18}}>
-              <div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:11,color:"#adb5bd"}}>전체 작업 진행률</span><span style={{fontSize:11,fontWeight:700,color:"#0071CE"}}>{done}/{tasks.length} 완료 ({pct}%)</span></div><div style={{background:"#f0f1f3",borderRadius:99,height:5}}><div style={{width:`${pct}%`,background:"linear-gradient(90deg,#8468D3,#0071CE)",borderRadius:99,height:"100%",transition:"width .4s"}}/></div></div>
-              <div style={{display:"flex",gap:14,flexShrink:0}}>{Object.entries(S).map(([k,v])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:v.color}}>{tasks.filter(t=>t.status===k).length}</div><div style={{fontSize:10,color:"#adb5bd"}}>{v.label}</div></div>))}<div style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:"#8468D3"}}>{visibleContracts.length}</div><div style={{fontSize:10,color:"#adb5bd"}}>계약</div></div></div>
+        {window.innerWidth<=768?(
+          <div style={{background:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f0f1f3",position:"sticky",top:0,zIndex:50}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:26,height:26,borderRadius:7,background:"linear-gradient(135deg,#8468D3,#0071CE)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <span style={{fontSize:13,fontWeight:800,color:"#fff",fontStyle:"italic"}}>P</span>
+              </div>
+              <span style={{fontSize:14,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>PRO Manager</span>
             </div>
-          )}
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {tab==="list"&&<button onClick={()=>{setEditTaskData(null);setForm(EF(user.isAdmin));setShowForm(v=>!v);}} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 새 작업</button>}
+              {tab==="contracts"&&user.isAdmin&&<button onClick={()=>{setEditContract(null);setShowCF(v=>!v);}} style={{background:"#8468D3",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 계약 등록</button>}
+            </div>
+          </div>
+        ):(
+          <div style={{background:"#fff",padding:"12px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f0f1f3",position:"sticky",top:0,zIndex:50}}>
+            <div style={{fontSize:15,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>
+              {tab==="list"&&"작업 목록"}{tab==="calendar"&&"캘린더"}{tab==="revenue"&&"매출현황 캘린더"}{tab==="contracts"&&"계약 관리"}{tab==="report"&&"업무 보고"}{tab==="ranking"&&"매출 랭킹"}{tab==="admin"&&"관리자 설정"}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              {tab==="list"&&<button onClick={()=>{setEditTaskData(null);setForm(EF(user.isAdmin));setShowForm(v=>!v);}} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 새 작업</button>}
+              {tab==="contracts"&&user.isAdmin&&<button onClick={()=>{setEditContract(null);setShowCF(v=>!v);}} style={{background:"#8468D3",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 계약 등록</button>}
+            </div>
+          </div>
+        )}
           {tab==="list"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               {showForm&&<TaskForm form={form} setForm={setForm} onSubmit={submitTask} onCancel={()=>{setShowForm(false);setEditTaskData(null);setForm(EF(user.isAdmin));}} isEdit={!!editTaskData} isAdminUser={user.isAdmin} projectCategories={projectCategories}/>}
@@ -797,7 +806,7 @@ function MainApp({user,onLogout}){
                 {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span><button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>필터 초기화</button></div>)}
               </div>
               {filteredContracts.length===0&&!showCF?(<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}><div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":contractStatus==="cancelled"?"해지된 업체가 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div></div>)
-              :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              :<div style={{display:"grid",gridTemplateColumns:window.innerWidth<=768?"1fr":"1fr 1fr",gap:10,alignItems:"start"}}>
                 {pagedContracts.map(c=>{
                   const isCancelled=!!c.cancelled;
                   const isActive=!isCancelled&&c.endDate>=todayStr;
