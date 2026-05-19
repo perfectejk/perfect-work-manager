@@ -271,6 +271,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
     {id:"contracts",label:"계약관리",icon:"ti-users",badge:myCount>0?myCount:null},
     {id:"report",label:"업무보고",icon:"ti-clipboard-text"},
     {id:"ranking",label:"매출 랭킹",icon:"ti-trophy"},
+    {id:"keyword",label:"키워드분석",icon:"ti-search"},
   ];
   const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean);
 
@@ -741,7 +742,7 @@ function MainApp({user,onLogout}){
         ):(
           <div style={{background:"#fff",padding:"12px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f0f1f3",position:"sticky",top:0,zIndex:50}}>
             <div style={{fontSize:15,fontWeight:700,color:"#0f1117",letterSpacing:"-0.3px"}}>
-              {tab==="list"&&"작업 목록"}{tab==="calendar"&&"캘린더"}{tab==="revenue"&&"매출현황 캘린더"}{tab==="contracts"&&"계약 관리"}{tab==="report"&&"업무 보고"}{tab==="ranking"&&"매출 랭킹"}{tab==="admin"&&"관리자 설정"}
+              {tab==="list"&&"작업 목록"}{tab==="calendar"&&"캘린더"}{tab==="revenue"&&"매출현황 캘린더"}{tab==="contracts"&&"계약 관리"}{tab==="report"&&"업무 보고"}{tab==="ranking"&&"매출 랭킹"}{tab==="admin"&&"관리자 설정"}{tab==="keyword"&&"키워드 분석"}
             </div>
             <div style={{display:"flex",gap:8}}>
               {tab==="list"&&<button onClick={()=>{setEditTaskData(null);setForm(EF(user.isAdmin));setShowForm(v=>!v);}} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 새 작업</button>}
@@ -1020,6 +1021,15 @@ function MainApp({user,onLogout}){
             </div>
           )}
           {tab==="ranking"&&<RankingTab contracts={contracts} profiles={profiles} accounts={accounts}/>}
+          {tab==="keyword"&&(
+            <div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden",height:"calc(100vh - 120px)"}}>
+              <iframe
+                src="https://keyword-tool-ochre.vercel.app/"
+                style={{width:"100%",height:"100%",border:"none"}}
+                title="키워드 분석"
+              />
+            </div>
+          )}
           {tab==="admin"&&user.isAdmin&&(<AdminTab projectCategories={projectCategories} setProjectCategories={setProjectCategories} targets={targets} setTargets={setTargets} accounts={accounts} setAccounts={setAccounts} webhookUrl={webhookUrl} setWebhookUrl={setWebhookUrl} allData={allData} loadAllData={loadAllData} loadingAll={loadingAll} contracts={contracts} navOrder={navOrder} setNavOrder={setNavOrder}/>)}
         </div>
       </div>
