@@ -748,6 +748,68 @@ function MainApp({user,onLogout}){
                         ※ 날짜별로 최종마감 보고 우선, 없으면 6시 타임 표시 · 좌우 스크롤 가능
                       </div>
                     </div>
+                    {/* ===== 사원별 평균 테이블 ===== */}
+                    <div style={{background:"#fff",borderRadius:10,border:"1px solid #d1fae5",overflow:"hidden",marginTop:12}}>
+                      <div style={{background:"#ecfdf5",padding:"8px 14px",fontWeight:700,fontSize:12,color:"#065f46",borderBottom:"1px solid #d1fae5"}}>📈 사원별 평균 (기간 내 보고일 기준)</div>
+                      <div style={{overflowX:"auto"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+                          <thead style={{background:"#f0fdf4"}}>
+                            <tr>
+                              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#374151",borderBottom:"1px solid #d1fae5",whiteSpace:"nowrap"}}>사원</th>
+                              <th style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#374151",borderBottom:"1px solid #d1fae5",whiteSpace:"nowrap"}}>보고일수</th>
+                              {METRICS.map(m=><th key={m.key} style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#374151",borderBottom:"1px solid #d1fae5",whiteSpace:"nowrap"}}>{m.label}<br/><span style={{fontSize:9,fontWeight:400,color:"#adb5bd"}}>평균</span></th>)}
+                              <th style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#8468D3",borderBottom:"1px solid #d1fae5",whiteSpace:"nowrap"}}>일매출<br/><span style={{fontSize:9,fontWeight:400,color:"#adb5bd"}}>평균</span></th>
+                              <th style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#0071CE",borderBottom:"1px solid #d1fae5",whiteSpace:"nowrap"}}>연결률<br/><span style={{fontSize:9,fontWeight:400,color:"#adb5bd"}}>평균</span></th>
+                              <th style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#10b981",borderBottom:"1px solid #d1fae5",whiteSpace:"nowrap"}}>30초↑<br/><span style={{fontSize:9,fontWeight:400,color:"#adb5bd"}}>평균</span></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(()=>{
+                              // 사원별 집계
+                              const personMap={};
+                              Object.values(analysisData).forEach(rows=>{
+                                rows.forEach(r=>{
+                                  if(!personMap[r.name])personMap[r.name]={days:0,...Object.fromEntries([...METRICS,...FINAL_METRICS].map(m=>[m.key,0]))};
+                                  personMap[r.name].days+=1;
+                                  [...METRICS,...FINAL_METRICS].forEach(m=>{personMap[r.name][m.key]+=(Number(r[m.key])||0);});
+                                });
+                              });
+                              const allMetrics=[...METRICS,...FINAL_METRICS];
+                              return Object.entries(personMap).sort((a,b)=>a[0].localeCompare(b[0],'ko')).map(([name,acc],i)=>(
+                                <tr key={name} style={{background:i%2===0?"#fff":"#f7faf8",borderBottom:"1px solid #f0f1f3"}}>
+                                  <td style={{padding:"6px 10px",fontWeight:700,color:"#0f1117",whiteSpace:"nowrap"}}>{name}</td>
+                                  <td style={{padding:"6px 8px",textAlign:"center"}}><span style={{background:"#d1fae5",color:"#065f46",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700}}>{acc.days}일</span></td>
+                                  {METRICS.map(m=><td key={m.key} style={{padding:"6px 8px",textAlign:"center",color:"#374151"}}>{acc.days>0?(Math.round(acc[m.key]/acc.days*10)/10):0}</td>)}
+                                  <td style={{padding:"6px 8px",textAlign:"center",color:"#8468D3",fontWeight:600}}>{acc.days>0?Math.round(acc.dailySales/acc.days).toLocaleString()+"원":"0원"}</td>
+                                  <td style={{padding:"6px 8px",textAlign:"center",color:"#0071CE"}}>{acc.days>0?(Math.round(acc.connRate/acc.days*10)/10):0}</td>
+                                  <td style={{padding:"6px 8px",textAlign:"center",color:"#10b981"}}>{acc.days>0?(Math.round(acc.rate30s/acc.days*10)/10):0}</td>
+                                </tr>
+                              ));
+                            })()}
+                            {/* 팀 전체 평균 행 */}
+                            {(()=>{
+                              const allRows=Object.values(analysisData).flat();
+                              const totalDays=Object.keys(analysisData).length;
+                              const allMetrics=[...METRICS,...FINAL_METRICS];
+                              if(allRows.length===0)return null;
+                              return(
+                                <tr style={{background:"#ecfdf5",borderTop:"2px solid #6ee7b7"}}>
+                                  <td style={{padding:"7px 10px",fontWeight:800,color:"#065f46",whiteSpace:"nowrap"}}>【팀 평균】</td>
+                                  <td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#065f46"}}>{totalDays}일</td>
+                                  {METRICS.map(m=>{const tot=allRows.reduce((s,r)=>s+(Number(r[m.key])||0),0);return<td key={m.key} style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#065f46"}}>{allRows.length>0?(Math.round(tot/allRows.length*10)/10):0}</td>;})}
+                                  {(()=>{const tot=allRows.reduce((s,r)=>s+(Number(r.dailySales)||0),0);return<td style={{padding:"7px 8px",textAlign:"center",fontWeight:800,color:"#8468D3"}}>{allRows.length>0?Math.round(tot/allRows.length).toLocaleString()+"원":"0원"}</td>;})()}
+                                  {(()=>{const tot=allRows.reduce((s,r)=>s+(Number(r.connRate)||0),0);return<td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#0071CE"}}>{allRows.length>0?(Math.round(tot/allRows.length*10)/10):0}</td>;})()}
+                                  {(()=>{const tot=allRows.reduce((s,r)=>s+(Number(r.rate30s)||0),0);return<td style={{padding:"7px 8px",textAlign:"center",fontWeight:700,color:"#10b981"}}>{allRows.length>0?(Math.round(tot/allRows.length*10)/10):0}</td>;})()}
+                                </tr>
+                              );
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{background:"#ecfdf5",padding:"6px 14px",fontSize:10,color:"#6b7280",borderTop:"1px solid #d1fae5"}}>
+                        ※ 사원별 평균 = 해당 사원이 실제 보고한 날수 기준 · 팀 평균 = 전체 제출건수 기준
+                      </div>
+                    </div>
                   </div>)}
 
                   {!analysisData&&!loadingAnalysis&&<div style={{textAlign:"center",padding:"20px",color:"#adb5bd",fontSize:12}}>월을 선택하거나 기간을 입력 후 불러오기를 눌러주세요</div>}
