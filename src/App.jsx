@@ -50,6 +50,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
   const[editingRank,setEditingRank]=useState(null);
   const[kwInput,setKwInput]=useState("");const[kwSaving,setKwSaving]=useState(false);
   const[localContract,setLocalContract]=useState(contract);
+  const[initRankEdits,setInitRankEdits]=useState({});
   const memoKey=`contract:memos:${contract.linkedMemoId||contract.id}`;
   useEffect(()=>{loadMemos();},[]);
   useEffect(()=>{if(activeTab==="rank")loadRankHistory();},[activeTab]);
@@ -76,7 +77,6 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
   const tS={fontSize:11,fontWeight:700,fontFamily:"'Pretendard',-apple-system,sans-serif"};
   const keywords=localContract.keywords||[];
   const sortedRankKeys=Object.keys(rankHistory).sort();
-  const[initRankEdits,setInitRankEdits]=useState({});
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif",padding:"20px"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:580,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.15)"}}>
