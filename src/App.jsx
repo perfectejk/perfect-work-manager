@@ -11,7 +11,7 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 const san=s=>s.replace(/[\s/\\'":]/g,"_").slice(0,50);
 const P={high:{label:"높음",color:"#ef4444",bg:"#fef2f2"},medium:{label:"중간",color:"#f59e0b",bg:"#fffbeb"},low:{label:"낮음",color:"#10b981",bg:"#f0fdf4"}};
 const S={todo:{label:"할 일",color:"#6b7280",bg:"#f3f4f6"},doing:{label:"진행 중",color:"#2563eb",bg:"#eff6ff"},done:{label:"완료",color:"#10b981",bg:"#d1fae5"}};
-const CE={온보딩:{color:"#6b7280",bg:"#f3f4f6"},관리전화:{color:"#2563eb",bg:"#eff6ff"},리포트:{color:"#7c3aed",bg:"#f5f3ff"}};
+const CE={온보딩:{color:"#6b7280",bg:"#f3f4f6"},순위체크:{color:"#0891b2",bg:"#ecfeff"},리포트:{color:"#7c3aed",bg:"#f5f3ff"}};
 const DAYS_KR=["일","월","화","수","목","금","토"];
 const EF=(isAdmin)=>({title:"",project:"",priority:"medium",status:"todo",due:"",deadline:"",memo:"",visibility:isAdmin?"public":"personal",repeat:"none",repeatDays:[]});
 const getDDay=(dl)=>{if(!dl)return null;return Math.ceil((new Date(dl+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));};
@@ -29,7 +29,7 @@ const st={
 const ses={get:()=>{try{const v=localStorage.getItem('ses:user');return v?JSON.parse(v):null;}catch{return null;}},set:v=>{try{localStorage.setItem('ses:user',JSON.stringify(v));}catch{}},del:()=>{try{localStorage.removeItem('ses:user');}catch{}}};
 const addBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
 const subBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
-const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,3);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;while(true){cur=addBizDays(cur,10);if(cur>=rptDate)break;evts.push({type:"관리전화",date:cur,cid:c.id,name:c.name,manager:c.manager||""});}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
+const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,3);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;let rankIdx=1;while(true){const next=addBizDays(cur,10);if(next>=rptDate)break;evts.push({type:"순위체크",date:next,cid:c.id,name:c.name,manager:c.manager||"",rankIdx,initialRank:c.initialRank||null});cur=next;rankIdx++;}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
 const ceKey=e=>`${e.cid}:${e.type}:${e.date}`;
 const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[:\\s]\\s*([^\\n]+)'));return m?m[1].trim():'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};return{name:line('상호명'),phone:line('번호'),link:line('플레이스 링크'),products:section('상품내역',['서비스내역','결제정보','담당자']),services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액'),manager:line('담당자'),notes:line('특이사항')};};
 const sendNotif=async(url,name,ts,data,targets)=>{if(!url?.startsWith("http"))return;const lines=METRICS.map(m=>{const v=data[m.key]||0,t=targets[m.key];return`• ${m.label}: **${v}${m.unit}**${t?` / ${t}${m.unit} (${Math.round(v/t*100)}%)`:''}`;});try{await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:"업무보고 알림",content:`[${ts}] ${name} 실적 제출\n${lines.join('\n')}`})});}catch{}};
@@ -413,30 +413,60 @@ function TaskCard({task,onCycle,onDelete,onEdit,showOwner,canEdit}){
     </div>
   </div>);
 }
-function ContractEventCard({event,contract,isDone,onToggle,onMemo}){
-  const[exp,setExp]=useState(false);const ce=CE[event.type];
-  return(<div style={{background:"#fff",borderRadius:10,padding:"10px 12px",border:`1.5px solid ${ce.color}40`,borderLeft:`4px solid ${ce.color}`,opacity:isDone?0.65:1}}>
-    <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
-      <button onClick={onToggle} style={{flexShrink:0,marginTop:1,width:20,height:20,borderRadius:"50%",border:`2px solid ${isDone?"#10b981":ce.color}`,background:isDone?"#10b981":ce.bg,cursor:"pointer",fontSize:9,color:isDone?"#fff":ce.color,display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone?"✓":""}</button>
-      <div style={{flex:1,minWidth:0,cursor:onMemo?"pointer":"default"}} onClick={onMemo}>
-        <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-          <span style={{fontSize:12,fontWeight:700,color:isDone?"#9ca3af":"#111827",textDecoration:isDone?"line-through":"none"}}>[{event.type}] {contract.name}</span>
-          <Badge label="계약" color={ce.color} bg={ce.bg}/>
-          {event.manager&&<Badge label={event.manager} color="#7c3aed" bg="#f5f3ff"/>}
-        </div>
-        <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
-          {contract.phone&&<span style={{fontSize:10,color:"#6b7280"}}>{contract.phone}</span>}
-          {contract.total&&<span style={{fontSize:10,color:"#6b7280"}}>{contract.total}</span>}
-          <button onClick={e=>{e.stopPropagation();setExp(v=>!v);}} style={{fontSize:9,color:ce.color,background:ce.bg,border:"none",borderRadius:5,padding:"1px 6px",cursor:"pointer"}}>{exp?"접기":"상세"}</button>
-        </div>
-        {exp&&<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}} onClick={e=>e.stopPropagation()}>
-          {contract.link&&<a href={contract.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0071CE",wordBreak:"break-all"}}>{contract.link}</a>}
-          {contract.products&&<div style={{fontSize:11,color:"#374151",background:"#f8fafc",borderRadius:6,padding:"5px 7px",whiteSpace:"pre-line"}}><b>상품:</b>{"\n"}{contract.products}</div>}
-          {contract.notes&&<div style={{fontSize:11,color:"#6b7280"}}>{contract.notes}</div>}
-        </div>}
+function RankInputModal({event,contract,onClose,onConfirm}){
+  const[rank,setRank]=useState("");
+  const inputRef=useRef();
+  useEffect(()=>{setTimeout(()=>inputRef.current?.focus(),50);},[]);
+  const prevRank=event.initialRank||null;
+  const handleConfirm=()=>{const v=parseInt(rank);if(!v||v<1)return alert("순위를 입력해주세요");onConfirm(v);};
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:24,width:260,boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+      <div style={{fontWeight:700,fontSize:14,color:"#0f1117",marginBottom:4}}>{event.rankIdx}차 순위 입력</div>
+      <div style={{fontSize:12,color:"#6b7280",marginBottom:14}}>{contract.name}{prevRank?` · 시작순위 ${prevRank}위`:""}</div>
+      <input ref={inputRef} type="number" min="1" value={rank} onChange={e=>setRank(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handleConfirm();if(e.key==="Escape")onClose();}} placeholder="이번 순위 (예: 5)" style={{width:"100%",border:"1.5px solid #bfdbfe",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:12}}/>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={onClose} style={{flex:1,background:"#f3f4f6",border:"none",borderRadius:8,padding:"9px",fontSize:13,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button>
+        <button onClick={handleConfirm} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"9px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>확인</button>
       </div>
     </div>
   </div>);
+}
+function ContractEventCard({event,contract,isDone,rankData,onToggle,onRankConfirm,onMemo}){
+  const[exp,setExp]=useState(false);
+  const[showRankModal,setShowRankModal]=useState(false);
+  const ce=CE[event.type]||CE["리포트"];
+  const isRankCheck=event.type==="순위체크";
+  const handleToggle=()=>{if(isRankCheck&&!isDone){setShowRankModal(true);return;}onToggle();};
+  const handleRankConfirm=(rankVal)=>{setShowRankModal(false);if(onRankConfirm)onRankConfirm(rankVal);else onToggle();};
+  const prevRank=rankData?.prevRank||event.initialRank||null;
+  const currRank=rankData?.rank||null;
+  const rankDiff=prevRank&&currRank?prevRank-currRank:null;
+  return(<>
+    {showRankModal&&<RankInputModal event={event} contract={contract} onClose={()=>setShowRankModal(false)} onConfirm={handleRankConfirm}/>}
+    <div style={{background:"#fff",borderRadius:10,padding:"10px 12px",border:`1.5px solid ${ce.color}40`,borderLeft:`4px solid ${ce.color}`,opacity:isDone?0.65:1}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+        <button onClick={handleToggle} style={{flexShrink:0,marginTop:1,width:20,height:20,borderRadius:"50%",border:`2px solid ${isDone?"#10b981":ce.color}`,background:isDone?"#10b981":ce.bg,cursor:"pointer",fontSize:9,color:isDone?"#fff":ce.color,display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone?"✓":""}</button>
+        <div style={{flex:1,minWidth:0,cursor:onMemo?"pointer":"default"}} onClick={onMemo}>
+          <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+            <span style={{fontSize:12,fontWeight:700,color:isDone?"#9ca3af":"#111827",textDecoration:isDone?"line-through":"none"}}>[{event.type}{isRankCheck?` ${event.rankIdx}차`:""}] {contract.name}</span>
+            <Badge label="계약" color={ce.color} bg={ce.bg}/>
+            {event.manager&&<Badge label={event.manager} color="#7c3aed" bg="#f5f3ff"/>}
+          </div>
+          <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
+            {contract.phone&&<span style={{fontSize:10,color:"#6b7280"}}>{contract.phone}</span>}
+            {contract.total&&<span style={{fontSize:10,color:"#6b7280"}}>{contract.total}</span>}
+            {isDone&&isRankCheck&&currRank&&<span style={{fontSize:10,fontWeight:700,color:rankDiff>0?"#10b981":rankDiff<0?"#ef4444":"#6b7280"}}>{rankDiff>0?"▲":rankDiff<0?"▼":"—"}{prevRank?`${prevRank}위→`:""}{currRank}위</span>}
+            <button onClick={e=>{e.stopPropagation();setExp(v=>!v);}} style={{fontSize:9,color:ce.color,background:ce.bg,border:"none",borderRadius:5,padding:"1px 6px",cursor:"pointer"}}>{exp?"접기":"상세"}</button>
+          </div>
+          {exp&&<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}} onClick={e=>e.stopPropagation()}>
+            {contract.link&&<a href={contract.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0071CE",wordBreak:"break-all"}}>{contract.link}</a>}
+            {contract.products&&<div style={{fontSize:11,color:"#374151",background:"#f8fafc",borderRadius:6,padding:"5px 7px",whiteSpace:"pre-line"}}><b>상품:</b>{"\n"}{contract.products}</div>}
+            {contract.notes&&<div style={{fontSize:11,color:"#6b7280"}}>{contract.notes}</div>}
+          </div>}
+        </div>
+      </div>
+    </div>
+  </>);
 }
 function RepeatPicker({repeat,repeatDays,due,onChange}){const opts=[{v:"none",l:"반복 없음"},{v:"weekly",l:"매주"},{v:"monthly",l:"매월"},{v:"weekdays",l:"평일(월-금)"},{v:"custom",l:"요일 직접 설정"}];const toggle=d=>{const c=repeatDays||[];onChange("repeatDays",c.includes(d)?c.filter(x=>x!==d):[...c,d]);};const dueDow=due?DAYS_KR[new Date(due+"T00:00:00").getDay()]:"";return(<div><select value={repeat} onChange={e=>onChange("repeat",e.target.value)} style={{border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 10px",fontSize:12,background:"#fff",width:"100%",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{opts.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}</select>{repeat==="weekly"&&due&&<div style={{marginTop:4,fontSize:11,color:"#7c3aed",background:"#f5f3ff",borderRadius:7,padding:"4px 8px"}}>매주 <b>{dueDow}요일</b> ({due} 부터)</div>}{repeat==="custom"&&(<div style={{marginTop:6}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{DAYS_KR.map((d,i)=>(<button key={i} onClick={()=>toggle(i)} style={{width:30,height:30,borderRadius:"50%",border:`2px solid ${(repeatDays||[]).includes(i)?"#7c3aed":"#e5e7eb"}`,background:(repeatDays||[]).includes(i)?"#7c3aed":"#fff",color:(repeatDays||[]).includes(i)?"#fff":"#374151",fontSize:12,fontWeight:600,cursor:"pointer"}}>{d}</button>))}</div></div>)}</div>);}
 function TaskForm({form,setForm,onSubmit,onCancel,isEdit,isAdminUser,projectCategories}){
@@ -464,8 +494,8 @@ function TaskForm({form,setForm,onSubmit,onCancel,isEdit,isAdminUser,projectCate
   </div>);
 }
 function ContractForm({initial,onSubmit,onCancel,allContracts}){
-  const blank={name:"",phone:"",link:"",products:"",services:"",total:"",manager:"",notes:"",isRenewal:false};
-  const[memo,setMemo]=useState("");const[parsed,setParsed]=useState(initial?{name:initial.name,phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false}:blank);
+  const blank={name:"",phone:"",link:"",products:"",services:"",total:"",manager:"",notes:"",isRenewal:false,initialRank:""};
+  const[memo,setMemo]=useState("");const[parsed,setParsed]=useState(initial?{name:initial.name,phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,initialRank:initial.initialRank||""}:blank);
   const[startDate,setStartDate]=useState(initial?.startDate||"");const[endDate,setEndDate]=useState(initial?.endDate||"");const[parseMsg,setParseMsg]=useState("");
   const[linkedMemoId,setLinkedMemoId]=useState(initial?.linkedMemoId||"");const[showManualLink,setShowManualLink]=useState(false);const[autoMatched,setAutoMatched]=useState(null);
   const iS={border:"1px solid #f0f1f3",borderRadius:8,padding:"8px 12px",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Pretendard',-apple-system,sans-serif"};
@@ -489,8 +519,9 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>총금액</label><input value={parsed.total} onChange={e=>setParsed(p=>({...p,total:e.target.value}))} placeholder="00만원" style={{...iS}}/></div><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>담당자</label><input value={parsed.manager} onChange={e=>setParsed(p=>({...p,manager:e.target.value}))} placeholder="담당자 이름" style={{...iS}}/></div></div>
     <div style={{marginBottom:8}}><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>특이사항</label><textarea value={parsed.notes} onChange={e=>setParsed(p=>({...p,notes:e.target.value}))} rows={3} style={{...iS,resize:"vertical"}}/></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 시작일 *</label><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} style={{...iS}}/></div><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 종료일 *</label><input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={{...iS}}/></div></div>
-    <div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 14px",marginBottom:12,fontSize:12,color:"#166534"}}>[관리전화] 영업일 10일 간격 · [리포트] 종료 3영업일 전</div>
-    <div style={{display:"flex",gap:8}}><button onClick={()=>{if(!parsed.name.trim()||!startDate||!endDate)return alert("상호명과 계약 기간은 필수입니다.");if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");onSubmit({...parsed,startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined});}} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button></div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}><div><label style={{fontSize:12,color:"#0891b2",fontWeight:600,display:"block",marginBottom:3}}>시작 순위 (현재 플레이스 순위)</label><input type="number" min="1" value={parsed.initialRank} onChange={e=>setParsed(p=>({...p,initialRank:e.target.value}))} placeholder="예: 15" style={{...iS}}/></div><div style={{display:"flex",alignItems:"flex-end"}}><div style={{fontSize:11,color:"#6b7280",background:"#ecfeff",borderRadius:8,padding:"8px 10px",border:"1px solid #a5f3fc"}}>입력 시 순위 상승/하락을 자동으로 표시합니다</div></div></div>
+    <div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 14px",marginBottom:12,fontSize:12,color:"#166534"}}>[순위체크] 계약 시작일부터 10일 단위 자동 생성 · [리포트] 종료 3영업일 전</div>
+    <div style={{display:"flex",gap:8}}><button onClick={()=>{if(!parsed.name.trim()||!startDate||!endDate)return alert("상호명과 계약 기간은 필수입니다.");if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");onSubmit({...parsed,startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,initialRank:parseInt(parsed.initialRank)||undefined});}} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button></div>
   </div>);
 }
 function DailyAlertModal({items,onClose}){
@@ -626,8 +657,8 @@ function MainApp({user,onLogout}){
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[contractMonth,setContractMonth]=useState("all");const[contractStatus,setContractStatus]=useState("all");
-  const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");
-  const[completions,setCompletions]=useState({});const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
+  const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");  const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);
+  const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());
   const[calFilter,setCalFilter]=useState("all");const[selectedDay,setSelectedDay]=useState(null);
   const[fOwner,setFOwner]=useState("all");const[fStatus,setFStatus]=useState("all");const[fPriority,setFPriority]=useState("all");const[fProject,setFProject]=useState("all");
@@ -647,7 +678,7 @@ function MainApp({user,onLogout}){
   const[analysisMonth,setAnalysisMonth]=useState(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
   const[analysisData,setAnalysisData]=useState(null);const[loadingAnalysis,setLoadingAnalysis]=useState(false);
 
-  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadProfiles();loadProjectCategories();loadAccounts();},[]);
+  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadProfiles();loadProjectCategories();loadAccounts();},[]);// rankDataMap loaded inside loadCompletions
   useEffect(()=>{if(selTs)loadReports(selTs);},[selTs]);
   useEffect(()=>{loadDateFinalReports(reportViewDate);},[reportViewDate]);
   useEffect(()=>{
@@ -662,7 +693,7 @@ function MainApp({user,onLogout}){
     const myTasks=tasks.filter(t=>t.status!=="done"&&(user.isAdmin||t.owner===user.name));
     myTasks.forEach(t=>{if(t.deadline===todayStr){const dd=getDDayLabel(t.deadline);items.push({type:"task",title:t.title,sub:`마감 당일 · ${t.project||"프로젝트 없음"}`,dday:dd?.text,urgent:true});}else if(t.deadline&&getDDay(t.deadline)<=3&&getDDay(t.deadline)>0){const dd=getDDayLabel(t.deadline);items.push({type:"task",title:t.title,sub:`마감 임박 · ${t.project||""}`,dday:dd?.text,urgent:true});}});
     const myContracts=user.isAdmin?contracts:contracts.filter(c=>c.manager===user.name);
-    myContracts.forEach(c=>{const evts=genEvents(c);evts.forEach(e=>{if(e.date===todayStr&&(e.type==="관리전화"||e.type==="리포트")){const isDone=!!completions[ceKey(e)];if(!isDone){items.push({type:"contract",ceType:e.type,title:c.name,sub:`${c.manager||"담당자 미지정"} · ${c.phone||""}`,urgent:false});}}});});
+    myContracts.forEach(c=>{const evts=genEvents(c);evts.forEach(e=>{if(e.date===todayStr&&(e.type==="순위체크"||e.type==="리포트")){const isDone=!!completions[ceKey(e)];if(!isDone){items.push({type:"contract",ceType:e.type,title:c.name,sub:`${c.manager||"담당자 미지정"} · ${c.phone||""}`,urgent:false});}}});});
     if(items.length>0)setDailyAlertItems(items);else setDailyAlertItems(null);
   },[dailyAlertItems,tasks,contracts,completions]);
 
@@ -675,8 +706,11 @@ function MainApp({user,onLogout}){
   const loadContracts=async()=>{const c=await st.get("contracts:all")||[];setContracts(c);};
   const saveContract=async c=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0)list[idx]=c;else list.push(c);await st.set("contracts:all",list);setContracts([...list]);setShowCF(false);setEditContract(null);};
   const deleteContract=async id=>{const list=(await st.get("contracts:all")||[]).filter(c=>c.id!==id);await st.set("contracts:all",list);setContracts(list);};
-  const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);};
+  const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);const r=await st.get("ce:rankdata")||{};setRankDataMap(r);};
   const toggleCE=async e=>{const data=await st.get("ce:completions")||{};const k=ceKey(e);data[k]=!data[k];await st.set("ce:completions",data);setCompletions({...data});};
+  const handleRankConfirm=async(event,rankVal)=>{const k=ceKey(event);const contract=visibleContracts.find(c=>c.id===event.cid);const prevRank=event.rankIdx===1?(contract?.initialRank||null):(()=>{const prevEvts=genEvents(contract||{}).filter(e=>e.type==="순위체크"&&e.rankIdx===event.rankIdx-1);if(prevEvts.length>0){const pk=ceKey(prevEvts[0]);return rankDataMap[pk]?.rank||null;}return null;})();const newMap=await saveRankEntry(k,rankVal,prevRank);setRankDataMap({...newMap});const cData=await st.get("ce:completions")||{};cData[k]=true;await st.set("ce:completions",cData);setCompletions({...cData});};
+  const loadRankData=async()=>{const r=await st.get("ce:rankdata")||{};return r;};
+  const saveRankEntry=async(eventKey,rankVal,prevRank)=>{const data=await st.get("ce:rankdata")||{};data[eventKey]={rank:rankVal,prevRank,date:todayStr};await st.set("ce:rankdata",data);return data;};
   const loadProfiles=async()=>{const p=await st.get("profiles:all")||{};setProfiles(p);};
   const updateProfile=async(name,img)=>{const p=await st.get("profiles:all")||{};p[name]=img;await st.set("profiles:all",p);setProfiles({...p});};
   const loadProjectCategories=async()=>{const p=await st.get("config:projects")||[];setProjectCategories(p);};
@@ -688,7 +722,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
   const loadReports=async ts=>{setLoadingR(true);const keys=await st.list(`wr:${todayStr}:${san(ts)}:`);const rows=[];for(const k of keys){const r=await st.get(k);if(r)rows.push(r);}setTsReports(rows);setLoadingR(false);};
   const loadDateFinalReports=async(dateStr)=>{setLoadingDateR(true);const keys=await st.list(`wr:${dateStr}:${san("최종마감")}:`);const rows=[];for(const k of keys){const r=await st.get(k);if(r)rows.push(r);}setDateReports(rows);setLoadingDateR(false);};
   const handleAdminSaveReport=async(updatedReport)=>{const key=`wr:${reportViewDate}:${san("최종마감")}:${san(updatedReport.name)}`;await st.set(key,updatedReport);await loadDateFinalReports(reportViewDate);};
-  const loadAnalysisData=async(startDate,endDate)=>{if(!startDate||!endDate)return;setLoadingAnalysis(true);setAnalysisData(null);const byDate={};const dates=[];let cur=new Date(startDate+"T00:00:00");const end=new Date(endDate+"T00:00:00");while(cur<=end){dates.push(cur.toISOString().slice(0,10));cur.setDate(cur.getDate()+1);}for(const date of dates){const finalKeys=await st.list(`wr:${date}:${san("최종마감")}:`);let rows=[];if(finalKeys.length>0){for(const k of finalKeys){const r=await st.get(k);if(r)rows.push({...r,_ts:"최종마감"});}}else{const sixKeys=await st.list(`wr:${date}:${san("6시")}:`);for(const k of sixKeys){const r=await st.get(k);if(r)rows.push({...r,_ts:"6시"});}}if(rows.length>0)byDate[date]=rows;}setAnalysisData(byDate);setLoadingAnalysis(false);};
+  const loadAnalysisData=async(startDate,endDate)=>{if(!startDate||!endDate)return;setLoadingAnalysis(true);setAnalysisData(null);const byDate={};const dates=[];let cur=new Date(startDate+"T00:00:00");while(cur.toISOString().slice(0,10)<=endDate){dates.push(cur.toISOString().slice(0,10));cur.setDate(cur.getDate()+1);}for(const date of dates){const finalKeys=await st.list(`wr:${date}:${san("최종마감")}:`);let rows=[];if(finalKeys.length>0){for(const k of finalKeys){const r=await st.get(k);if(r)rows.push({...r,_ts:"최종마감"});}}else{const sixKeys=await st.list(`wr:${date}:${san("6시")}:`);for(const k of sixKeys){const r=await st.get(k);if(r)rows.push({...r,_ts:"6시"});}}if(rows.length>0)byDate[date]=rows;}setAnalysisData(byDate);setLoadingAnalysis(false);};
   const loadAnalysisByMonth=async()=>{if(!analysisMonth)return;const[y,m]=analysisMonth.split("-");const dim=new Date(parseInt(y),parseInt(m),0).getDate();await loadAnalysisData(`${analysisMonth}-01`,`${analysisMonth}-${String(dim).padStart(2,"0")}`);};
   const downloadAnalysisExcel=()=>{if(!analysisData||Object.keys(analysisData).length===0){alert("먼저 데이터를 불러오세요.");return;}const allMetrics=[...METRICS,...FINAL_METRICS];const metricKeys=allMetrics.map(m=>m.key);const metricLabels=allMetrics.map(m=>m.label+(m.unit?`(${m.unit})`:""));const wb=XLSX.utils.book_new();const sortedDates=Object.keys(analysisData).sort();const nameSet=new Set();sortedDates.forEach(d=>analysisData[d].forEach(r=>nameSet.add(r.name)));const names=[...nameSet].sort();const dailyRows=[["날짜","타임","사원",...metricLabels]];sortedDates.forEach(date=>{const rows=analysisData[date];const ts=rows[0]?._ts||"-";rows.forEach(r=>{dailyRows.push([date,ts,r.name,...metricKeys.map(k=>k==="dailySales"?Number(r[k])||0:r[k]||0)]);});const tot=metricKeys.map(k=>rows.reduce((s,r)=>s+(Number(r[k])||0),0));dailyRows.push([date,"【합계】","",...tot]);dailyRows.push([]);});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dailyRows),"일자별_업무량");const label=analysisStart&&analysisEnd?`${analysisStart}~${analysisEnd}`:analysisMonth||"조회";XLSX.writeFile(wb,`업무량분석_${label}.xlsx`);};
   const submitReport=async()=>{if(!myTs)return;setSubmitting(true);setSubmitMsg("");const isFinal=myTs==="최종마감";const data={name:user.name,timeslot:myTs,...Object.fromEntries(METRICS.map(m=>[m.key,parseInt(myR[m.key])||0])),...(isFinal?{dailySales:parseInt((myR.dailySales||"").toString().replace(/[^0-9]/g,""))||0,connRate:parseInt(myR.connRate)||0,rate30s:parseInt(myR.rate30s)||0}:{})};const ok=await st.set(`wr:${todayStr}:${san(myTs)}:${san(user.name)}`,data);if(ok){const wh=await st.get("wt:webhook");if(wh)await sendNotif(wh,user.name,myTs,data,targets);setSelTs(myTs);await loadReports(myTs);if(isFinal)await loadDateFinalReports(reportViewDate);setSubmitMsg("✓ 제출 완료! (재제출 시 덮어쓰기)");}else setSubmitMsg("❌ 오류 발생");setSubmitting(false);};
@@ -699,9 +733,9 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
   const weekDays=useMemo(()=>getWeekDays(),[]);
   const visibleContracts=useMemo(()=>{const base=user.isAdmin?contracts:contracts.filter(c=>c.manager===user.name);return[...base].sort((a,b)=>(b.startDate||"").localeCompare(a.startDate||""));},[contracts,user]);
   const allCE=useMemo(()=>visibleContracts.flatMap(genEvents),[visibleContracts]);
-  const todayCE=useMemo(()=>filterCE(allCE.filter(e=>e.date===todayStr&&(e.type==="관리전화"||e.type==="리포트"))),[allCE,filterCE]);
+  const todayCE=useMemo(()=>filterCE(allCE.filter(e=>e.date===todayStr&&(e.type==="순위체크"||e.type==="리포트"))),[allCE,filterCE]);
   const todayTasks=useMemo(()=>filtered.filter(t=>isActiveOnDate(t,todayStr)&&t.status!=="done").sort((a,b)=>({high:0,medium:1,low:2}[a.priority]-{high:0,medium:1,low:2}[b.priority])),[filtered]);
-  const allCEFiltered=useMemo(()=>filterCE(allCE.filter(e=>e.type==="관리전화"||e.type==="리포트")),[allCE,filterCE]);
+  const allCEFiltered=useMemo(()=>filterCE(allCE.filter(e=>e.type==="순위체크"||e.type==="리포트")),[allCE,filterCE]);
   const allItems=useMemo(()=>[...filtered.map(t=>({...t,_itemType:"task"})),...allCEFiltered.map(e=>({...e,_itemType:"ce",due:e.date}))].sort((a,b)=>!a.due?1:!b.due?-1:a.due.localeCompare(b.due)),[filtered,allCEFiltered]);
   const managers=useMemo(()=>[...new Set(contracts.map(c=>c.manager).filter(Boolean))],[contracts]);
   const contractMonthOptions=useMemo(()=>{const set=new Set();visibleContracts.forEach(c=>{if(c.startDate){const[y,m]=c.startDate.split("-");set.add(`${y}-${m}`);}});return[...set].sort().reverse();},[visibleContracts]);
@@ -725,6 +759,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
   return(
     <div style={{display:"flex",minHeight:"100vh",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#f7f8fa"}}>
       {showProfile&&<ProfileModal user={user} profiles={profiles} onUpdateProfile={updateProfile} onClose={()=>setShowProfile(false)} contracts={contracts}/>}
+      {rankModalEvent&&rankModalContract&&<RankInputModal event={rankModalEvent} contract={rankModalContract} onClose={()=>{setRankModalEvent(null);setRankModalContract(null);}} onConfirm={async(rv)=>{await handleRankConfirm(rankModalEvent,rv);setRankModalEvent(null);setRankModalContract(null);}}/>}
       {memoContract&&<ContractMemoModal contract={memoContract} user={user} onClose={()=>setMemoContract(null)} allContracts={contracts}/>}
       {editingReport&&<AdminEditReportModal report={editingReport} dateStr={reportViewDate} onClose={()=>setEditingReport(null)} onSave={handleAdminSaveReport}/>}
       {dailyAlertItems&&dailyAlertItems!=='PENDING'&&Array.isArray(dailyAlertItems)&&<DailyAlertModal items={dailyAlertItems} onClose={()=>setDailyAlertItems(null)}/>}
@@ -766,13 +801,13 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",border:"1px solid #f0f1f3"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>이번 주</span><span style={{fontSize:10,color:"#adb5bd"}}>{weekDays[0].slice(5).replace("-","/")} – {weekDays[4].slice(5).replace("-","/")}</span></div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,maxHeight:window.innerWidth<=768?180:9999,overflowY:window.innerWidth<=768?"auto":"visible"}}>
-                  {weekDays.map(ds=>{const isToday=ds===todayStr;const dow=new Date(ds+"T00:00:00").getDay();const dayTasks=filtered.filter(t=>isActiveOnDate(t,ds));const dayCE=filterCE(allCE.filter(e=>e.date===ds&&(e.type==="관리전화"||e.type==="리포트")));const all=[...dayCE,...dayTasks];return(<div key={ds} style={{background:isToday?"#f0f7ff":"#f7f8fa",border:`1.5px solid ${isToday?"#bfd7f5":"#f0f1f3"}`,borderRadius:10,padding:"8px 6px",minHeight:80,boxSizing:"border-box"}}><div style={{textAlign:"center",marginBottom:5}}>{isToday?<div style={{width:20,height:20,background:"#0071CE",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 2px",fontSize:10,fontWeight:800,color:"#fff"}}>{DAYS_KR[dow]}</div>:<div style={{fontSize:10,fontWeight:700,color:"#adb5bd"}}>{DAYS_KR[dow]}</div>}<div style={{fontSize:9,color:isToday?"#93c5fd":"#adb5bd"}}>{ds.slice(5).replace("-","/")}</div></div>{all.length===0&&<div style={{fontSize:9,color:"#d1d5db",textAlign:"center"}}>없음</div>}{all.slice(0,3).map((item,i)=>{if(item.type&&CE[item.type]){const ce=CE[item.type];return <div key={i} title={`[${item.type}] ${item.name}`} style={{fontSize:9,background:ce.bg,color:ce.color,borderRadius:3,padding:"1px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:700}}>[{item.type[0]}] {item.name}</div>;}return <div key={i} title={item.title} style={{fontSize:9,background:P[item.priority].bg,color:P[item.priority].color,borderRadius:3,padding:"1px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,textDecoration:item.status==="done"?"line-through":"none"}}>{item.title}</div>;})} {all.length>3&&<div style={{fontSize:9,color:"#adb5bd",textAlign:"center"}}>+{all.length-3}</div>}</div>);})}
+                  {weekDays.map(ds=>{const isToday=ds===todayStr;const dow=new Date(ds+"T00:00:00").getDay();const dayTasks=filtered.filter(t=>isActiveOnDate(t,ds));const dayCE=filterCE(allCE.filter(e=>e.date===ds&&(e.type==="순위체크"||e.type==="리포트")));const all=[...dayCE,...dayTasks];return(<div key={ds} style={{background:isToday?"#f0f7ff":"#f7f8fa",border:`1.5px solid ${isToday?"#bfd7f5":"#f0f1f3"}`,borderRadius:10,padding:"8px 6px",minHeight:80,boxSizing:"border-box"}}><div style={{textAlign:"center",marginBottom:5}}>{isToday?<div style={{width:20,height:20,background:"#0071CE",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 2px",fontSize:10,fontWeight:800,color:"#fff"}}>{DAYS_KR[dow]}</div>:<div style={{fontSize:10,fontWeight:700,color:"#adb5bd"}}>{DAYS_KR[dow]}</div>}<div style={{fontSize:9,color:isToday?"#93c5fd":"#adb5bd"}}>{ds.slice(5).replace("-","/")}</div></div>{all.length===0&&<div style={{fontSize:9,color:"#d1d5db",textAlign:"center"}}>없음</div>}{all.slice(0,3).map((item,i)=>{if(item.type&&CE[item.type]){const ce=CE[item.type];return <div key={i} title={`[${item.type}] ${item.name}`} style={{fontSize:9,background:ce.bg,color:ce.color,borderRadius:3,padding:"1px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:700}}>[{item.type[0]}] {item.name}</div>;}return <div key={i} title={item.title} style={{fontSize:9,background:P[item.priority].bg,color:P[item.priority].color,borderRadius:3,padding:"1px 4px",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,textDecoration:item.status==="done"?"line-through":"none"}}>{item.title}</div>;})} {all.length>3&&<div style={{fontSize:9,color:"#adb5bd",textAlign:"center"}}>+{all.length-3}</div>}</div>);})}
                 </div>
               </div>
               <div style={{display:"flex",flexDirection:window.innerWidth<=768?"column":"row",gap:14,alignItems:"flex-start"}}>
                 <div style={{flex:window.innerWidth<=768?"none":"0 0 420px",width:window.innerWidth<=768?"100%":"auto",maxWidth:window.innerWidth<=768?"100%":420,background:"#fff",borderRadius:12,padding:"14px 16px",border:"1px solid #f0f1f3"}}>
                   <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>오늘 할 일</span><span style={{background:"#fef2f2",color:"#ef4444",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{todayTasks.length+todayCE.length}</span></div>
-                  {todayTasks.length===0&&todayCE.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>오늘 할 일이 없습니다</div>:<div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:window.innerWidth<=768?300:9999,overflowY:window.innerWidth<=768?"auto":"visible"}}>{todayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>toggleCE(e)} onMemo={()=>setMemoContract(c)}/>:null;})}{todayTasks.map(t=><TaskCard key={t.id+t._sk} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}
+                  {todayTasks.length===0&&todayCE.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>오늘 할 일이 없습니다</div>:<div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:window.innerWidth<=768?300:9999,overflowY:window.innerWidth<=768?"auto":"visible"}}>{todayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} rankData={rankDataMap[ceKey(e)]} onToggle={()=>toggleCE(e)} onRankConfirm={(rv)=>handleRankConfirm(e,rv)} onMemo={()=>setMemoContract(c)}/>:null;})}{todayTasks.map(t=><TaskCard key={t.id+t._sk} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}
                 </div>
                 <div style={{flex:1,minWidth:0,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}>
                   <div onClick={()=>setShowAllTasks(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer"}}><div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>전체 할 일</span><span style={{background:"#f7f8fa",color:"#6b7280",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{allItems.length}개</span></div><span style={{fontSize:10,fontWeight:600,color:"#0071CE",background:"#f0f7ff",borderRadius:6,padding:"3px 8px"}}>{showAllTasks?"숨기기 ▲":"전체보기 ▼"}</span></div>
@@ -789,7 +824,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:3}}>{DAYS_KR.map((d,i)=>(<div key={d} style={{textAlign:"center",fontSize:window.innerWidth<=768?9:11,fontWeight:700,color:i===0?"#ef4444":i===6?"#0071CE":"#adb5bd",padding:"3px 0"}}>{d}</div>))}</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>{cells.map((day,i)=>{if(!day)return <div key={i}/>;const ds=`${calY}-${String(calM+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;const isToday=ds===todayStr;const isSel=selectedDay===ds;const dow=(firstDay+day-1)%7;const cell=tasksByDay[day]||{t:[],e:[]};const allCellItems=[...cell.e.map(e=>({...e,_ce:true})),...cell.t];return(<div key={i} onClick={()=>setSelectedDay(isSel?null:ds)} style={{minHeight:window.innerWidth<=768?120:82,background:isSel?"#e8f4fd":isToday?"#f0f7ff":"#fff",border:`1px solid ${isSel?"#0071CE":isToday?"#93c5fd":"#f0f1f3"}`,borderRadius:6,padding:window.innerWidth<=768?"3px 2px":"5px 4px",cursor:"pointer",overflow:"hidden",boxSizing:"border-box"}}><div style={{fontSize:window.innerWidth<=768?10:11,fontWeight:isToday?800:500,color:isToday?"#0071CE":dow===0?"#ef4444":dow===6?"#3b82f6":"#374151",marginBottom:2,textAlign:"center",lineHeight:1.2}}>{isToday?<span style={{background:"#0071CE",color:"#fff",borderRadius:"50%",width:16,height:16,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:9}}>{day}</span>:day}</div><div style={{display:"flex",flexDirection:"column",gap:1}}>{allCellItems.slice(0,window.innerWidth<=768?3:3).map((item,ti)=>{const iD=item._ce?!!completions[ceKey(item)]:item.status==="done";const rawLabel=item._ce?item.type[0]+"."+item.name:item.title;const label=window.innerWidth<=768?(rawLabel.length>5?rawLabel.slice(0,5)+"…":rawLabel):rawLabel;const bg=item._ce?CE[item.type].bg:P[item.priority].bg;const color=item._ce?CE[item.type].color:P[item.priority].color;return <div key={ti} title={rawLabel} style={{fontSize:window.innerWidth<=768?8:9,background:bg,color,borderRadius:2,padding:"1px 2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,textDecoration:iD?"line-through":"none",opacity:iD?0.6:1,lineHeight:1.3,marginBottom:1}}>{label}</div>;})} {allCellItems.length>3&&<div style={{fontSize:7,color:"#9ca3af",textAlign:"center",fontWeight:600}}>+{allCellItems.length-3}</div>}</div></div>);})} </div>
               </div>
-              {selectedDay&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}><div style={{padding:"12px 18px",borderBottom:"1px solid #f0f1f3",background:selectedDay===todayStr?"#f0f7ff":"#f7f8fa",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>{new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span>{selectedDay===todayStr&&<span style={{fontSize:10,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:99,padding:"2px 7px"}}>오늘</span>}</div><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#adb5bd"}}>{selDayTasks.length+selDayCE.length}개</span><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:15}}>✕</button></div></div><div style={{padding:"14px 18px"}}>{selDayTasks.length===0&&selDayCE.length===0?<div style={{textAlign:"center",padding:"16px 0",color:"#adb5bd",fontSize:12}}>이 날 일정이 없어요</div>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:7}}>{selDayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>toggleCE(e)} onMemo={()=>setMemoContract(c)}/>:null;})}{selDayTasks.map(t=><TaskCard key={t.id+(t._sk||"")} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}</div></div>)}
+              {selectedDay&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}><div style={{padding:"12px 18px",borderBottom:"1px solid #f0f1f3",background:selectedDay===todayStr?"#f0f7ff":"#f7f8fa",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>{new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span>{selectedDay===todayStr&&<span style={{fontSize:10,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:99,padding:"2px 7px"}}>오늘</span>}</div><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#adb5bd"}}>{selDayTasks.length+selDayCE.length}개</span><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:15}}>✕</button></div></div><div style={{padding:"14px 18px"}}>{selDayTasks.length===0&&selDayCE.length===0?<div style={{textAlign:"center",padding:"16px 0",color:"#adb5bd",fontSize:12}}>이 날 일정이 없어요</div>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:7}}>{selDayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} rankData={rankDataMap[ceKey(e)]} onToggle={()=>toggleCE(e)} onRankConfirm={(rv)=>handleRankConfirm(e,rv)} onMemo={()=>setMemoContract(c)}/>:null;})}{selDayTasks.map(t=><TaskCard key={t.id+(t._sk||"")} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}</div></div>)}
             </div>
           )}
           {tab==="revenue"&&<RevenueCalendarTab contracts={contracts} user={user} profiles={profiles}/>}
@@ -813,35 +848,35 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                   const evts=genEvents(c);
                   const isCancelled=!!c.cancelled;
                   const isActive=!isCancelled&&c.endDate>=todayStr;
-                  const nextCall=evts.filter(e=>e.type==="관리전화"&&e.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date))[0];
+                  const rankEvts=evts.filter(e=>e.type==="순위체크");
                   const rpt=evts.find(e=>e.type==="리포트");
                   const startParts=c.startDate?c.startDate.split("-"):["","",""];
                   const handleToggleCancel=async(e)=>{e.stopPropagation();if(isCancelled){if(!window.confirm("해지를 취소하고 복구할까요?"))return;}else{if(!window.confirm(`"${c.name}" 업체를 해지 처리할까요?`))return;}const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0){list[idx]={...list[idx],cancelled:!isCancelled};await st.set("contracts:all",list);setContracts([...list]);}};
                   return(
-                    <div key={c.id} style={{background:isCancelled?"#fff5f5":"#fff",borderRadius:12,border:`1px solid ${isCancelled?"#fca5a5":"#f0f1f3"}`,padding:"12px 14px",display:"flex",gap:0,alignItems:"stretch",cursor:"pointer",transition:"box-shadow 0.15s",width:"100%",overflow:"hidden",boxSizing:"border-box"}} onMouseEnter={e=>e.currentTarget.style.boxShadow=isCancelled?"0 4px 16px rgba(239,68,68,0.12)":"0 4px 16px rgba(0,113,206,0.10)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"} onClick={()=>setMemoContract(c)}>
-                      {/* 날짜 열 */}
-                      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,width:44,borderRight:`1px solid ${isCancelled?"#fecaca":"#f0f1f3"}`,marginRight:14,paddingRight:14,gap:1}}>
-                        <div style={{fontSize:9,color:isCancelled?"#fca5a5":"#adb5bd",fontWeight:600}}>{startParts[1]}월</div>
-                        <div style={{fontSize:20,fontWeight:800,color:isCancelled?"#ef4444":"#0071CE",lineHeight:1}}>{startParts[2]}</div>
-                        <div style={{fontSize:8,color:isCancelled?"#fca5a5":"#adb5bd"}}>{startParts[0]}</div>
-                      </div>
-                      {/* 가운데: 상호명+담당자+기간 */}
-                      <div style={{display:"flex",flexDirection:"column",justifyContent:"center",flex:1,minWidth:0,gap:4}}>
-                        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                          <span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{c.isRenewal?"R":"N"}</span>
-                          <span style={{fontWeight:800,fontSize:14,color:isCancelled?"#ef4444":"#0f1117",textDecoration:isCancelled?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
-                          {isCancelled?<Badge label="해지" color="#ef4444" bg="#fee2e2"/>:<Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/>}
+                    <div key={c.id} style={{background:isCancelled?"#fff5f5":"#fff",borderRadius:12,border:`1px solid ${isCancelled?"#fca5a5":"#f0f1f3"}`,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
+                      {/* 헤더행 */}
+                      <div style={{display:"grid",gridTemplateColumns:"80px 1fr auto",gap:0,alignItems:"center",padding:"10px 14px",borderBottom:rankEvts.length>0||rpt?"1px solid #f7f8fa":"none",cursor:"pointer"}} onClick={()=>setMemoContract(c)}>
+                        {/* 날짜 */}
+                        <div style={{display:"flex",flexDirection:"column",gap:0,lineHeight:1.2}}>
+                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#adb5bd",fontWeight:600}}>{startParts[0]}년</span>
+                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#adb5bd",fontWeight:600}}>{startParts[1]}월</span>
+                          <span style={{fontSize:20,fontWeight:800,color:isCancelled?"#ef4444":"#0071CE",lineHeight:1}}>{startParts[2]}</span>
                         </div>
-                        {c.manager&&<div style={{fontSize:11,color:isCancelled?"#fca5a5":"#8468D3",fontWeight:600}}>{c.manager}</div>}
-                        <div style={{display:"flex",alignItems:"center",gap:4}}>
-                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#6b7280",fontWeight:500}}>{c.startDate}</span>
-                          <span style={{fontSize:10,color:"#d1d5db"}}>~</span>
-                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#6b7280",fontWeight:500}}>{c.endDate}</span>
+                        {/* 업체명+담당자+기간 */}
+                        <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                            <span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{c.isRenewal?"R":"N"}</span>
+                            <span style={{fontWeight:800,fontSize:14,color:isCancelled?"#ef4444":"#0f1117",textDecoration:isCancelled?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+                            {isCancelled?<Badge label="해지" color="#ef4444" bg="#fee2e2"/>:<Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/>}
+                          </div>
+                          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                            {c.manager&&<span style={{fontSize:11,color:isCancelled?"#fca5a5":"#8468D3",fontWeight:600}}>{c.manager}</span>}
+                            {c.total&&<span style={{fontSize:11,color:isCancelled?"#ef4444":"#0071CE",fontWeight:700}}>{c.total}</span>}
+                            <span style={{fontSize:10,color:"#adb5bd"}}>{c.startDate} ~ {c.endDate}</span>
+                          </div>
                         </div>
-                      </div>
-                      {/* 오른쪽: 금액+뱃지+버튼 */}
-                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",justifyContent:"space-between",flexShrink:0,marginLeft:12,gap:4}} onClick={e=>e.stopPropagation()}>
-                        <div style={{display:"flex",gap:3,alignItems:"center"}}>
+                        {/* 버튼 */}
+                        <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0}} onClick={e=>e.stopPropagation()}>
                           <button onClick={()=>setMemoContract(c)} style={{background:"#f5f3ff",border:"1px solid #e9d5ff",color:"#8468D3",cursor:"pointer",padding:"3px 7px",borderRadius:6,fontSize:10,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>메모</button>
                           {user.isAdmin&&<>
                             <button onClick={handleToggleCancel} style={{background:isCancelled?"#fff7ed":"#fff5f5",border:`1px solid ${isCancelled?"#fed7aa":"#fca5a5"}`,color:isCancelled?"#ea580c":"#ef4444",cursor:"pointer",padding:"3px 7px",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{isCancelled?"복구":"해지"}</button>
@@ -849,13 +884,55 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                             <button onClick={()=>deleteContract(c.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",padding:2,fontSize:11}}>✕</button>
                           </>}
                         </div>
-                        {c.total&&<div style={{fontSize:12,color:isCancelled?"#ef4444":"#0071CE",fontWeight:700}}>{c.total}</div>}
-                        <div style={{display:"flex",gap:3,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                          {!isCancelled&&nextCall&&<Badge label={`관리 ${nextCall.date.slice(5)}`} color="#16a34a" bg="#dcfce7"/>}
-                          {!isCancelled&&rpt&&<Badge label={`리포트 ${rpt.date.slice(5)}`} color="#8468D3" bg="#f5f3ff"/>}
-                          {isCancelled&&<Badge label="해지 업체" color="#ef4444" bg="#fee2e2"/>}
-                        </div>
                       </div>
+                      {/* 순위체크 + 리포트 행 */}
+                      {(rankEvts.length>0||rpt)&&!isCancelled&&(
+                        <div style={{padding:"8px 14px",background:"#f9fafb",display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-start"}}>
+                          {/* 순위체크 칸들 */}
+                          {rankEvts.map((e,ri)=>{
+                            const ek=ceKey(e);
+                            const isDone=!!completions[ek];
+                            const rd=rankDataMap[ek];
+                            const isToday=e.date===todayStr;
+                            const isPast=e.date<todayStr;
+                            const isFuture=e.date>todayStr;
+                            const daysLeft=Math.ceil((new Date(e.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
+                            const rankDiff=rd?.prevRank&&rd?.rank?rd.prevRank-rd.rank:null;
+                            return(
+                              <div key={ri} style={{display:"flex",alignItems:"flex-start",gap:6,background:"#fff",borderRadius:8,padding:"7px 10px",border:`1.5px solid ${isDone?"#6ee7b7":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`,minWidth:110}}>
+                                <button onClick={()=>{if(!isDone){setRankModalEvent(e);setRankModalContract(c);}}} style={{width:16,height:16,borderRadius:3,border:`1.5px solid ${isDone?"#10b981":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#10b981":"transparent",cursor:isDone?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                                  {isDone&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
+                                </button>
+                                <div>
+                                  <div style={{fontSize:10,fontWeight:600,color:(isToday||isPast)&&!isDone?"#ef4444":isDone?"#10b981":"#6b7280"}}>{e.rankIdx}차 {e.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" (지남)":isFuture?` (D-${daysLeft})`:""}</div>
+                                  {isDone&&rd?.rank&&<div style={{fontSize:10,fontWeight:700,color:rankDiff>0?"#10b981":rankDiff<0?"#ef4444":"#6b7280",marginTop:1}}>{rankDiff>0?"▲":rankDiff<0?"▼":"—"}{rd.prevRank?`${rd.prevRank}위→`:""}{rd.rank}위</div>}
+                                  {!isDone&&c.initialRank&&ri===0&&<div style={{fontSize:9,color:"#adb5bd",marginTop:1}}>시작 {c.initialRank}위</div>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {/* 리포트 칸 */}
+                          {rpt&&(()=>{
+                            const ek=ceKey(rpt);
+                            const isDone=!!completions[ek];
+                            const isToday=rpt.date===todayStr;
+                            const isPast=rpt.date<todayStr;
+                            const isFuture=rpt.date>todayStr;
+                            const daysLeft=Math.ceil((new Date(rpt.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
+                            return(
+                              <div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#fff",borderRadius:8,padding:"7px 10px",border:`1.5px solid ${isDone?"#c4b5fd":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`,minWidth:100}}>
+                                <button onClick={async()=>{if(!isDone){await toggleCE(rpt);}}} style={{width:16,height:16,borderRadius:3,border:`1.5px solid ${isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#7c3aed":"transparent",cursor:isDone?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                                  {isDone&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
+                                </button>
+                                <div>
+                                  <div style={{fontSize:10,fontWeight:600,color:"#7c3aed"}}>리포트</div>
+                                  <div style={{fontSize:10,color:(isToday||isPast)&&!isDone?"#ef4444":isDone?"#7c3aed":"#6b7280",fontWeight:isDone||isToday||isPast?600:400}}>{rpt.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" (지남)":isFuture?` (D-${daysLeft})`:""}</div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
