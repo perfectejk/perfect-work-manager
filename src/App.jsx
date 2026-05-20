@@ -29,9 +29,9 @@ const st={
 const ses={get:()=>{try{const v=localStorage.getItem('ses:user');return v?JSON.parse(v):null;}catch{return null;}},set:v=>{try{localStorage.setItem('ses:user',JSON.stringify(v));}catch{}},del:()=>{try{localStorage.removeItem('ses:user');}catch{}}};
 const addBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
 const subBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
-const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,3);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;let rankIdx=1;while(true){const nextD=new Date(cur+"T00:00:00");nextD.setDate(nextD.getDate()+10);const next=nextD.toISOString().slice(0,10);if(next>=rptDate)break;evts.push({type:"순위체크",date:next,cid:c.id,name:c.name,manager:c.manager||"",rankIdx,initialRank:c.initialRank||null});cur=next;rankIdx++;}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
+const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,3);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;let rankIdx=1;while(true){const nextD=new Date(cur+"T00:00:00");nextD.setDate(nextD.getDate()+10);const next=nextD.toISOString().slice(0,10);if(next>=rptDate)break;evts.push({type:"순위체크",date:next,cid:c.id,name:c.name,manager:c.manager||"",rankIdx,initialRanks:c.initialRanks||{}});cur=next;rankIdx++;}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
 const ceKey=e=>`${e.cid}:${e.type}:${e.date}`;
-const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[:\\s]\\s*([^\\n]+)'));return m?m[1].trim():'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};return{name:line('상호명'),phone:line('번호'),link:line('플레이스 링크'),products:section('상품내역',['서비스내역','결제정보','담당자']),services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액'),manager:line('담당자'),notes:line('특이사항')};};
+const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[:\\s]\\s*([^\\n]+)'));return m?m[1].trim():'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};const parseKeywords=()=>{const kwLine=line('키워드')||line('순위키워드')||line('검색키워드');if(!kwLine)return[];return kwLine.split(/[,，/·\s]+/).map(k=>k.trim()).filter(k=>k.length>0&&k.length<=30);};return{name:line('상호명'),phone:line('번호'),link:line('플레이스 링크'),products:section('상품내역',['서비스내역','결제정보','담당자']),services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액'),manager:line('담당자'),notes:line('특이사항'),keywords:parseKeywords()};};
 const sendNotif=async(url,name,ts,data,targets)=>{if(!url?.startsWith("http"))return;const lines=METRICS.map(m=>{const v=data[m.key]||0,t=targets[m.key];return`• ${m.label}: **${v}${m.unit}**${t?` / ${t}${m.unit} (${Math.round(v/t*100)}%)`:''}`;});try{await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:"업무보고 알림",content:`[${ts}] ${name} 실적 제출\n${lines.join('\n')}`})});}catch{}};
 const repeatLabel=t=>{if(!t.repeat||t.repeat==="none")return null;if(t.repeat==="weekly")return`매주 ${DAYS_KR[new Date(t.due+"T00:00:00").getDay()]}`;if(t.repeat==="monthly")return`매월 ${parseInt(t.due.slice(8))}일`;if(t.repeat==="weekdays")return"평일";if(t.repeat==="custom")return`${(t.repeatDays||[]).sort().map(d=>DAYS_KR[d]).join("·")}`;return null;};
 const isActiveOnDate=(t,ds)=>{if(!t.due||t.due>ds)return false;const dow=new Date(ds+"T00:00:00").getDay();if(!t.repeat||t.repeat==="none")return t.due===ds;if(t.repeat==="weekly")return new Date(t.due+"T00:00:00").getDay()===dow;if(t.repeat==="monthly")return parseInt(t.due.slice(8))===new Date(ds+"T00:00:00").getDate();if(t.repeat==="weekdays")return dow>=1&&dow<=5;if(t.repeat==="custom")return(t.repeatDays||[]).includes(dow);return false;};
@@ -499,7 +499,7 @@ function RankInputModal({event,contract,onClose,onConfirm,existingData}){
       <div style={{fontSize:12,color:"#6b7280",marginBottom:16}}>{contract.name} · {event.date}</div>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
         {localKws.map(kw=>{
-          const prev=existingData?.keywords?.[kw]?.rank||contract.initialRank||null;
+          const prev=existingData?.keywords?.[kw]?.rank||(contract.initialRanks?.[kw])||(event.initialRanks?.[kw])||null;
           const cur=parseInt(ranks[kw])||0;
           const diff=prev&&cur?parseInt(prev)-cur:null;
           return(
@@ -591,15 +591,15 @@ function TaskForm({form,setForm,onSubmit,onCancel,isEdit,isAdminUser,projectCate
   </div>);
 }
 function ContractForm({initial,onSubmit,onCancel,allContracts}){
-  const blank={name:"",phone:"",link:"",products:"",services:"",total:"",manager:"",notes:"",isRenewal:false,initialRank:"",keywords:[]};
-  const[memo,setMemo]=useState("");const[parsed,setParsed]=useState(initial?{name:initial.name,phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,initialRank:initial.initialRank||"",keywords:initial.keywords||[]}:blank);
+  const blank={name:"",phone:"",link:"",products:"",services:"",total:"",manager:"",notes:"",isRenewal:false,keywords:[],initialRanks:{}};
+  const[memo,setMemo]=useState("");const[parsed,setParsed]=useState(initial?{name:initial.name,phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,keywords:initial.keywords||[],initialRanks:initial.initialRanks||{}}:blank);
   const[kwInput,setKwInput]=useState("");
   const addKeyword=()=>{const v=kwInput.trim();if(!v||parsed.keywords.includes(v))return;setParsed(p=>({...p,keywords:[...p.keywords,v]}));setKwInput("");};
-  const removeKeyword=kw=>setParsed(p=>({...p,keywords:p.keywords.filter(k=>k!==kw)}));
+  const removeKeyword=kw=>setParsed(p=>({...p,keywords:p.keywords.filter(k=>k!==kw),initialRanks:Object.fromEntries(Object.entries(p.initialRanks||{}).filter(([k])=>k!==kw))}));
   const[startDate,setStartDate]=useState(initial?.startDate||"");const[endDate,setEndDate]=useState(initial?.endDate||"");const[parseMsg,setParseMsg]=useState("");
   const[linkedMemoId,setLinkedMemoId]=useState(initial?.linkedMemoId||"");const[showManualLink,setShowManualLink]=useState(false);const[autoMatched,setAutoMatched]=useState(null);
   const iS={border:"1px solid #f0f1f3",borderRadius:8,padding:"8px 12px",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Pretendard',-apple-system,sans-serif"};
-  const handleParse=()=>{const r=parseMemo(memo);setParsed(p=>({...p,...r}));setParseMsg("파싱 완료!");if(r.name){const matched=allContracts.find(c=>c.name===r.name&&(!initial||c.id!==initial.id));if(matched){setAutoMatched(matched);setLinkedMemoId(matched.id);}else{setAutoMatched(null);}}};
+  const handleParse=()=>{const r=parseMemo(memo);setParsed(p=>{const mergedKws=[...new Set([...(p.keywords||[]),...(r.keywords||[])])];return{...p,...r,keywords:mergedKws};});setParseMsg("파싱 완료!" + (r.keywords?.length>0?` (키워드 ${r.keywords.length}개 추출)`:""));if(r.name){const matched=allContracts.find(c=>c.name===r.name&&(!initial||c.id!==initial.id));if(matched){setAutoMatched(matched);setLinkedMemoId(matched.id);}else{setAutoMatched(null);}}};
   return(<div style={{background:"#fff",borderRadius:14,padding:22,border:"1px solid #f0f1f3",marginBottom:12}}>
     <p style={{margin:"0 0 14px",fontWeight:700,fontSize:15,color:"#0f1117"}}>{initial?.id?"계약 수정":"계약업체 등록"}</p>
     {!initial?.id&&<div style={{marginBottom:14,background:"#f5f3ff",borderRadius:10,padding:14}}>
@@ -619,10 +619,10 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>총금액</label><input value={parsed.total} onChange={e=>setParsed(p=>({...p,total:e.target.value}))} placeholder="00만원" style={{...iS}}/></div><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>담당자</label><input value={parsed.manager} onChange={e=>setParsed(p=>({...p,manager:e.target.value}))} placeholder="담당자 이름" style={{...iS}}/></div></div>
     <div style={{marginBottom:8}}><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>특이사항</label><textarea value={parsed.notes} onChange={e=>setParsed(p=>({...p,notes:e.target.value}))} rows={3} style={{...iS,resize:"vertical"}}/></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 시작일 *</label><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} style={{...iS}}/></div><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 종료일 *</label><input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={{...iS}}/></div></div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}><div><label style={{fontSize:12,color:"#0891b2",fontWeight:600,display:"block",marginBottom:3}}>시작 순위 (현재 플레이스 순위)</label><input type="number" min="1" value={parsed.initialRank} onChange={e=>setParsed(p=>({...p,initialRank:e.target.value}))} placeholder="예: 15" style={{...iS}}/></div><div style={{display:"flex",alignItems:"flex-end"}}><div style={{fontSize:11,color:"#6b7280",background:"#ecfeff",borderRadius:8,padding:"8px 10px",border:"1px solid #a5f3fc"}}>입력 시 순위 상승/하락을 자동으로 표시합니다</div></div></div>
     <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#0891b2",fontWeight:600,display:"block",marginBottom:5}}>순위 체크 키워드 (2~5개 권장)</label><div style={{display:"flex",gap:6,marginBottom:7,flexWrap:"wrap"}}>{(parsed.keywords||[]).map((kw,i)=>(<span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:99,padding:"3px 10px",fontSize:12,color:"#0891b2",fontWeight:600}}>{kw}<button onClick={()=>removeKeyword(kw)} style={{background:"none",border:"none",color:"#0891b2",cursor:"pointer",padding:0,fontSize:12,lineHeight:1}}>✕</button></span>))}</div><div style={{display:"flex",gap:6}}><input value={kwInput} onChange={e=>setKwInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),addKeyword())} placeholder="키워드 입력 후 Enter 또는 + 버튼" style={{...iS,flex:1}}/><button onClick={addKeyword} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+</button></div></div>
+    {(parsed.keywords||[]).length>0&&(<div style={{marginBottom:12,background:"#f0fdf4",borderRadius:10,padding:"12px 14px",border:"1px solid #bbf7d0"}}><label style={{fontSize:12,color:"#166534",fontWeight:600,display:"block",marginBottom:8}}>키워드별 시작 순위 (선택)</label><div style={{display:"flex",flexDirection:"column",gap:6}}>{(parsed.keywords||[]).map(kw=>(<div key={kw} style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:"#0f1117",fontWeight:500,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw}</span><input type="number" min="1" value={(parsed.initialRanks||{})[kw]||""} onChange={e=>setParsed(p=>({...p,initialRanks:{...(p.initialRanks||{}),[kw]:e.target.value}}))} placeholder="순위" style={{width:64,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/><span style={{fontSize:11,color:"#6b7280"}}>위</span></div>))}</div><div style={{fontSize:10,color:"#6b7280",marginTop:6}}>입력 시 이후 순위체크에서 상승/하락 자동 표시</div></div>)}
     <div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 14px",marginBottom:12,fontSize:12,color:"#166534"}}>[순위체크] 계약 시작일부터 10일 단위 자동 생성 · [리포트] 종료 3영업일 전</div>
-    <div style={{display:"flex",gap:8}}><button onClick={()=>{if(!parsed.name.trim()||!startDate||!endDate)return alert("상호명과 계약 기간은 필수입니다.");if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");onSubmit({...parsed,startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,initialRank:parseInt(parsed.initialRank)||undefined,keywords:parsed.keywords||[]});}} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button></div>
+    <div style={{display:"flex",gap:8}}><button onClick={()=>{if(!parsed.name.trim()||!startDate||!endDate)return alert("상호명과 계약 기간은 필수입니다.");if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");const finalInitialRanks={};(parsed.keywords||[]).forEach(kw=>{if(parsed.initialRanks?.[kw])finalInitialRanks[kw]=parseInt(parsed.initialRanks[kw]);});onSubmit({...parsed,startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitialRanks});}} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button></div>
   </div>);
 }
 function DailyAlertModal({items,onClose}){
@@ -758,7 +758,7 @@ function MainApp({user,onLogout}){
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[contractMonth,setContractMonth]=useState("all");const[contractStatus,setContractStatus]=useState("all");
-  const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");  const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);
+  const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");  const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");
   const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());
   const[calFilter,setCalFilter]=useState("all");const[selectedDay,setSelectedDay]=useState(null);
@@ -929,96 +929,54 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
           {tab==="revenue"&&<RevenueCalendarTab contracts={contracts} user={user} profiles={profiles}/>}
           {tab==="contracts"&&(
             <div>
-              {window.innerWidth<=768&&user.isAdmin&&<button onClick={()=>{setEditContract(null);setShowCF(v=>!v);}} style={{width:"100%",background:"#8468D3",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:12}}>+ 계약 등록</button>}
-              {showCF&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}} allContracts={contracts}/>}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-                <div style={{background:"linear-gradient(135deg,#f0f7ff,#dbeafe)",borderRadius:12,padding:"12px 16px",border:"1px solid #bfdbfe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#1e40af",fontWeight:700,marginBottom:2}}>신규 계약</div><div style={{fontSize:22,fontWeight:900,color:"#0071CE"}}>{renewalStats.new.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#3b82f6",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#0071CE"}}>{fmtAmount(renewalStats.new.amount)}</div></div></div></div>
-                <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:12,padding:"12px 16px",border:"1px solid #ddd6fe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#5b21b6",fontWeight:700,marginBottom:2}}>재연장</div><div style={{fontSize:22,fontWeight:900,color:"#8468D3"}}>{renewalStats.renewal.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#8468D3",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#8468D3"}}>{fmtAmount(renewalStats.renewal.amount)}</div></div></div></div>
+              {/* 세부탭 */}
+              <div style={{display:"flex",background:"#fff",borderRadius:12,padding:4,marginBottom:14,border:"1px solid #f0f1f3",gap:4}}>
+                {[{id:"list",label:"업체 목록"},{id:"rank",label:"순위 관리"}].map(t=>(
+                  <button key={t.id} onClick={()=>setContractSubTab(t.id)} style={{flex:1,padding:"9px",borderRadius:9,border:"none",fontSize:13,fontWeight:contractSubTab===t.id?700:500,cursor:"pointer",background:contractSubTab===t.id?"#0071CE":"transparent",color:contractSubTab===t.id?"#fff":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"all 0.15s"}}>{t.label}</button>
+                ))}
               </div>
-              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
-                <div style={{position:"relative"}}><input value={contractSearch} onChange={e=>{setContractSearch(e.target.value);setContractPage(1);}} placeholder="상호명 검색..." style={{width:"100%",border:"1.5px solid #f0f1f3",borderRadius:9,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>{contractSearch&&<button onClick={()=>{setContractSearch("");setContractPage(1);}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:14,padding:0}}>✕</button>}</div>
-                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>월별:</span><button onClick={()=>{setContractMonth("all");setContractPage(1);}} style={{border:`1.5px solid ${contractMonth==="all"?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth==="all"?"#f0f7ff":"#fff",color:contractMonth==="all"?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{contractMonthOptions.map(mo=>{const[y,m]=mo.split("-");return(<button key={mo} onClick={()=>{setContractMonth(mo);setContractPage(1);}} style={{border:`1.5px solid ${contractMonth===mo?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth===mo?"#f0f7ff":"#fff",color:contractMonth===mo?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{parseInt(y)}년 {parseInt(m)}월</button>);})}</div>
-                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>상태:</span>{[{v:"all",l:"전체",c:"#6b7280"},{v:"active",l:"진행중",c:"#10b981"},{v:"ended",l:"종료",c:"#9ca3af"},{v:"cancelled",l:"해지",c:"#ef4444"}].map(({v,l,c})=>(<button key={v} onClick={()=>{setContractStatus(v);setContractPage(1);}} style={{border:`1.5px solid ${contractStatus===v?c:"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractStatus===v?c+"18":"#fff",color:contractStatus===v?c:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>))}{user.isAdmin&&managers.length>0&&(<><span style={{fontSize:11,fontWeight:600,color:"#6b7280",marginLeft:4,flexShrink:0}}>담당자:</span><button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#f5f3ff":"#fff",color:contractManager==="all"?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{managers.map(m=>(<button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{m}</button>))}</>)}</div>
-                {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span><button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>필터 초기화</button></div>)}
-              </div>
-              {filteredContracts.length===0&&!showCF?(<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}><div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":contractStatus==="cancelled"?"해지된 업체가 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div></div>)
-              :<div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,alignItems:"start"}}>
-                {pagedContracts.map(c=>{
-                  const evts=genEvents(c);
-                  const isCancelled=!!c.cancelled;
-                  const isActive=!isCancelled&&c.endDate>=todayStr;
-                  const rankEvts=evts.filter(e=>e.type==="순위체크");
-                  const rpt=evts.find(e=>e.type==="리포트");
-                  const startParts=c.startDate?c.startDate.split("-"):["","",""];
-                  const handleToggleCancel=async(e)=>{e.stopPropagation();if(isCancelled){if(!window.confirm("해지를 취소하고 복구할까요?"))return;}else{if(!window.confirm(`"${c.name}" 업체를 해지 처리할까요?`))return;}const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0){list[idx]={...list[idx],cancelled:!isCancelled};await st.set("contracts:all",list);setContracts([...list]);}};
-                  return(
-                    <div key={c.id} style={{background:isCancelled?"#fff5f5":"#fff",borderRadius:12,border:`1px solid ${isCancelled?"#fca5a5":"#f0f1f3"}`,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
-                      {/* 통합 행: 날짜 + 업체정보+체크박스 인라인 + 버튼 */}
-                      <div style={{display:"grid",gridTemplateColumns:"80px 1fr auto auto",gap:0,alignItems:"start",padding:"10px 14px",cursor:"pointer"}} onClick={()=>setMemoContract(c)}>
-                        {/* 날짜 */}
-                        <div style={{display:"flex",flexDirection:"column",gap:0,lineHeight:1.2,paddingTop:2}}>
-                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#adb5bd",fontWeight:600}}>{startParts[0]}년</span>
-                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#adb5bd",fontWeight:600}}>{startParts[1]}월</span>
+
+              {/* ===== 업체목록 탭 ===== */}
+              {contractSubTab==="list"&&(<div>
+                {window.innerWidth<=768&&user.isAdmin&&<button onClick={()=>{setEditContract(null);setShowCF(v=>!v);}} style={{width:"100%",background:"#8468D3",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:12}}>+ 계약 등록</button>}
+                {showCF&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}} allContracts={contracts}/>}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                  <div style={{background:"linear-gradient(135deg,#f0f7ff,#dbeafe)",borderRadius:12,padding:"12px 16px",border:"1px solid #bfdbfe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#1e40af",fontWeight:700,marginBottom:2}}>신규 계약</div><div style={{fontSize:22,fontWeight:900,color:"#0071CE"}}>{renewalStats.new.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#3b82f6",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#0071CE"}}>{fmtAmount(renewalStats.new.amount)}</div></div></div></div>
+                  <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:12,padding:"12px 16px",border:"1px solid #ddd6fe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#5b21b6",fontWeight:700,marginBottom:2}}>재연장</div><div style={{fontSize:22,fontWeight:900,color:"#8468D3"}}>{renewalStats.renewal.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#8468D3",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#8468D3"}}>{fmtAmount(renewalStats.renewal.amount)}</div></div></div></div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+                  <div style={{position:"relative"}}><input value={contractSearch} onChange={e=>{setContractSearch(e.target.value);setContractPage(1);}} placeholder="상호명 검색..." style={{width:"100%",border:"1.5px solid #f0f1f3",borderRadius:9,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>{contractSearch&&<button onClick={()=>{setContractSearch("");setContractPage(1);}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:14,padding:0}}>✕</button>}</div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>월별:</span><button onClick={()=>{setContractMonth("all");setContractPage(1);}} style={{border:`1.5px solid ${contractMonth==="all"?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth==="all"?"#f0f7ff":"#fff",color:contractMonth==="all"?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{contractMonthOptions.map(mo=>{const[y,m]=mo.split("-");return(<button key={mo} onClick={()=>{setContractMonth(mo);setContractPage(1);}} style={{border:`1.5px solid ${contractMonth===mo?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth===mo?"#f0f7ff":"#fff",color:contractMonth===mo?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{parseInt(y)}년 {parseInt(m)}월</button>);})}</div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>상태:</span>{[{v:"all",l:"전체",c:"#6b7280"},{v:"active",l:"진행중",c:"#10b981"},{v:"ended",l:"종료",c:"#9ca3af"},{v:"cancelled",l:"해지",c:"#ef4444"}].map(({v,l,c})=>(<button key={v} onClick={()=>{setContractStatus(v);setContractPage(1);}} style={{border:`1.5px solid ${contractStatus===v?c:"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractStatus===v?c+"18":"#fff",color:contractStatus===v?c:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>))}{user.isAdmin&&managers.length>0&&(<><span style={{fontSize:11,fontWeight:600,color:"#6b7280",marginLeft:4,flexShrink:0}}>담당자:</span><button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#f5f3ff":"#fff",color:contractManager==="all"?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{managers.map(m=>(<button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{m}</button>))}</>)}</div>
+                  {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span><button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>필터 초기화</button></div>)}
+                </div>
+                {filteredContracts.length===0&&!showCF?(<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}><div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":contractStatus==="cancelled"?"해지된 업체가 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div></div>)
+                :<div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,alignItems:"start"}}>
+                  {pagedContracts.map(c=>{
+                    const isCancelled=!!c.cancelled;
+                    const isActive=!isCancelled&&c.endDate>=todayStr;
+                    const startParts=c.startDate?c.startDate.split("-"):["","",""];
+                    const handleToggleCancel=async(e)=>{e.stopPropagation();if(isCancelled){if(!window.confirm("해지를 취소하고 복구할까요?"))return;}else{if(!window.confirm(`"${c.name}" 업체를 해지 처리할까요?`))return;}const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0){list[idx]={...list[idx],cancelled:!isCancelled};await st.set("contracts:all",list);setContracts([...list]);}};
+                    return(
+                      <div key={c.id} onClick={()=>setMemoContract(c)} style={{background:isCancelled?"#fff5f5":"#fff",borderRadius:12,border:`1px solid ${isCancelled?"#fca5a5":"#f0f1f3"}`,padding:"11px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",boxSizing:"border-box",width:"100%"}} onMouseEnter={e=>e.currentTarget.style.background=isCancelled?"#fff0f0":"#f7f9ff"} onMouseLeave={e=>e.currentTarget.style.background=isCancelled?"#fff5f5":"#fff"}>
+                        <div style={{display:"flex",flexDirection:"column",lineHeight:1.2,flexShrink:0,width:52}}>
+                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#adb5bd",fontWeight:600}}>{startParts[0]}년 {startParts[1]}월</span>
                           <span style={{fontSize:20,fontWeight:800,color:isCancelled?"#ef4444":"#0071CE",lineHeight:1}}>{startParts[2]}</span>
                         </div>
-                        {/* 업체명+담당자+기간+체크박스 인라인 */}
-                        <div style={{display:"flex",flexDirection:"column",gap:5,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",marginBottom:3}}>
                             <span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{c.isRenewal?"R":"N"}</span>
-                            <span style={{fontWeight:800,fontSize:14,color:isCancelled?"#ef4444":"#0f1117",textDecoration:isCancelled?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+                            <span style={{fontWeight:700,fontSize:13,color:isCancelled?"#ef4444":"#0f1117",textDecoration:isCancelled?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
                             {isCancelled?<Badge label="해지" color="#ef4444" bg="#fee2e2"/>:<Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/>}
                           </div>
-                          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
                             {c.manager&&<span style={{fontSize:11,color:isCancelled?"#fca5a5":"#8468D3",fontWeight:600}}>{c.manager}</span>}
                             {c.total&&<span style={{fontSize:11,color:isCancelled?"#ef4444":"#0071CE",fontWeight:700}}>{c.total}</span>}
                             <span style={{fontSize:10,color:"#adb5bd"}}>{c.startDate} ~ {c.endDate}</span>
+                            {c.keywords&&c.keywords.length>0&&<span style={{fontSize:10,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"1px 7px",border:"1px solid #a5f3fc"}}>{c.keywords.length}개 키워드</span>}
                           </div>
-                          {/* 순위체크 + 리포트 체크박스 - 별도 열로 분리됨 */}
                         </div>
-                        {/* 체크박스 열 - 메모/해지 버튼 왼쪽 */}
-                        {(rankEvts.length>0||rpt)&&!isCancelled&&(
-                          <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end",justifyContent:"center",paddingTop:2,paddingRight:8,minWidth:0}} onClick={e=>e.stopPropagation()}>
-                            {rankEvts.map((e,ri)=>{
-                              const ek=ceKey(e);
-                              const isDone=!!completions[ek];
-                              const rd=rankDataMap[ek];
-                              const isToday=e.date===todayStr;
-                              const isPast=e.date<todayStr;
-                              const isFuture=e.date>todayStr;
-                              const daysLeft=Math.ceil((new Date(e.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
-                              return(
-                                <div key={ri} style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f0fdf4":(isToday||isPast)?"#fef2f2":"#f7f8fa",borderRadius:7,padding:"3px 7px",border:`1.5px solid ${isDone?"#6ee7b7":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`,whiteSpace:"nowrap"}}>
-                                  <button onClick={()=>{if(!isDone){setRankModalEvent(e);setRankModalContract(c);}}} style={{width:13,height:13,borderRadius:3,border:`1.5px solid ${isDone?"#10b981":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#10b981":"transparent",cursor:isDone?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                                    {isDone&&<span style={{color:"#fff",fontSize:7,fontWeight:700}}>✓</span>}
-                                  </button>
-                                  <span style={{fontSize:10,fontWeight:600,color:(isToday||isPast)&&!isDone?"#ef4444":isDone?"#10b981":"#6b7280"}}>
-                                    {e.rankIdx}차 {e.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" (지남)":isFuture?` D-${daysLeft}`:""}
-                                  </span>
-                                  {isDone&&rd?.keywords&&(()=>{const kws=Object.entries(rd.keywords);const imp=kws.filter(([,v])=>v.prevRank&&v.rank&&v.prevRank>v.rank).length;const drp=kws.filter(([,v])=>v.prevRank&&v.rank&&v.prevRank<v.rank).length;return(<span style={{fontSize:9,fontWeight:700,color:imp>drp?"#10b981":drp>imp?"#ef4444":"#6b7280"}}>▲{imp}▼{drp}</span>);})()}
-                                </div>
-                              );
-                            })}
-                            {rpt&&(()=>{
-                              const ek=ceKey(rpt);
-                              const isDone=!!completions[ek];
-                              const isToday=rpt.date===todayStr;
-                              const isPast=rpt.date<todayStr;
-                              const isFuture=rpt.date>todayStr;
-                              const daysLeft=Math.ceil((new Date(rpt.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
-                              return(
-                                <div style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f5f3ff":(isToday||isPast)?"#fef2f2":"#f7f8fa",borderRadius:7,padding:"3px 7px",border:`1.5px solid ${isDone?"#c4b5fd":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`,whiteSpace:"nowrap"}}>
-                                  <button onClick={async()=>{if(!isDone){await toggleCE(rpt);}}} style={{width:13,height:13,borderRadius:3,border:`1.5px solid ${isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#7c3aed":"transparent",cursor:isDone?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                                    {isDone&&<span style={{color:"#fff",fontSize:7,fontWeight:700}}>✓</span>}
-                                  </button>
-                                  <span style={{fontSize:10,fontWeight:600,color:isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#6b7280"}}>리포트 {rpt.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" (지남)":isFuture?` D-${daysLeft}`:""}</span>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
-                        {/* 버튼 */}
-                        <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingTop:2}} onClick={e=>e.stopPropagation()}>
-                          <button onClick={()=>setMemoContract(c)} style={{background:"#f5f3ff",border:"1px solid #e9d5ff",color:"#8468D3",cursor:"pointer",padding:"3px 7px",borderRadius:6,fontSize:10,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>메모</button>
+                        <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0}} onClick={e=>e.stopPropagation()}>
                           {user.isAdmin&&<>
                             <button onClick={handleToggleCancel} style={{background:isCancelled?"#fff7ed":"#fff5f5",border:`1px solid ${isCancelled?"#fed7aa":"#fca5a5"}`,color:isCancelled?"#ea580c":"#ef4444",cursor:"pointer",padding:"3px 7px",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{isCancelled?"복구":"해지"}</button>
                             <button onClick={()=>{setEditContract(c);setShowCF(true);}} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",padding:2,fontSize:11}}>✏️</button>
@@ -1026,11 +984,124 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                           </>}
                         </div>
                       </div>
+                    );
+                  })}
+                </div>}
+                {totalPages>1&&(<div style={{display:"flex",justifyContent:"center",gap:5,marginTop:12}}>{Array.from({length:totalPages},(_,i)=>(<button key={i} onClick={()=>setContractPage(i+1)} style={{width:30,height:30,borderRadius:7,border:`1.5px solid ${contractPage===i+1?"#0071CE":"#f0f1f3"}`,background:contractPage===i+1?"#0071CE":"#fff",color:contractPage===i+1?"#fff":"#6b7280",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{i+1}</button>))}</div>)}
+              </div>)}
+
+              {/* ===== 순위관리 탭 ===== */}
+              {contractSubTab==="rank"&&(()=>{
+                const activeContracts=visibleContracts.filter(c=>!c.cancelled&&c.endDate>=todayStr);
+                // 각 업체의 다음 순위체크 날짜 계산 → 임박 순 정렬
+                const withNext=activeContracts.map(c=>{
+                  const evts=genEvents(c);
+                  const rankEvts=evts.filter(e=>e.type==="순위체크");
+                  const rpt=evts.find(e=>e.type==="리포트");
+                  const pendingRank=rankEvts.find(e=>!completions[ceKey(e)]);
+                  const nextDate=pendingRank?.date||rpt?.date||c.endDate;
+                  const daysLeft=Math.ceil((new Date(nextDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
+                  return{c,evts,rankEvts,rpt,pendingRank,daysLeft,nextDate};
+                }).sort((a,b)=>a.daysLeft-b.daysLeft);
+                const needCheck=withNext.filter(x=>x.pendingRank&&x.daysLeft<=0);
+                const upcoming=withNext.filter(x=>x.pendingRank&&x.daysLeft>0);
+                const allDone=withNext.filter(x=>!x.pendingRank);
+                const renderRankCard=({c,rankEvts,rpt,daysLeft})=>{
+                  const isCancelled=false;
+                  const startParts=c.startDate?c.startDate.split("-"):["","",""];
+                  return(
+                    <div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden",boxSizing:"border-box"}}>
+                      {/* 업체 헤더 - 클릭하면 모달 */}
+                      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:"1px solid #f7f8fa",cursor:"pointer",background:"#fafbfc"}} onClick={()=>setMemoContract(c)}>
+                        <div style={{display:"flex",flexDirection:"column",lineHeight:1.1,flexShrink:0,width:48}}>
+                          <span style={{fontSize:9,color:"#adb5bd",fontWeight:600}}>{startParts[0]}년 {startParts[1]}월</span>
+                          <span style={{fontSize:18,fontWeight:800,color:"#0071CE",lineHeight:1}}>{startParts[2]}</span>
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                            <span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{c.isRenewal?"R":"N"}</span>
+                            <span style={{fontWeight:700,fontSize:13,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+                            {c.manager&&<span style={{fontSize:11,color:"#8468D3",fontWeight:600}}>{c.manager}</span>}
+                          </div>
+                          <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
+                            {c.total&&<span style={{fontSize:11,color:"#0071CE",fontWeight:700}}>{c.total}</span>}
+                            <span style={{fontSize:10,color:"#adb5bd"}}>{c.startDate} ~ {c.endDate}</span>
+                            {c.keywords&&c.keywords.length>0&&<div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{c.keywords.map((kw,ki)=>(<span key={ki} style={{fontSize:10,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"1px 7px",border:"1px solid #a5f3fc"}}>{kw}</span>))}</div>}
+                          </div>
+                        </div>
+                        <span style={{fontSize:10,color:"#adb5bd"}}>상세 ›</span>
+                      </div>
+                      {/* 순위체크 + 리포트 체크박스 행 */}
+                      <div style={{display:"flex",gap:6,padding:"10px 14px",flexWrap:"wrap",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                        {rankEvts.map((e,ri)=>{
+                          const ek=ceKey(e);
+                          const isDone=!!completions[ek];
+                          const rd=rankDataMap[ek];
+                          const isToday=e.date===todayStr;
+                          const isPast=e.date<todayStr;
+                          const isFuture=e.date>todayStr;
+                          const dl=Math.ceil((new Date(e.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
+                          return(
+                            <div key={ri} style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f0fdf4":(isToday||isPast)?"#fef2f2":"#f7f8fa",borderRadius:8,padding:"6px 10px",border:`1.5px solid ${isDone?"#6ee7b7":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`,cursor:isDone?"default":"pointer"}} onClick={()=>{if(!isDone){setRankModalEvent(e);setRankModalContract(c);}}}>
+                              <div style={{width:15,height:15,borderRadius:3,border:`1.5px solid ${isDone?"#10b981":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#10b981":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                {isDone&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
+                              </div>
+                              <div>
+                                <div style={{fontSize:11,fontWeight:600,color:(isToday||isPast)&&!isDone?"#ef4444":isDone?"#10b981":"#374151",whiteSpace:"nowrap"}}>
+                                  {e.rankIdx}차 {e.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" ⚠ 지남":isFuture?` D-${dl}`:""}
+                                </div>
+                                {isDone&&rd?.keywords&&(()=>{
+                                  return(<div style={{display:"flex",gap:4,marginTop:2,flexWrap:"wrap"}}>{Object.entries(rd.keywords).map(([kw,v])=>{const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;return(<span key={kw} style={{fontSize:10,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",fontWeight:600}}>{kw} {diff>0?"▲":diff<0?"▼":"—"}{v.rank}위</span>);})}</div>);
+                                })()}
+                                {!isDone&&(c.keywords||[]).length>0&&<div style={{fontSize:10,color:"#adb5bd",marginTop:1}}>{(c.keywords).join(" · ")}</div>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {rpt&&(()=>{
+                          const ek=ceKey(rpt);
+                          const isDone=!!completions[ek];
+                          const isToday=rpt.date===todayStr;
+                          const isPast=rpt.date<todayStr;
+                          const isFuture=rpt.date>todayStr;
+                          const dl=Math.ceil((new Date(rpt.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
+                          return(
+                            <div style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f5f3ff":(isToday||isPast)?"#fef2f2":"#f7f8fa",borderRadius:8,padding:"6px 10px",border:`1.5px solid ${isDone?"#c4b5fd":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`,cursor:isDone?"default":"pointer"}} onClick={async()=>{if(!isDone)await toggleCE(rpt);}}>
+                              <div style={{width:15,height:15,borderRadius:3,border:`1.5px solid ${isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#7c3aed":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                {isDone&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
+                              </div>
+                              <div style={{fontSize:11,fontWeight:600,color:isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#374151",whiteSpace:"nowrap"}}>리포트 {rpt.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" ⚠ 지남":isFuture?` D-${dl}`:""}</div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   );
-                })}
-              </div>}
-              {totalPages>1&&(<div style={{display:"flex",justifyContent:"center",gap:5,marginTop:12}}>{Array.from({length:totalPages},(_,i)=>(<button key={i} onClick={()=>setContractPage(i+1)} style={{width:30,height:30,borderRadius:7,border:`1.5px solid ${contractPage===i+1?"#0071CE":"#f0f1f3"}`,background:contractPage===i+1?"#0071CE":"#fff",color:contractPage===i+1?"#fff":"#6b7280",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{i+1}</button>))}</div>)}
+                };
+                return(
+                  <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                    {needCheck.length>0&&(<div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{fontSize:12,fontWeight:700,color:"#ef4444",background:"#fef2f2",borderRadius:99,padding:"3px 12px",border:"1px solid #fecaca"}}>⚠ 체크 필요 · 오늘/지남 ({needCheck.length})</span>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>{needCheck.map(x=>renderRankCard(x))}</div>
+                    </div>)}
+                    {upcoming.length>0&&(<div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{fontSize:12,fontWeight:700,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"3px 12px",border:"1px solid #a5f3fc"}}>예정 ({upcoming.length})</span>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>{upcoming.map(x=>renderRankCard(x))}</div>
+                    </div>)}
+                    {allDone.length>0&&(<div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{fontSize:12,fontWeight:700,color:"#10b981",background:"#f0fdf4",borderRadius:99,padding:"3px 12px",border:"1px solid #bbf7d0"}}>완료 ({allDone.length})</span>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>{allDone.map(x=>renderRankCard(x))}</div>
+                    </div>)}
+                    {withNext.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}>진행중인 계약 업체가 없습니다</div>}
+                  </div>
+                );
+              })()}
             </div>
           )}
           {tab==="report"&&(
