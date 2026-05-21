@@ -254,7 +254,25 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
   const[kwInput,setKwInput]=useState("");const[kwSaving,setKwSaving]=useState(false);
   const[initEdits,setInitEdits]=useState({});const[editingRank,setEditingRank]=useState(null);
   useEffect(()=>{loadHistory();},[]);
-  const loadHistory=async()=>{setRankLoading(true);const data=await st.get("ce:rankdata")||{};const myKeys=Object.keys(data).filter(k=>k.startsWith(`${contract.id}:순위체크:`));const hist={};myKeys.forEach(k=>{hist[k]=data[k];});setRankHistory(hist);setRankLoading(false);};
+  const loadHistory=async()=>{
+    setRankLoading(true);
+    const data=await st.get("ce:rankdata")||{};
+    const hist={};
+    // 현재 계약 순위 기록
+    Object.keys(data).filter(k=>k.startsWith(`${contract.id}:순위체크:`)).forEach(k=>{hist[k]=data[k];});
+    // 이전 계약(linkedMemoId) 순위 기록 체인 방식으로 소급
+    const allContracts=await st.get("contracts:all")||[];
+    let prevId=contract.linkedMemoId;
+    const visited=new Set([contract.id]);
+    while(prevId&&!visited.has(prevId)){
+      visited.add(prevId);
+      Object.keys(data).filter(k=>k.startsWith(`${prevId}:순위체크:`)).forEach(k=>{hist[k]=data[k];});
+      const prevContract=allContracts.find(c=>c.id===prevId);
+      prevId=prevContract?.linkedMemoId;
+    }
+    setRankHistory(hist);
+    setRankLoading(false);
+  };
   const saveContractField=async(fields)=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===contract.id);if(idx<0)return;list[idx]={...list[idx],...fields};await st.set("contracts:all",list);if(onContractUpdate)onContractUpdate([...list]);};
   const handleAddKw=async()=>{const v=kwInput.trim();if(!v||localKws.includes(v))return alert("이미 있거나 빈 키워드입니다");setKwSaving(true);const updated=[...localKws,v];setLocalKws(updated);await saveContractField({keywords:updated});setKwInput("");setKwSaving(false);};
   const handleRemoveKw=async(kw)=>{if(!window.confirm(`키워드 "${kw}"를 삭제할까요?`))return;const updated=localKws.filter(k=>k!==kw);setLocalKws(updated);await saveContractField({keywords:updated});};
@@ -297,14 +315,24 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
       {rankLoading?<div style={{textAlign:"center",padding:"20px",color:"#adb5bd",fontSize:12}}>불러오는 중…</div>:(<>
         {allKws.length>0&&sortedKeys.length>0&&(
           <div>
-            <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:8}}>순위 변화 한눈에 보기</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>순위 변화 한눈에 보기</div>
+              {contract.linkedMemoId&&<span style={{fontSize:10,fontWeight:600,color:"#f59e0b",background:"#fffbeb",borderRadius:6,padding:"2px 7px",border:"1px solid #fde68a"}}>이전 계약 기록 포함</span>}
+            </div>
             <div style={{overflowX:"auto",borderRadius:10,border:"1px solid #f0f1f3",WebkitOverflowScrolling:"touch"}}>
               <table style={{borderCollapse:"collapse",fontSize:11,whiteSpace:"nowrap",minWidth:"100%"}}>
                 <thead>
                   <tr style={{background:"#f7f8fa"}}>
                     <td style={{padding:"8px 12px",fontWeight:700,color:"#374151",borderBottom:"1px solid #f0f1f3",position:"sticky",left:0,background:"#f7f8fa",zIndex:1,minWidth:100,maxWidth:130}}>키워드</td>
                     {localInitRanks&&Object.keys(localInitRanks).length>0&&<td style={{padding:"8px 10px",textAlign:"center",fontWeight:600,color:"#adb5bd",borderBottom:"1px solid #f0f1f3",fontSize:10}}><div>시작</div><div style={{fontSize:9}}>{contract.startDate?.slice(5)}</div></td>}
-                    {sortedKeys.map((ek,i)=>{const rd=rankHistory[ek];return(<td key={ek} style={{padding:"8px 10px",textAlign:"center",fontWeight:600,color:"#6b7280",borderBottom:"1px solid #f0f1f3",fontSize:10}}><div>{i+1}차</div><div style={{fontSize:9,color:"#adb5bd"}}>{rd.date?.slice(5)||""}</div></td>);})}
+                    {sortedKeys.map((ek,i)=>{
+                      const rd=rankHistory[ek];
+                      const isPrev=!ek.startsWith(`${contract.id}:`);
+                      return(<td key={ek} style={{padding:"8px 10px",textAlign:"center",fontWeight:600,color:isPrev?"#8468D3":"#6b7280",borderBottom:"1px solid #f0f1f3",fontSize:10,background:isPrev?"#fdf8ff":"transparent"}}>
+                        <div>{i+1}차{isPrev&&<span style={{fontSize:8,color:"#8468D3",marginLeft:2}}>이전</span>}</div>
+                        <div style={{fontSize:9,color:"#adb5bd"}}>{rd.date?.slice(5)||""}</div>
+                      </td>);
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -312,13 +340,18 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
                     <tr key={kw} style={{borderBottom:ki<allKws.length-1?"1px solid #f7f8fa":"none"}}>
                       <td style={{padding:"8px 12px",fontWeight:600,color:"#0f1117",position:"sticky",left:0,background:"#fff",zIndex:1,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis"}}>{kw}</td>
                       {localInitRanks&&Object.keys(localInitRanks).length>0&&(()=>{const v=localInitRanks[kw];return(<td style={{padding:"8px 10px",textAlign:"center"}}>{v?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><span style={{fontSize:12,fontWeight:700,color:"#6b7280"}}>{v}위</span><span style={{fontSize:9,color:"#0891b2",background:"#ecfeff",borderRadius:4,padding:"1px 4px",border:"1px solid #a5f3fc"}}>시작</span></div>:<span style={{color:"#e5e7eb",fontSize:11}}>—</span>}</td>);})()}
-                      {sortedKeys.map((ek,i)=>{const rd=rankHistory[ek];const v=rd?.keywords?.[kw];const diff=v?.prevRank&&v?.rank?v.prevRank-v.rank:null;return(<td key={ek} style={{padding:"8px 10px",textAlign:"center"}}>{v?(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{v.rank}위</span>{diff!==null&&<span style={{fontSize:9,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",background:diff>0?"#f0fdf4":diff<0?"#fef2f2":"#f7f8fa",borderRadius:4,padding:"1px 4px"}}>{diff>0?"▲":diff<0?"▼":"—"}{diff!==0?Math.abs(diff):""}</span>}</div>):<span style={{color:"#e5e7eb",fontSize:11}}>—</span>}</td>);})}
+                      {sortedKeys.map((ek,i)=>{
+                        const rd=rankHistory[ek];const v=rd?.keywords?.[kw];
+                        const diff=v?.prevRank&&v?.rank?v.prevRank-v.rank:null;
+                        const isPrev=!ek.startsWith(`${contract.id}:`);
+                        return(<td key={ek} style={{padding:"8px 10px",textAlign:"center",background:isPrev?"#fdf8ff":"transparent"}}>{v?(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><span style={{fontSize:12,fontWeight:800,color:isPrev?"#8468D3":"#0f1117"}}>{v.rank}위</span>{diff!==null&&<span style={{fontSize:9,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",background:diff>0?"#f0fdf4":diff<0?"#fef2f2":"#f7f8fa",borderRadius:4,padding:"1px 4px"}}>{diff>0?"▲":diff<0?"▼":"—"}{diff!==0?Math.abs(diff):""}</span>}</div>):<span style={{color:"#e5e7eb",fontSize:11}}>—</span>}</td>);
+                      })}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div style={{fontSize:10,color:"#adb5bd",marginTop:4,textAlign:"right"}}>← 좌우 스크롤</div>
+            <div style={{fontSize:10,color:"#adb5bd",marginTop:4,textAlign:"right"}}>← 좌우 스크롤{contract.linkedMemoId&&" · 보라색 열 = 이전 계약 기록"}</div>
           </div>
         )}
         {/* 차수별 상세 기록 */}
@@ -327,11 +360,13 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
           {sortedKeys.length===0?<div style={{textAlign:"center",padding:"24px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:10}}>아직 순위 체크 기록이 없습니다</div>
           :<div style={{display:"flex",flexDirection:"column",gap:10}}>
             {sortedKeys.map((ek,idx)=>{
+            {sortedKeys.map((ek,idx)=>{
               const rd=rankHistory[ek];
+              const isPrev=!ek.startsWith(`${contract.id}:`);
               return(
-                <div key={ek} style={{background:"#f7f8fa",borderRadius:12,padding:"12px 14px",border:"1px solid #f0f1f3"}}>
+                <div key={ek} style={{background:isPrev?"#fdf8ff":"#f7f8fa",borderRadius:12,padding:"12px 14px",border:`1px solid ${isPrev?"#e9d5ff":"#f0f1f3"}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                    <span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>{idx+1}차 순위체크</span>
+                    <div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:12,fontWeight:700,color:isPrev?"#8468D3":"#0f1117"}}>{idx+1}차 순위체크</span>{isPrev&&<span style={{fontSize:10,fontWeight:600,color:"#8468D3",background:"#f5f3ff",borderRadius:5,padding:"1px 6px",border:"1px solid #e9d5ff"}}>이전 계약</span>}</div>
                     <span style={{fontSize:11,color:"#adb5bd"}}>{rd.date||""}</span>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
