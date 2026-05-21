@@ -45,13 +45,15 @@ const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[
         const inline=trimmed.replace(/^키워드\s*[:：]\s*/,'').trim();
         if(inline){
           // 인라인 키워드도 쉼표/공백으로 분리
-          inline.split(/[,，\/·\s]+/).map(k=>k.trim()).filter(k=>k.length>0&&k.length<=30).forEach(k=>res.push(k));
+          inline.split(/[,，\/·\s]+/).map(k=>k.trim()).filter(k=>k.length>0&&k.length<=30&&k!=='키워드'&&k!=='순위키워드'&&k!=='검색키워드').forEach(k=>res.push(k));
         }
         continue;
       }
       if(!cap)continue;
       // 빈줄이나 다음 섹션 시작이면 종료
       if(!trimmed||STOP_WORDS.some(s=>trimmed.startsWith(s))||trimmed.startsWith('▪')){cap=false;continue;}
+      // "키워드" 단어 자체는 스킵
+      if(trimmed==='키워드'||trimmed==='순위키워드'||trimmed==='검색키워드')continue;
       // 쉼표로 구분된 경우도 처리
       trimmed.split(/[,，\/·]+/).map(k=>k.trim()).filter(k=>k.length>0&&k.length<=30&&k!=='키워드'&&k!=='순위키워드'&&k!=='검색키워드').forEach(k=>res.push(k));
     }
@@ -1021,7 +1023,7 @@ function MainApp({user,onLogout}){
   const[analysisMonth,setAnalysisMonth]=useState(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
   const[analysisData,setAnalysisData]=useState(null);const[loadingAnalysis,setLoadingAnalysis]=useState(false);
 
-  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadProfiles();loadProjectCategories();loadAccounts();},[]);
+  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadRankData();loadProfiles();loadProjectCategories();loadAccounts();},[]);
   useEffect(()=>{if(selTs)loadReports(selTs);},[selTs]);
   useEffect(()=>{loadDateFinalReports(reportViewDate);},[reportViewDate]);
   useEffect(()=>{
@@ -1050,6 +1052,7 @@ function MainApp({user,onLogout}){
   const saveContract=async c=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0)list[idx]=c;else list.push(c);await st.set("contracts:all",list);setContracts([...list]);setShowCF(false);setEditContract(null);};
   const deleteContract=async id=>{const list=(await st.get("contracts:all")||[]).filter(c=>c.id!==id);await st.set("contracts:all",list);setContracts(list);};
   const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);};
+  const loadRankData=async()=>{const r=await st.get("ce:rankdata")||{};setRankDataMap(r);};
   const handleRankConfirm=async(event,keywordsResult)=>{const k=ceKey(event);const newRankData=await st.get("ce:rankdata")||{};newRankData[k]={keywords:keywordsResult,date:todayStr};await st.set("ce:rankdata",newRankData);setRankDataMap({...newRankData});const cData=await st.get("ce:completions")||{};cData[k]=true;await st.set("ce:completions",cData);setCompletions({...cData});};
   const addKeywordToContract=async(contractId,kw)=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(c=>c.id===contractId);if(idx<0)return;const existing=list[idx].keywords||[];if(existing.includes(kw))return;list[idx]={...list[idx],keywords:[...existing,kw]};await st.set("contracts:all",list);setContracts([...list]);};
   const toggleCE=async(e,forceTo)=>{const data=await st.get("ce:completions")||{};const k=ceKey(e);data[k]=forceTo!==undefined?forceTo:!data[k];await st.set("ce:completions",data);setCompletions({...data});};
