@@ -384,12 +384,12 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
         {/* 차수별 상세 기록 */}
         <div>
           <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:10}}>차수별 상세 기록</div>
-          {sortedKeys.length===0?<div style={{textAlign:"center",padding:"24px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:10}}>아직 순위 체크 기록이 없습니다</div>
-          :<div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {sortedKeys.map((ek,idx)=>{
-            {sortedKeys.map((ek,idx)=>{
-              const rd=rankHistory[ek];
-              const isPrev=!ek.startsWith(`${contract.id}:`);
+          {sortedKeys.length===0
+            ?<div style={{textAlign:"center",padding:"24px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:10}}>아직 순위 체크 기록이 없습니다</div>
+            :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {sortedKeys.map((ek,idx)=>{
+                const rd=rankHistory[ek];
+                const isPrev=!ek.startsWith(`${contract.id}:`);
               return(
                 <div key={ek} style={{background:isPrev?"#fdf8ff":"#f7f8fa",borderRadius:12,padding:"12px 14px",border:`1px solid ${isPrev?"#e9d5ff":"#f0f1f3"}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -426,7 +426,7 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
                 </div>
               );
             })}
-          </div>}
+            </div>}
         </div>
       </>)}
     </div>
