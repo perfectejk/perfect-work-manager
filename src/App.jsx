@@ -459,6 +459,7 @@ function RankManageTab({contracts,completions,rankDataMap,setMemoContract,setRan
   const allDone=withNext.filter(x=>!x.rankEvts.some(e=>e.date===todayStr)&&!x.pendingRank);
   const renderCard=({c,rankEvts,rpt})=>{
     const isEnded=c.endDate<todayStr;
+    const sp=c.startDate?c.startDate.split("-"):["","",""];
     return(
       <div key={c.id} style={{background:"#fff",borderRadius:12,border:`1px solid ${isEnded?"#e9d5ff":"#f0f1f3"}`,overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:"1px solid #f7f8fa",cursor:"pointer",background:isEnded?"#fdfaff":"#fafbfc"}} onClick={()=>setMemoContract(c)}>
