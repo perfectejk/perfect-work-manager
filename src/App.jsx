@@ -31,7 +31,34 @@ const addBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDat
 const subBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
 const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,3);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;let rankIdx=1;while(true){const nd=new Date(cur+"T00:00:00");nd.setDate(nd.getDate()+10);const next=nd.toISOString().slice(0,10);if(next>=rptDate)break;evts.push({type:"순위체크",date:next,cid:c.id,name:c.name,manager:c.manager||"",rankIdx,initialRanks:c.initialRanks||{}});cur=next;rankIdx++;}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
 const ceKey=e=>`${e.cid}:${e.type}:${e.date}`;
-const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[:\\s]\\s*([^\\n]+)'));return m?m[1].trim():'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};const kws=line('키워드')||line('순위키워드')||line('검색키워드');const keywords=kws?kws.split(/[,，\/·\s]+/).map(k=>k.trim()).filter(k=>k.length>0&&k.length<=30):[];return{name:line('상호명'),phone:line('번호'),link:line('플레이스 링크'),products:section('상품내역',['서비스내역','결제정보','담당자']),services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액'),manager:line('담당자'),notes:line('특이사항'),keywords};};
+const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[:\\s]\\s*([^\\n]+)'));return m?m[1].trim():'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};
+  // 키워드 파싱: "키워드" 줄 이후 빈줄/다음섹션 전까지 여러 줄 수집
+  const parseKeywords=()=>{
+    const lines=text.split('\n');
+    let cap=false;const res=[];
+    const STOP_WORDS=['상품내역','서비스내역','결제정보','담당자','특이사항','디비유형','주소','번호','상호명','대표자','플레이스','총금액'];
+    for(const l of lines){
+      const trimmed=l.trim();
+      if(/^키워드\s*[:：]?\s*$/.test(trimmed)||/^키워드\s*[:：]/.test(trimmed)){
+        cap=true;
+        // 같은 줄에 키워드가 있으면 (키워드: 화성골프) 형태
+        const inline=trimmed.replace(/^키워드\s*[:：]\s*/,'').trim();
+        if(inline){
+          // 인라인 키워드도 쉼표/공백으로 분리
+          inline.split(/[,，\/·\s]+/).map(k=>k.trim()).filter(k=>k.length>0&&k.length<=30).forEach(k=>res.push(k));
+        }
+        continue;
+      }
+      if(!cap)continue;
+      // 빈줄이나 다음 섹션 시작이면 종료
+      if(!trimmed||STOP_WORDS.some(s=>trimmed.startsWith(s))||trimmed.startsWith('▪')){cap=false;continue;}
+      // 쉼표로 구분된 경우도 처리
+      trimmed.split(/[,，\/·]+/).map(k=>k.trim()).filter(k=>k.length>0&&k.length<=30&&k!=='키워드'&&k!=='순위키워드'&&k!=='검색키워드').forEach(k=>res.push(k));
+    }
+    return[...new Set(res)];// 중복 제거
+  };
+  const keywords=parseKeywords();
+  return{name:line('상호명'),phone:line('번호'),link:line('플레이스 링크'),products:section('상품내역',['서비스내역','결제정보','담당자']),services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액'),manager:line('담당자'),notes:line('특이사항'),keywords};};
 const sendNotif=async(url,name,ts,data,targets)=>{if(!url?.startsWith("http"))return;const lines=METRICS.map(m=>{const v=data[m.key]||0,t=targets[m.key];return`• ${m.label}: **${v}${m.unit}**${t?` / ${t}${m.unit} (${Math.round(v/t*100)}%)`:''}`;});try{await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:"업무보고 알림",content:`[${ts}] ${name} 실적 제출\n${lines.join('\n')}`})});}catch{}};
 const repeatLabel=t=>{if(!t.repeat||t.repeat==="none")return null;if(t.repeat==="weekly")return`매주 ${DAYS_KR[new Date(t.due+"T00:00:00").getDay()]}`;if(t.repeat==="monthly")return`매월 ${parseInt(t.due.slice(8))}일`;if(t.repeat==="weekdays")return"평일";if(t.repeat==="custom")return`${(t.repeatDays||[]).sort().map(d=>DAYS_KR[d]).join("·")}`;return null;};
 const isActiveOnDate=(t,ds)=>{if(!t.due||t.due>ds)return false;const dow=new Date(ds+"T00:00:00").getDay();if(!t.repeat||t.repeat==="none")return t.due===ds;if(t.repeat==="weekly")return new Date(t.due+"T00:00:00").getDay()===dow;if(t.repeat==="monthly")return parseInt(t.due.slice(8))===new Date(ds+"T00:00:00").getDate();if(t.repeat==="weekdays")return dow>=1&&dow<=5;if(t.repeat==="custom")return(t.repeatDays||[]).includes(dow);return false;};
@@ -422,11 +449,13 @@ function RankManageTab({contracts,completions,rankDataMap,setMemoContract,setRan
     const daysLeft=Math.ceil((new Date(nextDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
     return{c,rankEvts,rpt,pendingRank,daysLeft};
   }).sort((a,b)=>a.daysLeft-b.daysLeft),[filtered,completions]);
-  const todayCheck=withNext.filter(x=>x.pendingRank&&x.pendingRank.date===todayStr);
-  const upcoming=withNext.filter(x=>x.pendingRank&&x.pendingRank.date>todayStr);
-  const allDone=withNext.filter(x=>!x.pendingRank);
+  // 오늘 날짜 순위체크가 있는 업체 → 완료 여부 관계없이 오늘 섹션 유지
+  const todayCheck=withNext.filter(x=>x.rankEvts.some(e=>e.date===todayStr));
+  // 예정: 오늘 체크 대상 아니고, 미래 미완료 있는 업체
+  const upcoming=withNext.filter(x=>!x.rankEvts.some(e=>e.date===todayStr)&&x.pendingRank&&x.pendingRank.date>todayStr);
+  // 완료: 오늘 체크 대상도 아니고 미래 미완료도 없는 업체
+  const allDone=withNext.filter(x=>!x.rankEvts.some(e=>e.date===todayStr)&&!x.pendingRank);
   const renderCard=({c,rankEvts,rpt})=>{
-    const sp=c.startDate?c.startDate.split("-"):["","",""];
     const isEnded=c.endDate<todayStr;
     return(
       <div key={c.id} style={{background:"#fff",borderRadius:12,border:`1px solid ${isEnded?"#e9d5ff":"#f0f1f3"}`,overflow:"hidden"}}>
