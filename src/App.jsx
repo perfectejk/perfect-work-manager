@@ -261,6 +261,10 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
   const handleSaveInitRanks=async()=>{const toSave={};localKws.forEach(kw=>{const v=initEdits[kw]!==undefined?initEdits[kw]:localInitRanks[kw]||"";if(v&&parseInt(v)>0)toSave[kw]=parseInt(v);});const merged={...localInitRanks,...toSave};setLocalInitRanks(merged);setInitEdits({});await saveContractField({initialRanks:merged});alert("저장됐어요!");};
   const handleRankEdit=async(ek,kw,newVal)=>{if(!newVal||isNaN(parseInt(newVal)))return;const data=await st.get("ce:rankdata")||{};if(!data[ek])return;data[ek].keywords[kw].rank=parseInt(newVal);await st.set("ce:rankdata",data);setRankHistory(prev=>({...prev,[ek]:{...prev[ek],keywords:{...prev[ek].keywords,[kw]:{...prev[ek].keywords[kw],rank:parseInt(newVal)}}}}));setEditingRank(null);};
   const sortedKeys=Object.keys(rankHistory).sort();
+  // 테이블용: 모든 키워드 수집
+  const allKws=useMemo(()=>{const set=new Set(localKws);sortedKeys.forEach(ek=>{const rd=rankHistory[ek];if(rd?.keywords)Object.keys(rd.keywords).forEach(k=>set.add(k));});return[...set];},[localKws,sortedKeys,rankHistory]);
+  // 테이블 셀: initialRanks → 1차 → 2차 ...
+  const getCell=(kw,ekIdx)=>{if(ekIdx===-1){const v=localInitRanks[kw];return v?{rank:v,isStart:true}:null;}const ek=sortedKeys[ekIdx];const rd=rankHistory[ek];const v=rd?.keywords?.[kw];return v||null;};
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14,padding:"14px 20px 20px",overflowX:"hidden",boxSizing:"border-box",width:"100%"}}>
       {/* 키워드 관리 */}
@@ -278,67 +282,206 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
         <div style={{background:"#f0fdf4",borderRadius:12,padding:"14px 16px",border:"1px solid #bbf7d0"}}>
           <div style={{fontSize:12,fontWeight:700,color:"#166534",marginBottom:10}}>계약 시작 시점 순위 ({contract.startDate})</div>
           <div style={{display:"flex",flexDirection:"column",gap:7}}>
-            {localKws.map(kw=>{
-              const saved=localInitRanks[kw]||"";
-              const val=initEdits[kw]!==undefined?initEdits[kw]:saved;
-              return(
-                <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:12,fontWeight:500,flex:1,color:"#0f1117"}}>{kw}</span>
-                  <input type="number" min="1" value={val} onChange={e=>setInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
-                  <span style={{fontSize:11,color:"#6b7280"}}>위</span>
-                </div>
-              );
-            })}
+            {localKws.map(kw=>{const saved=localInitRanks[kw]||"";const val=initEdits[kw]!==undefined?initEdits[kw]:saved;return(
+              <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:12,fontWeight:500,flex:1,color:"#0f1117"}}>{kw}</span>
+                <input type="number" min="1" value={val} onChange={e=>setInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                <span style={{fontSize:11,color:"#6b7280"}}>위</span>
+              </div>
+            );})}
           </div>
           <button onClick={handleSaveInitRanks} style={{marginTop:10,background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button>
         </div>
       )}
-      {/* 순위 체크 기록 */}
-      <div>
-        <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:10}}>순위 체크 기록</div>
-        {rankLoading?<div style={{textAlign:"center",padding:"20px",color:"#adb5bd",fontSize:12}}>불러오는 중…</div>
-        :sortedKeys.length===0?<div style={{textAlign:"center",padding:"24px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:10}}>아직 순위 체크 기록이 없습니다</div>
-        :<div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {sortedKeys.map((ek,idx)=>{
-            const rd=rankHistory[ek];
-            return(
-              <div key={ek} style={{background:"#f7f8fa",borderRadius:12,padding:"12px 14px",border:"1px solid #f0f1f3"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>{idx+1}차 순위체크</span>
-                  <span style={{fontSize:11,color:"#adb5bd"}}>{rd.date||""}</span>
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  {rd.keywords&&Object.entries(rd.keywords).map(([kw,v])=>{
-                    const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;
-                    const isEd=editingRank?.ek===ek&&editingRank?.kw===kw;
-                    return(
-                      <div key={kw} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",borderRadius:8,padding:"7px 10px",border:"1px solid #f0f1f3",minWidth:0,overflow:"hidden"}}>
-                        <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
-                          <div style={{fontSize:12,fontWeight:600,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw}</div>
-                          {v.prevRank&&<div style={{fontSize:10,color:"#adb5bd"}}>직전: {v.prevRank}위</div>}
+      {/* 순위 변화 테이블 (가로 스크롤) */}
+      {rankLoading?<div style={{textAlign:"center",padding:"20px",color:"#adb5bd",fontSize:12}}>불러오는 중…</div>:(<>
+        {allKws.length>0&&sortedKeys.length>0&&(
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:8}}>순위 변화 한눈에 보기</div>
+            <div style={{overflowX:"auto",borderRadius:10,border:"1px solid #f0f1f3",WebkitOverflowScrolling:"touch"}}>
+              <table style={{borderCollapse:"collapse",fontSize:11,whiteSpace:"nowrap",minWidth:"100%"}}>
+                <thead>
+                  <tr style={{background:"#f7f8fa"}}>
+                    <td style={{padding:"8px 12px",fontWeight:700,color:"#374151",borderBottom:"1px solid #f0f1f3",position:"sticky",left:0,background:"#f7f8fa",zIndex:1,minWidth:100,maxWidth:130}}>키워드</td>
+                    {localInitRanks&&Object.keys(localInitRanks).length>0&&<td style={{padding:"8px 10px",textAlign:"center",fontWeight:600,color:"#adb5bd",borderBottom:"1px solid #f0f1f3",fontSize:10}}><div>시작</div><div style={{fontSize:9}}>{contract.startDate?.slice(5)}</div></td>}
+                    {sortedKeys.map((ek,i)=>{const rd=rankHistory[ek];return(<td key={ek} style={{padding:"8px 10px",textAlign:"center",fontWeight:600,color:"#6b7280",borderBottom:"1px solid #f0f1f3",fontSize:10}}><div>{i+1}차</div><div style={{fontSize:9,color:"#adb5bd"}}>{rd.date?.slice(5)||""}</div></td>);})}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allKws.map((kw,ki)=>(
+                    <tr key={kw} style={{borderBottom:ki<allKws.length-1?"1px solid #f7f8fa":"none"}}>
+                      <td style={{padding:"8px 12px",fontWeight:600,color:"#0f1117",position:"sticky",left:0,background:"#fff",zIndex:1,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis"}}>{kw}</td>
+                      {localInitRanks&&Object.keys(localInitRanks).length>0&&(()=>{const v=localInitRanks[kw];return(<td style={{padding:"8px 10px",textAlign:"center"}}>{v?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><span style={{fontSize:12,fontWeight:700,color:"#6b7280"}}>{v}위</span><span style={{fontSize:9,color:"#0891b2",background:"#ecfeff",borderRadius:4,padding:"1px 4px",border:"1px solid #a5f3fc"}}>시작</span></div>:<span style={{color:"#e5e7eb",fontSize:11}}>—</span>}</td>);})()}
+                      {sortedKeys.map((ek,i)=>{const rd=rankHistory[ek];const v=rd?.keywords?.[kw];const diff=v?.prevRank&&v?.rank?v.prevRank-v.rank:null;return(<td key={ek} style={{padding:"8px 10px",textAlign:"center"}}>{v?(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{v.rank}위</span>{diff!==null&&<span style={{fontSize:9,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",background:diff>0?"#f0fdf4":diff<0?"#fef2f2":"#f7f8fa",borderRadius:4,padding:"1px 4px"}}>{diff>0?"▲":diff<0?"▼":"—"}{diff!==0?Math.abs(diff):""}</span>}</div>):<span style={{color:"#e5e7eb",fontSize:11}}>—</span>}</td>);})}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{fontSize:10,color:"#adb5bd",marginTop:4,textAlign:"right"}}>← 좌우 스크롤</div>
+          </div>
+        )}
+        {/* 차수별 상세 기록 */}
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:10}}>차수별 상세 기록</div>
+          {sortedKeys.length===0?<div style={{textAlign:"center",padding:"24px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:10}}>아직 순위 체크 기록이 없습니다</div>
+          :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {sortedKeys.map((ek,idx)=>{
+              const rd=rankHistory[ek];
+              return(
+                <div key={ek} style={{background:"#f7f8fa",borderRadius:12,padding:"12px 14px",border:"1px solid #f0f1f3"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>{idx+1}차 순위체크</span>
+                    <span style={{fontSize:11,color:"#adb5bd"}}>{rd.date||""}</span>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {rd.keywords&&Object.entries(rd.keywords).map(([kw,v])=>{
+                      const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;
+                      const isEd=editingRank?.ek===ek&&editingRank?.kw===kw;
+                      return(
+                        <div key={kw} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",borderRadius:8,padding:"7px 10px",border:"1px solid #f0f1f3",minWidth:0,overflow:"hidden"}}>
+                          <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                            <div style={{fontSize:12,fontWeight:600,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw}</div>
+                            {v.prevRank&&<div style={{fontSize:10,color:"#adb5bd"}}>직전: {v.prevRank}위</div>}
+                          </div>
+                          {isEd?(
+                            <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
+                              <input type="number" min="1" defaultValue={v.rank} autoFocus onKeyDown={e=>{if(e.key==="Enter")handleRankEdit(ek,kw,e.target.value);if(e.key==="Escape")setEditingRank(null);}} style={{width:52,border:"1.5px solid #0071CE",borderRadius:6,padding:"3px 5px",fontSize:12,textAlign:"center",outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                              <button onClick={ev=>{const inp=ev.target.parentElement.querySelector("input");handleRankEdit(ek,kw,inp.value);}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:6,padding:"3px 7px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✓</button>
+                              <button onClick={()=>setEditingRank(null)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"3px 7px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✕</button>
+                            </div>
+                          ):(
+                            <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+                              {diff!==null&&<span style={{fontSize:11,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280"}}>{diff>0?"▲":diff<0?"▼":"—"}{Math.abs(diff)}</span>}
+                              <span style={{fontSize:13,fontWeight:800,color:"#0f1117"}}>{v.rank}위</span>
+                              <button onClick={()=>setEditingRank({ek,kw})} style={{background:"none",border:"1px solid #e5e7eb",borderRadius:5,padding:"2px 5px",fontSize:10,color:"#adb5bd",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>수정</button>
+                            </div>
+                          )}
                         </div>
-                        {isEd?(
-                          <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
-                            <input type="number" min="1" defaultValue={v.rank} autoFocus onKeyDown={e=>{if(e.key==="Enter")handleRankEdit(ek,kw,e.target.value);if(e.key==="Escape")setEditingRank(null);}} style={{width:52,border:"1.5px solid #0071CE",borderRadius:6,padding:"3px 5px",fontSize:12,textAlign:"center",outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
-                            <button onClick={ev=>{const inp=ev.target.parentElement.querySelector("input");handleRankEdit(ek,kw,inp.value);}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:6,padding:"3px 7px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✓</button>
-                            <button onClick={()=>setEditingRank(null)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"3px 7px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✕</button>
-                          </div>
-                        ):(
-                          <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                            {diff!==null&&<span style={{fontSize:11,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280"}}>{diff>0?"▲":diff<0?"▼":"—"}{Math.abs(diff)}</span>}
-                            <span style={{fontSize:13,fontWeight:800,color:"#0f1117"}}>{v.rank}위</span>
-                            <button onClick={()=>setEditingRank({ek,kw})} style={{background:"none",border:"1px solid #e5e7eb",borderRadius:5,padding:"2px 5px",fontSize:10,color:"#adb5bd",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>수정</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>}
+        </div>
+      </>)}
+    </div>
+  );
+}
+
+// ========== 순위관리 탭 컴포넌트 ==========
+function RankManageTab({contracts,completions,rankDataMap,setMemoContract,setRankModalEvent,setRankModalContract,toggleCE}){
+  const[search,setSearch]=useState("");
+  const[statusFilter,setStatusFilter]=useState("active");// active | ended | all
+  const filtered=useMemo(()=>{let list=contracts;if(statusFilter==="active")list=list.filter(c=>c.endDate>=todayStr);else if(statusFilter==="ended")list=list.filter(c=>c.endDate<todayStr);if(search.trim())list=list.filter(c=>c.name?.toLowerCase().includes(search.trim().toLowerCase()));return list;},[contracts,statusFilter,search]);
+  const withNext=useMemo(()=>filtered.map(c=>{
+    const evts=genEvents(c);
+    const rankEvts=evts.filter(e=>e.type==="순위체크");
+    const rpt=evts.find(e=>e.type==="리포트");
+    // 오늘 이후 기준: 오늘 또는 미래에 해당하는 미완료 체크만 "다음 체크"로 산정
+    const pendingRank=rankEvts.find(e=>!completions[ceKey(e)]&&e.date>=todayStr);
+    // 오늘 이후 기준 D-day 계산 (과거 미체크는 무시)
+    const nextDate=pendingRank?.date||rpt?.date||c.endDate;
+    const daysLeft=Math.ceil((new Date(nextDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
+    return{c,rankEvts,rpt,pendingRank,daysLeft};
+  }).sort((a,b)=>a.daysLeft-b.daysLeft),[filtered,completions]);
+  const todayCheck=withNext.filter(x=>x.pendingRank&&x.pendingRank.date===todayStr);
+  const upcoming=withNext.filter(x=>x.pendingRank&&x.pendingRank.date>todayStr);
+  const allDone=withNext.filter(x=>!x.pendingRank);
+  const renderCard=({c,rankEvts,rpt})=>{
+    const sp=c.startDate?c.startDate.split("-"):["","",""];
+    const isEnded=c.endDate<todayStr;
+    return(
+      <div key={c.id} style={{background:"#fff",borderRadius:12,border:`1px solid ${isEnded?"#e9d5ff":"#f0f1f3"}`,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:"1px solid #f7f8fa",cursor:"pointer",background:isEnded?"#fdfaff":"#fafbfc"}} onClick={()=>setMemoContract(c)}>
+          <div style={{display:"flex",flexDirection:"column",lineHeight:1.1,flexShrink:0,width:46}}>
+            <span style={{fontSize:9,color:"#adb5bd",fontWeight:600}}>{sp[0]}년 {sp[1]}월</span>
+            <span style={{fontSize:18,fontWeight:800,color:isEnded?"#8468D3":"#0071CE",lineHeight:1}}>{sp[2]}</span>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+              <span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{c.isRenewal?"R":"N"}</span>
+              <span style={{fontWeight:700,fontSize:13,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+              {c.manager&&<span style={{fontSize:11,color:"#8468D3",fontWeight:600}}>{c.manager}</span>}
+              {isEnded&&<span style={{fontSize:10,color:"#8468D3",background:"#f5f3ff",borderRadius:5,padding:"1px 6px",fontWeight:600}}>종료</span>}
+            </div>
+            <div style={{display:"flex",gap:5,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
+              {c.total&&<span style={{fontSize:11,color:isEnded?"#8468D3":"#0071CE",fontWeight:700}}>{c.total}</span>}
+              <span style={{fontSize:10,color:"#adb5bd"}}>{c.startDate} ~ {c.endDate}</span>
+              {c.keywords&&c.keywords.map((kw,ki)=>(<span key={ki} style={{fontSize:10,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"1px 7px",border:"1px solid #a5f3fc"}}>{kw}</span>))}
+            </div>
+          </div>
+          <span style={{fontSize:10,color:"#adb5bd",flexShrink:0}}>상세 ›</span>
+        </div>
+        <div style={{display:"flex",gap:6,padding:"10px 14px",flexWrap:"wrap",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+          {rankEvts.map((e,ri)=>{
+            const ek=ceKey(e);const isDone=!!completions[ek];const rd=rankDataMap[ek];
+            const isToday=e.date===todayStr;const isFuture=e.date>todayStr;const isPast=e.date<todayStr;
+            const dl=Math.ceil((new Date(e.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
+            return(
+              <div key={ri} style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f0fdf4":isToday?"#fef9ec":"#f7f8fa",borderRadius:8,padding:"6px 10px",border:`1.5px solid ${isDone?"#6ee7b7":isToday?"#fde68a":"#e5e7eb"}`,cursor:isDone?"default":"pointer",opacity:isPast&&!isDone?0.45:1}} onClick={()=>{if(!isDone&&!isPast){setRankModalEvent(e);setRankModalContract(c);}}}>
+                <div style={{width:15,height:15,borderRadius:3,border:`1.5px solid ${isDone?"#10b981":isToday?"#f59e0b":"#d1d5db"}`,background:isDone?"#10b981":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {isDone&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
+                </div>
+                <div>
+                  <div style={{fontSize:11,fontWeight:600,color:isDone?"#10b981":isToday?"#d97706":"#374151",whiteSpace:"nowrap"}}>
+                    {e.rankIdx}차 {e.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" (지남)":isFuture?` D-${dl}`:""}
+                  </div>
+                  {isDone&&rd?.keywords&&<div style={{display:"flex",gap:3,marginTop:1,flexWrap:"wrap"}}>{Object.entries(rd.keywords).map(([kw,v])=>{const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;return(<span key={kw} style={{fontSize:9,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",fontWeight:600}}>{kw} {diff>0?"▲":diff<0?"▼":""}{diff!==null&&diff!==0?Math.abs(diff):""} {v.rank}위</span>);})}</div>}
+                  {!isDone&&!isPast&&(c.keywords||[]).length>0&&<div style={{fontSize:9,color:"#adb5bd",marginTop:1}}>{c.keywords.slice(0,3).join(" · ")}{c.keywords.length>3&&" …"}</div>}
                 </div>
               </div>
             );
           })}
-        </div>}
+          {rpt&&(()=>{
+            const ek=ceKey(rpt);const isDone=!!completions[ek];
+            const isToday=rpt.date===todayStr;const isFuture=rpt.date>todayStr;const isPast=rpt.date<todayStr;
+            const dl=Math.ceil((new Date(rpt.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
+            return(
+              <div style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f5f3ff":"#f7f8fa",borderRadius:8,padding:"6px 10px",border:`1.5px solid ${isDone?"#c4b5fd":"#e5e7eb"}`}}>
+                <div style={{width:15,height:15,borderRadius:3,border:`1.5px solid ${isDone?"#7c3aed":"#d1d5db"}`,background:isDone?"#7c3aed":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:isDone?"default":"pointer"}} onClick={async()=>{if(!isDone)await toggleCE(rpt);}}>
+                  {isDone&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                  <div style={{fontSize:11,fontWeight:600,color:isDone?"#7c3aed":"#374151",whiteSpace:"nowrap"}}>리포트 {rpt.date.slice(5)}{isToday?" (오늘)":isFuture?` D-${dl}`:""}</div>
+                  {isDone&&<span style={{fontSize:9,color:"#adb5bd",cursor:"pointer",textDecoration:"underline"}} onClick={async ev=>{ev.stopPropagation();if(window.confirm("리포트 완료를 취소할까요?"))await toggleCE(rpt,false);}}>완료 취소</span>}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
       </div>
+    );
+  };
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {/* 검색 + 필터 */}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="업체명 검색..." style={{width:"100%",border:"1.5px solid #f0f1f3",borderRadius:9,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+        <div style={{display:"flex",gap:5}}>
+          {[{v:"active",l:"진행중",c:"#10b981"},{v:"ended",l:"종료",c:"#8468D3"},{v:"all",l:"전체",c:"#6b7280"}].map(({v,l,c})=>(
+            <button key={v} onClick={()=>setStatusFilter(v)} style={{border:`1.5px solid ${statusFilter===v?c:"#f0f1f3"}`,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:statusFilter===v?c+"18":"#fff",color:statusFilter===v?c:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {/* 오늘 체크 */}
+      {todayCheck.length>0&&(<div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#d97706",background:"#fffbeb",borderRadius:99,padding:"3px 12px",border:"1px solid #fde68a"}}>☀ 오늘 체크 ({todayCheck.length})</span></div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>{todayCheck.map(x=>renderCard(x))}</div>
+      </div>)}
+      {/* 예정 */}
+      {upcoming.length>0&&(<div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"3px 12px",border:"1px solid #a5f3fc"}}>예정 ({upcoming.length})</span></div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>{upcoming.map(x=>renderCard(x))}</div>
+      </div>)}
+      {/* 완료 */}
+      {allDone.length>0&&(<div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#10b981",background:"#f0fdf4",borderRadius:99,padding:"3px 12px",border:"1px solid #bbf7d0"}}>완료 ({allDone.length})</span></div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>{allDone.map(x=>renderCard(x))}</div>
+      </div>)}
+      {withNext.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}>{search?"검색 결과가 없습니다":"해당하는 계약 업체가 없습니다"}</div>}
     </div>
   );
 }
@@ -1042,90 +1185,12 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
 
               {/* ===== 순위관리 탭 ===== */}
               {contractSubTab==="rank"&&(()=>{
-                const activeContracts=visibleContracts.filter(c=>!c.cancelled&&c.endDate>=todayStr);
-                const withNext=activeContracts.map(c=>{
-                  const evts=genEvents(c);
-                  const rankEvts=evts.filter(e=>e.type==="순위체크");
-                  const rpt=evts.find(e=>e.type==="리포트");
-                  const pendingRank=rankEvts.find(e=>!completions[ceKey(e)]);
-                  const nextDate=pendingRank?.date||rpt?.date||c.endDate;
-                  const daysLeft=Math.ceil((new Date(nextDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
-                  return{c,rankEvts,rpt,pendingRank,daysLeft};
-                }).sort((a,b)=>a.daysLeft-b.daysLeft);
-                const needCheck=withNext.filter(x=>x.pendingRank&&x.daysLeft<=0);
-                const upcoming=withNext.filter(x=>x.pendingRank&&x.daysLeft>0);
-                const allDone=withNext.filter(x=>!x.pendingRank);
-                const renderCard=({c,rankEvts,rpt})=>{
-                  const sp=c.startDate?c.startDate.split("-"):["","",""];
-                  return(
-                    <div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:"1px solid #f7f8fa",cursor:"pointer",background:"#fafbfc"}} onClick={()=>setMemoContract(c)}>
-                        <div style={{display:"flex",flexDirection:"column",lineHeight:1.1,flexShrink:0,width:46}}>
-                          <span style={{fontSize:9,color:"#adb5bd",fontWeight:600}}>{sp[0]}년 {sp[1]}월</span>
-                          <span style={{fontSize:18,fontWeight:800,color:"#0071CE",lineHeight:1}}>{sp[2]}</span>
-                        </div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                            <span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{c.isRenewal?"R":"N"}</span>
-                            <span style={{fontWeight:700,fontSize:13,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
-                            {c.manager&&<span style={{fontSize:11,color:"#8468D3",fontWeight:600}}>{c.manager}</span>}
-                          </div>
-                          <div style={{display:"flex",gap:5,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
-                            {c.total&&<span style={{fontSize:11,color:"#0071CE",fontWeight:700}}>{c.total}</span>}
-                            <span style={{fontSize:10,color:"#adb5bd"}}>{c.startDate} ~ {c.endDate}</span>
-                            {c.keywords&&c.keywords.length>0&&c.keywords.map((kw,ki)=>(<span key={ki} style={{fontSize:10,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"1px 7px",border:"1px solid #a5f3fc"}}>{kw}</span>))}
-                          </div>
-                        </div>
-                        <span style={{fontSize:10,color:"#adb5bd",flexShrink:0}}>상세 ›</span>
-                      </div>
-                      <div style={{display:"flex",gap:6,padding:"10px 14px",flexWrap:"wrap",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
-                        {rankEvts.map((e,ri)=>{
-                          const ek=ceKey(e);const isDone=!!completions[ek];const rd=rankDataMap[ek];
-                          const isToday=e.date===todayStr;const isPast=e.date<todayStr;const isFuture=e.date>todayStr;
-                          const dl=Math.ceil((new Date(e.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
-                          return(
-                            <div key={ri} style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f0fdf4":(isToday||isPast)?"#fef2f2":"#f7f8fa",borderRadius:8,padding:"6px 10px",border:`1.5px solid ${isDone?"#6ee7b7":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`,cursor:isDone?"default":"pointer"}} onClick={()=>{if(!isDone){setRankModalEvent(e);setRankModalContract(c);}}}>
-                              <div style={{width:15,height:15,borderRadius:3,border:`1.5px solid ${isDone?"#10b981":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#10b981":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                                {isDone&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
-                              </div>
-                              <div>
-                                <div style={{fontSize:11,fontWeight:600,color:(isToday||isPast)&&!isDone?"#ef4444":isDone?"#10b981":"#374151",whiteSpace:"nowrap"}}>
-                                  {e.rankIdx}차 {e.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" ⚠지남":isFuture?` D-${dl}`:""}
-                                </div>
-                                {isDone&&rd?.keywords&&<div style={{display:"flex",gap:4,marginTop:1,flexWrap:"wrap"}}>{Object.entries(rd.keywords).map(([kw,v])=>{const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;return(<span key={kw} style={{fontSize:10,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",fontWeight:600}}>{kw} {diff>0?"▲":diff<0?"▼":"—"}{v.rank}위</span>);})}</div>}
-                                {!isDone&&(c.keywords||[]).length>0&&<div style={{fontSize:10,color:"#adb5bd",marginTop:1}}>{c.keywords.join(" · ")}</div>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {rpt&&(()=>{
-                          const ek=ceKey(rpt);const isDone=!!completions[ek];
-                          const isToday=rpt.date===todayStr;const isPast=rpt.date<todayStr;const isFuture=rpt.date>todayStr;
-                          const dl=Math.ceil((new Date(rpt.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
-                          return(
-                            <div style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f5f3ff":(isToday||isPast)?"#fef2f2":"#f7f8fa",borderRadius:8,padding:"6px 10px",border:`1.5px solid ${isDone?"#c4b5fd":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`}}>
-                              <div style={{width:15,height:15,borderRadius:3,border:`1.5px solid ${isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#7c3aed":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:isDone?"default":"pointer"}} onClick={async()=>{if(!isDone)await toggleCE(rpt);}}>
-                                {isDone&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
-                              </div>
-                              <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                                <div style={{fontSize:11,fontWeight:600,color:isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#374151",whiteSpace:"nowrap"}}>리포트 {rpt.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" ⚠지남":isFuture?` D-${dl}`:""}</div>
-                                {isDone&&<span style={{fontSize:9,color:"#adb5bd",cursor:"pointer",textDecoration:"underline"}} onClick={async ev=>{ev.stopPropagation();if(window.confirm("리포트 완료를 취소할까요?"))await toggleCE(rpt,false);}}>완료 취소</span>}
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  );
-                };
-                return(
-                  <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                    {needCheck.length>0&&(<div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#ef4444",background:"#fef2f2",borderRadius:99,padding:"3px 12px",border:"1px solid #fecaca"}}>⚠ 체크 필요 · 오늘/지남 ({needCheck.length})</span></div><div style={{display:"flex",flexDirection:"column",gap:8}}>{needCheck.map(x=>renderCard(x))}</div></div>)}
-                    {upcoming.length>0&&(<div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"3px 12px",border:"1px solid #a5f3fc"}}>예정 ({upcoming.length})</span></div><div style={{display:"flex",flexDirection:"column",gap:8}}>{upcoming.map(x=>renderCard(x))}</div></div>)}
-                    {allDone.length>0&&(<div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#10b981",background:"#f0fdf4",borderRadius:99,padding:"3px 12px",border:"1px solid #bbf7d0"}}>완료 ({allDone.length})</span></div><div style={{display:"flex",flexDirection:"column",gap:8}}>{allDone.map(x=>renderCard(x))}</div></div>)}
-                    {withNext.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}>진행중인 계약 업체가 없습니다</div>}
-                  </div>
-                );
+                // 진행중 + 종료 모두 포함 (해지 제외)
+                const rankTargets=visibleContracts.filter(c=>!c.cancelled);
+                // 검색/필터 state는 외부에서 관리 불가하므로 즉시 처리
+                // 대신 useState 사용 불가 → useRef 없이 key로 처리
+                // → 실제로는 아래 JSX에서 직접 useState 컴포넌트로 분리
+                return <RankManageTab contracts={rankTargets} completions={completions} rankDataMap={rankDataMap} setMemoContract={setMemoContract} setRankModalEvent={setRankModalEvent} setRankModalContract={setRankModalContract} toggleCE={toggleCE}/>;
               })()}
             </div>
           )}
