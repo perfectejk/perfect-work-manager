@@ -383,6 +383,52 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
             <div style={{fontSize:10,color:"#adb5bd",marginTop:4,textAlign:"right"}}>← 좌우 스크롤{contract.linkedMemoId&&" · 보라색 열 = 이전 계약 기록"}</div>
           </div>
         )}
+        {/* 공유 텍스트 복사 */}
+        {sortedKeys.length>0&&allKws.length>0&&(()=>{
+          const generateShareText=()=>{
+            const lines=["📊 키워드 순위 결과",""];
+            allKws.forEach(kw=>{
+              const startRank=localInitRanks[kw];
+              // 가장 최근 체크 순위
+              const latestKey=[...sortedKeys].filter(ek=>rankHistory[ek]?.keywords?.[kw]).pop();
+              const latestData=latestKey?rankHistory[latestKey]?.keywords?.[kw]:null;
+              if(!latestData)return;
+              const startDate=contract.startDate?.slice(5).replace("-","/");
+              const latestDate=rankHistory[latestKey]?.date?.slice(5).replace("-","/");
+              const diff=startRank&&latestData.rank?startRank-latestData.rank:null;
+              const diffStr=diff!==null?(diff>0?` ▲${diff}`:diff<0?` ▼${Math.abs(diff)}`:" —"):"";
+              const startStr=startRank?`${startDate} ${startRank}위 → `:``;
+              lines.push(`키워드 : ${kw}`);
+              lines.push(`${startStr}${latestDate} ${latestData.rank}위${diffStr}`);
+              lines.push("");
+            });
+            lines.push("——————————");
+            lines.push("중간 점검 결과 공유드립니다 😊");
+            lines.push("담당자로서 매일 체크하며 관리하고 있고,");
+            lines.push("순위가 꾸준히 오르고 있어 저도 뿌듯하네요!");
+            lines.push("앞으로도 놓치는 부분 없이 꼼꼼하게 챙겨드릴게요.");
+            lines.push("언제든 궁금한 점 있으시면 편하게 연락 주세요 🙏");
+            return lines.join("\n");
+          };
+          const[copied,setCopied]=useState(false);
+          const handleCopy=()=>{
+            const text=generateShareText();
+            navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});
+          };
+          return(
+            <div style={{background:"linear-gradient(135deg,#f0f7ff,#f5f3ff)",borderRadius:12,padding:"14px 16px",border:"1px solid #dbeafe"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>광고주 공유 텍스트</div>
+                <button onClick={handleCopy} style={{display:"flex",alignItems:"center",gap:5,background:copied?"#10b981":"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"background 0.2s"}}>
+                  {copied?"✓ 복사됨!":"📋 텍스트 복사"}
+                </button>
+              </div>
+              <div style={{background:"#fff",borderRadius:8,padding:"12px 14px",fontSize:11,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap",border:"1px solid #e0eefe",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+                {generateShareText()}
+              </div>
+            </div>
+          );
+        })()}
         {/* 차수별 상세 기록 */}
         <div>
           <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:10}}>차수별 상세 기록</div>
