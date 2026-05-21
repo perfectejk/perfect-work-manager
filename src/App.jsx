@@ -165,7 +165,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
 
 
         {/* 순위 히스토리 탭 */}
-        {activeTab==="rank"&&<RankHistoryPanel contract={contract} user={user} onContractUpdate={onContractUpdate}/>}
+        {activeTab==="rank"&&<div style={{flex:1,overflowY:"auto",overflowX:"hidden"}}><RankHistoryPanel contract={contract} user={user} onContractUpdate={onContractUpdate}/></div>}
 
         {/* 상세정보 탭 */}
         {activeTab==="detail"&&(
@@ -262,7 +262,7 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
   const handleRankEdit=async(ek,kw,newVal)=>{if(!newVal||isNaN(parseInt(newVal)))return;const data=await st.get("ce:rankdata")||{};if(!data[ek])return;data[ek].keywords[kw].rank=parseInt(newVal);await st.set("ce:rankdata",data);setRankHistory(prev=>({...prev,[ek]:{...prev[ek],keywords:{...prev[ek].keywords,[kw]:{...prev[ek].keywords[kw],rank:parseInt(newVal)}}}}));setEditingRank(null);};
   const sortedKeys=Object.keys(rankHistory).sort();
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:14,padding:"14px 0"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:14,padding:"14px 20px 20px",overflowX:"hidden",boxSizing:"border-box",width:"100%"}}>
       {/* 키워드 관리 */}
       <div style={{background:"#ecfeff",borderRadius:12,padding:"14px 16px",border:"1px solid #a5f3fc"}}>
         <div style={{fontSize:12,fontWeight:700,color:"#0891b2",marginBottom:10}}>순위 체크 키워드</div>
@@ -312,22 +312,22 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
                     const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;
                     const isEd=editingRank?.ek===ek&&editingRank?.kw===kw;
                     return(
-                      <div key={kw} style={{display:"flex",alignItems:"center",gap:8,background:"#fff",borderRadius:8,padding:"8px 10px",border:"1px solid #f0f1f3"}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,fontWeight:600,color:"#0f1117"}}>{kw}</div>
+                      <div key={kw} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",borderRadius:8,padding:"7px 10px",border:"1px solid #f0f1f3",minWidth:0,overflow:"hidden"}}>
+                        <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                          <div style={{fontSize:12,fontWeight:600,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw}</div>
                           {v.prevRank&&<div style={{fontSize:10,color:"#adb5bd"}}>직전: {v.prevRank}위</div>}
                         </div>
                         {isEd?(
-                          <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                            <input type="number" min="1" defaultValue={v.rank} autoFocus onKeyDown={e=>{if(e.key==="Enter")handleRankEdit(ek,kw,e.target.value);if(e.key==="Escape")setEditingRank(null);}} style={{width:60,border:"1.5px solid #0071CE",borderRadius:6,padding:"4px 6px",fontSize:12,textAlign:"center",outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
-                            <button onClick={ev=>{const inp=ev.target.parentElement.querySelector("input");handleRankEdit(ek,kw,inp.value);}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✓</button>
-                            <button onClick={()=>setEditingRank(null)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✕</button>
+                          <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
+                            <input type="number" min="1" defaultValue={v.rank} autoFocus onKeyDown={e=>{if(e.key==="Enter")handleRankEdit(ek,kw,e.target.value);if(e.key==="Escape")setEditingRank(null);}} style={{width:52,border:"1.5px solid #0071CE",borderRadius:6,padding:"3px 5px",fontSize:12,textAlign:"center",outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                            <button onClick={ev=>{const inp=ev.target.parentElement.querySelector("input");handleRankEdit(ek,kw,inp.value);}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:6,padding:"3px 7px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✓</button>
+                            <button onClick={()=>setEditingRank(null)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"3px 7px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✕</button>
                           </div>
                         ):(
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
                             {diff!==null&&<span style={{fontSize:11,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280"}}>{diff>0?"▲":diff<0?"▼":"—"}{Math.abs(diff)}</span>}
-                            <span style={{fontSize:14,fontWeight:800,color:"#0f1117"}}>{v.rank}위</span>
-                            <button onClick={()=>setEditingRank({ek,kw})} style={{background:"none",border:"1px solid #e5e7eb",borderRadius:5,padding:"2px 6px",fontSize:10,color:"#adb5bd",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>수정</button>
+                            <span style={{fontSize:13,fontWeight:800,color:"#0f1117"}}>{v.rank}위</span>
+                            <button onClick={()=>setEditingRank({ek,kw})} style={{background:"none",border:"1px solid #e5e7eb",borderRadius:5,padding:"2px 5px",fontSize:10,color:"#adb5bd",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>수정</button>
                           </div>
                         )}
                       </div>
