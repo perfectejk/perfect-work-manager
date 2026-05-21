@@ -29,9 +29,9 @@ const st={
 const ses={get:()=>{try{const v=localStorage.getItem('ses:user');return v?JSON.parse(v):null;}catch{return null;}},set:v=>{try{localStorage.setItem('ses:user',JSON.stringify(v));}catch{}},del:()=>{try{localStorage.removeItem('ses:user');}catch{}}};
 const addBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
 const subBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
-const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,3);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;let rankIdx=1;while(true){const nextD=new Date(cur+"T00:00:00");nextD.setDate(nextD.getDate()+10);const next=nextD.toISOString().slice(0,10);if(next>=rptDate)break;evts.push({type:"순위체크",date:next,cid:c.id,name:c.name,manager:c.manager||"",rankIdx,initialRanks:c.initialRanks||{}});cur=next;rankIdx++;}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
+const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,3);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;let rankIdx=1;while(true){const nd=new Date(cur+"T00:00:00");nd.setDate(nd.getDate()+10);const next=nd.toISOString().slice(0,10);if(next>=rptDate)break;evts.push({type:"순위체크",date:next,cid:c.id,name:c.name,manager:c.manager||"",rankIdx,initialRanks:c.initialRanks||{}});cur=next;rankIdx++;}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
 const ceKey=e=>`${e.cid}:${e.type}:${e.date}`;
-const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[:\\s]\\s*([^\\n]+)'));return m?m[1].trim():'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};const parseKeywords=()=>{const kwLine=line('키워드')||line('순위키워드')||line('검색키워드');if(!kwLine)return[];return kwLine.split(/[,，/·\s]+/).map(k=>k.trim()).filter(k=>k.length>0&&k.length<=30);};return{name:line('상호명'),phone:line('번호'),link:line('플레이스 링크'),products:section('상품내역',['서비스내역','결제정보','담당자']),services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액'),manager:line('담당자'),notes:line('특이사항'),keywords:parseKeywords()};};
+const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[:\\s]\\s*([^\\n]+)'));return m?m[1].trim():'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};const kws=line('키워드')||line('순위키워드')||line('검색키워드');const keywords=kws?kws.split(/[,，\/·\s]+/).map(k=>k.trim()).filter(k=>k.length>0&&k.length<=30):[];return{name:line('상호명'),phone:line('번호'),link:line('플레이스 링크'),products:section('상품내역',['서비스내역','결제정보','담당자']),services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액'),manager:line('담당자'),notes:line('특이사항'),keywords};};
 const sendNotif=async(url,name,ts,data,targets)=>{if(!url?.startsWith("http"))return;const lines=METRICS.map(m=>{const v=data[m.key]||0,t=targets[m.key];return`• ${m.label}: **${v}${m.unit}**${t?` / ${t}${m.unit} (${Math.round(v/t*100)}%)`:''}`;});try{await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:"업무보고 알림",content:`[${ts}] ${name} 실적 제출\n${lines.join('\n')}`})});}catch{}};
 const repeatLabel=t=>{if(!t.repeat||t.repeat==="none")return null;if(t.repeat==="weekly")return`매주 ${DAYS_KR[new Date(t.due+"T00:00:00").getDay()]}`;if(t.repeat==="monthly")return`매월 ${parseInt(t.due.slice(8))}일`;if(t.repeat==="weekdays")return"평일";if(t.repeat==="custom")return`${(t.repeatDays||[]).sort().map(d=>DAYS_KR[d]).join("·")}`;return null;};
 const isActiveOnDate=(t,ds)=>{if(!t.due||t.due>ds)return false;const dow=new Date(ds+"T00:00:00").getDay();if(!t.repeat||t.repeat==="none")return t.due===ds;if(t.repeat==="weekly")return new Date(t.due+"T00:00:00").getDay()===dow;if(t.repeat==="monthly")return parseInt(t.due.slice(8))===new Date(ds+"T00:00:00").getDate();if(t.repeat==="weekdays")return dow>=1&&dow<=5;if(t.repeat==="custom")return(t.repeatDays||[]).includes(dow);return false;};
@@ -46,40 +46,24 @@ function ProfileModal({user,profiles,onUpdateProfile,onClose,contracts}){const f
 const Badge=({label,color,bg})=><span style={{fontSize:11,fontWeight:600,color,background:bg,borderRadius:6,padding:"2px 7px",whiteSpace:"nowrap"}}>{label}</span>;
 function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,completions,onRankEdit,onContractUpdate}){
   const[memos,setMemos]=useState([]);const[input,setInput]=useState("");const[saving,setSaving]=useState(false);const[loading,setLoading]=useState(true);const[activeTab,setActiveTab]=useState("memo");const bottomRef=useRef();
-  const[rankLoading,setRankLoading]=useState(false);const[rankHistory,setRankHistory]=useState({});
-  const[editingRank,setEditingRank]=useState(null);
-  const[kwInput,setKwInput]=useState("");const[kwSaving,setKwSaving]=useState(false);
-  const[localContract,setLocalContract]=useState(contract);
-  const[initRankEdits,setInitRankEdits]=useState({});
   const memoKey=`contract:memos:${contract.linkedMemoId||contract.id}`;
   useEffect(()=>{loadMemos();},[]);
-  useEffect(()=>{if(activeTab==="rank")loadRankHistory();},[activeTab]);
   useEffect(()=>{if(bottomRef.current)bottomRef.current.scrollIntoView({behavior:"smooth"});},[memos]);
   const loadMemos=async()=>{setLoading(true);const data=await st.get(memoKey)||[];setMemos(data);setLoading(false);};
-  const loadRankHistory=async()=>{setRankLoading(true);const data=await st.get("ce:rankdata")||{};
-  const myKeys=Object.keys(data).filter(k=>k.startsWith(`${contract.id}:순위체크:`));const hist={};myKeys.forEach(k=>{hist[k]=data[k];});setRankHistory(hist);setRankLoading(false);};
   const addMemo=async()=>{const text=input.trim();if(!text)return;setSaving(true);const now=new Date();const dateStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;const newMemo={id:uid(),date:dateStr,author:user.name,text};const updated=[...memos,newMemo];await st.set(memoKey,updated);setMemos(updated);setInput("");setSaving(false);};
   const deleteMemo=async(id)=>{if(!window.confirm("이 메모를 삭제할까요?"))return;const updated=memos.filter(m=>m.id!==id);await st.set(memoKey,updated);setMemos(updated);};
-  const handleRankEdit=async(eventKey,keyword,newRank)=>{if(!newRank||isNaN(parseInt(newRank)))return;const data=await st.get("ce:rankdata")||{};if(!data[eventKey])return;data[eventKey].keywords[keyword].rank=parseInt(newRank);await st.set("ce:rankdata",data);setRankHistory(prev=>({...prev,[eventKey]:{...prev[eventKey],keywords:{...prev[eventKey].keywords,[keyword]:{...prev[eventKey].keywords[keyword],rank:parseInt(newRank)}}}}));if(onRankEdit)onRankEdit(data);setEditingRank(null);};
-  // 키워드 추가 → 계약에 영구 저장
-  const handleAddKeyword=async()=>{const kw=kwInput.trim();if(!kw)return;const existing=localContract.keywords||[];if(existing.includes(kw))return alert("이미 등록된 키워드입니다");setKwSaving(true);const list=await st.get("contracts:all")||[];const idx=list.findIndex(c=>c.id===contract.id);if(idx>=0){list[idx]={...list[idx],keywords:[...existing,kw]};await st.set("contracts:all",list);const updated={...localContract,keywords:[...existing,kw]};setLocalContract(updated);if(onContractUpdate)onContractUpdate(list);}setKwInput("");setKwSaving(false);};
-  // 키워드 삭제
-  const handleRemoveKeyword=async(kw)=>{if(!window.confirm(`키워드 "${kw}"를 삭제할까요?`))return;const list=await st.get("contracts:all")||[];const idx=list.findIndex(c=>c.id===contract.id);if(idx>=0){const updated=(localContract.keywords||[]).filter(k=>k!==kw);list[idx]={...list[idx],keywords:updated};await st.set("contracts:all",list);const updatedC={...localContract,keywords:updated};setLocalContract(updatedC);if(onContractUpdate)onContractUpdate(list);}};
-  // 키워드별 초기순위 저장
-  const handleSaveInitialRanks=async(newRanks)=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(c=>c.id===contract.id);if(idx<0)return;list[idx]={...list[idx],initialRanks:{...(list[idx].initialRanks||{}),...newRanks}};await st.set("contracts:all",list);const updated={...localContract,initialRanks:{...(localContract.initialRanks||{}),...newRanks}};setLocalContract(updated);if(onContractUpdate)onContractUpdate(list);};
   const isActive=!contract.cancelled&&contract.endDate>=todayStr;
   const isCancelled=!!contract.cancelled;
+  // 히스토리: 같은 상호명 계약 전체를 날짜순으로
   const history=useMemo(()=>{if(!allContracts)return[contract];const same=allContracts.filter(c=>c.name===contract.name).sort((a,b)=>(a.startDate||"").localeCompare(b.startDate||""));return same.length>0?same:[contract];},[allContracts,contract]);
   const totalAmount=history.reduce((s,c)=>s+parseAmount(c.total),0);
   const firstAmount=parseAmount(history[0]?.total);
   const lastAmount=parseAmount(history[history.length-1]?.total);
   const growthPct=history.length>1&&firstAmount>0?Math.round((lastAmount-firstAmount)/firstAmount*100):null;
   const tS={fontSize:11,fontWeight:700,fontFamily:"'Pretendard',-apple-system,sans-serif"};
-  const keywords=localContract.keywords||[];
-  const sortedRankKeys=Object.keys(rankHistory).sort();
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif",padding:"20px"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:580,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.15)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.15)"}}>
         {/* 헤더 */}
         <div style={{padding:"18px 20px 0",flexShrink:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
@@ -102,7 +86,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
           {/* 탭 */}
           <div style={{display:"flex",borderBottom:"1px solid #f0f1f3",marginTop:4}}>
             {[{id:"memo",label:"메모"},{id:"rank",label:"순위 히스토리"},{id:"history",label:`계약 히스토리 (${history.length}회)`},{id:"detail",label:"상세정보"}].map(t=>(
-              <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,padding:"9px 2px",fontSize:11,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?"#0071CE":"#adb5bd",background:"none",border:"none",borderBottom:`2px solid ${activeTab===t.id?"#0071CE":"transparent"}`,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:-1}}>{t.label}</button>
+              <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,padding:"9px 4px",fontSize:12,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?"#0071CE":"#adb5bd",background:"none",border:"none",borderBottom:`2px solid ${activeTab===t.id?"#0071CE":"transparent"}`,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:-1}}>{t.label}</button>
             ))}
           </div>
         </div>
@@ -132,108 +116,23 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
           </div>
         </>}
 
-        {/* 순위 히스토리 탭 */}
-        {activeTab==="rank"&&(
-          <div style={{flex:1,overflowY:"auto",padding:"14px 20px 20px",display:"flex",flexDirection:"column",gap:14}}>
-            {/* 키워드 관리 */}
-            <div style={{background:"#ecfeff",borderRadius:12,padding:"14px 16px",border:"1px solid #a5f3fc"}}>
-              <div style={{fontSize:12,fontWeight:700,color:"#0891b2",marginBottom:10}}>순위 체크 키워드</div>
-              {keywords.length===0
-                ?<div style={{fontSize:12,color:"#adb5bd",marginBottom:10}}>등록된 키워드가 없습니다. 아래에서 추가하세요.</div>
-                :<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{keywords.map((kw,i)=>(
-                    <span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#fff",border:"1px solid #a5f3fc",borderRadius:99,padding:"3px 10px",fontSize:12,color:"#0891b2",fontWeight:600}}>
-                      {kw}
-                      <button onClick={()=>handleRemoveKeyword(kw)} style={{background:"none",border:"none",color:"#0891b2",cursor:"pointer",padding:0,fontSize:11,lineHeight:1,opacity:0.6}}>✕</button>
-                    </span>
-                  ))}</div>
-              }
-              <div style={{display:"flex",gap:6}}>
-                <input value={kwInput} onChange={e=>setKwInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),handleAddKeyword())} placeholder="키워드 추가" style={{flex:1,border:"1px solid #a5f3fc",borderRadius:7,padding:"6px 10px",fontSize:12,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#fff"}}/>
-                <button onClick={handleAddKeyword} disabled={kwSaving} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{kwSaving?"저장중":"+ 추가"}</button>
-              </div>
-            </div>
-
-            {/* 계약 시작 시점 초기 순위 */}
-            {keywords.length>0&&(
-              <div style={{background:"#f0fdf4",borderRadius:12,padding:"14px 16px",border:"1px solid #bbf7d0"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#166534",marginBottom:10}}>계약 시작 시점 순위 ({contract.startDate})</div>
-                <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                  {keywords.map(kw=>{
-                    const saved=(localContract.initialRanks||{})[kw]||"";
-                    const editing=initRankEdits[kw]!==undefined?initRankEdits[kw]:saved;
-                    return(
-                      <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:12,fontWeight:500,flex:1,color:"#0f1117"}}>{kw}</span>
-                        <input type="number" min="1" value={editing} onChange={e=>setInitRankEdits(r=>({...r,[kw]:e.target.value}))} placeholder="시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
-                        <span style={{fontSize:11,color:"#6b7280"}}>위</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <button onClick={async()=>{const toSave={};keywords.forEach(kw=>{const v=initRankEdits[kw]!==undefined?initRankEdits[kw]:(localContract.initialRanks||{})[kw]||"";if(v&&parseInt(v)>0)toSave[kw]=parseInt(v);});await handleSaveInitialRanks(toSave);setInitRankEdits({});alert("저장됐어요!");}} style={{marginTop:10,background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button>
-              </div>
-            )}
-
-            {/* 순위 체크 히스토리 */}
-            <div>
-              <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:10}}>순위 체크 기록</div>
-              {rankLoading?<div style={{textAlign:"center",padding:"20px",color:"#adb5bd",fontSize:12}}>불러오는 중…</div>
-              :sortedRankKeys.length===0?<div style={{textAlign:"center",padding:"24px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:10}}>아직 순위 체크 기록이 없습니다</div>
-              :<div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {sortedRankKeys.map((ek,idx)=>{
-                  const rd=rankHistory[ek];
-                  return(
-                    <div key={ek} style={{background:"#f7f8fa",borderRadius:12,padding:"12px 14px",border:"1px solid #f0f1f3"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                        <span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>{idx+1}차 순위체크</span>
-                        <span style={{fontSize:11,color:"#adb5bd"}}>{rd.date||""}</span>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                        {rd.keywords&&Object.entries(rd.keywords).map(([kw,v])=>{
-                          const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;
-                          const isEditing=editingRank?.eventKey===ek&&editingRank?.keyword===kw;
-                          return(
-                            <div key={kw} style={{display:"flex",alignItems:"center",gap:8,background:"#fff",borderRadius:8,padding:"8px 10px",border:"1px solid #f0f1f3"}}>
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{fontSize:12,fontWeight:600,color:"#0f1117"}}>{kw}</div>
-                                {v.prevRank&&<div style={{fontSize:10,color:"#adb5bd"}}>직전: {v.prevRank}위</div>}
-                              </div>
-                              {isEditing?(
-                                <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                                  <input type="number" min="1" defaultValue={v.rank} autoFocus onKeyDown={e=>{if(e.key==="Enter")handleRankEdit(ek,kw,e.target.value);if(e.key==="Escape")setEditingRank(null);}} style={{width:60,border:"1.5px solid #0071CE",borderRadius:6,padding:"4px 6px",fontSize:12,textAlign:"center",outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
-                                  <button onClick={e=>{const inp=e.target.parentElement.querySelector("input");handleRankEdit(ek,kw,inp.value);}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✓</button>
-                                  <button onClick={()=>setEditingRank(null)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✕</button>
-                                </div>
-                              ):(
-                                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                  {diff!==null&&<span style={{fontSize:11,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280"}}>{diff>0?"▲":diff<0?"▼":"—"}{Math.abs(diff)}</span>}
-                                  <span style={{fontSize:14,fontWeight:800,color:"#0f1117"}}>{v.rank}위</span>
-                                  <button onClick={()=>setEditingRank({eventKey:ek,keyword:kw})} style={{background:"none",border:"1px solid #e5e7eb",borderRadius:5,padding:"2px 6px",fontSize:10,color:"#adb5bd",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>수정</button>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>}
-            </div>
-          </div>
-        )}
-
-        {/* 계약 히스토리 탭 */}
+        {/* 히스토리 탭 */}
         {activeTab==="history"&&(
           <div style={{flex:1,overflowY:"auto",padding:"14px 20px 20px"}}>
+            {/* 요약 */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
               <div style={{background:"#f0f7ff",borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:"#0071CE"}}>{history.length}회</div><div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>총 계약</div></div>
               <div style={{background:"#f5f3ff",borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:"#8468D3"}}>{fmtAmount(totalAmount)}</div><div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>누적 매출</div></div>
               <div style={{background:growthPct!==null&&growthPct>0?"#f0fdf4":"#f7f8fa",borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:growthPct!==null&&growthPct>0?"#10b981":"#6b7280"}}>{growthPct!==null?`${growthPct>0?"+":""}${growthPct}%`:"—"}</div><div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>금액 성장</div></div>
             </div>
+            {/* 타임라인 */}
             <div style={{display:"flex",flexDirection:"column",gap:0}}>
               {history.map((c,i)=>{
-                const isLast=i===history.length-1;const isCur=c.id===contract.id;const amt=parseAmount(c.total);const prevAmt=i>0?parseFloat(history[i-1]?.total)||parseAmount(history[i-1]?.total):null;const pct=prevAmt&&prevAmt>0?Math.round((amt-prevAmt)/prevAmt*100):null;
+                const isLast=i===history.length-1;
+                const isCur=c.id===contract.id;
+                const amt=parseAmount(c.total);
+                const prevAmt=i>0?parseFloat(history[i-1]?.total)||parseAmount(history[i-1]?.total):null;
+                const pct=prevAmt&&prevAmt>0?Math.round((amt-prevAmt)/prevAmt*100):null;
                 return(
                   <div key={c.id} style={{display:"flex",gap:12}}>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
@@ -264,6 +163,10 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
           </div>
         )}
 
+
+        {/* 순위 히스토리 탭 */}
+        {activeTab==="rank"&&<RankHistoryPanel contract={contract} user={user} onContractUpdate={onContractUpdate}/>}
+
         {/* 상세정보 탭 */}
         {activeTab==="detail"&&(
           <div style={{flex:1,overflowY:"auto",padding:"14px 20px 20px"}}>
@@ -282,64 +185,163 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
     </div>
   );
 }
-function KeywordAdder({onAdd}){
-  const[kw,setKw]=useState("");
-  return(<div style={{display:"flex",gap:6}}><input value={kw} onChange={e=>setKw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),onAdd(kw),setKw(""))} placeholder="키워드 추가 후 Enter" style={{flex:1,border:"1px solid #a5f3fc",borderRadius:7,padding:"5px 9px",fontSize:11,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#fff"}}/><button onClick={()=>{onAdd(kw);setKw("");}} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+</button></div>);
-}
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif",padding:"20px"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:580,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.15)"}}>
-        {/* 헤더 */}
-        <div style={{padding:"18px 20px 0",flexShrink:0}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:4}}>
-                <span style={{fontSize:11,fontWeight:800,color:contract.isRenewal?"#8468D3":"#0071CE",background:contract.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${contract.isRenewal?"#e9d5ff":"#bfd7f5"}`}}>{contract.isRenewal?"R":"N"}</span>
-                <span style={{fontWeight:800,fontSize:16,color:isCancelled?"#ef4444":"#0f1117",textDecoration:isCancelled?"line-through":"none"}}>{contract.name}</span>
-                {isCancelled?<Badge label="해지" color="#ef4444" bg="#fee2e2"/>:<Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/>}
-                {contract.linkedMemoId&&<span style={{fontSize:10,fontWeight:600,color:"#f59e0b",background:"#fffbeb",borderRadius:6,padding:"2px 7px",border:"1px solid #fde68a"}}>메모 이어받기</span>}
-              </div>
-              <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-                {contract.manager&&<span style={{fontSize:11,color:"#8468D3",fontWeight:600}}>{contract.manager}</span>}
-                {contract.phone&&<span style={{fontSize:11,color:"#6b7280"}}>{contract.phone}</span>}
-                {contract.total&&<span style={{fontSize:11,color:"#0071CE",fontWeight:600}}>{contract.total}</span>}
-                <span style={{fontSize:11,color:"#adb5bd"}}>{contract.startDate} ~ {contract.endDate}</span>
-              </div>
-            </div>
-            <button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#adb5bd",flexShrink:0,marginLeft:8}}>✕</button>
-          </div>
-          {/* 탭 */}
-          <div style={{display:"flex",borderBottom:"1px solid #f0f1f3",marginTop:4}}>
-            {[{id:"memo",label:"메모"},{id:"rank",label:"순위 히스토리"},{id:"history",label:`계약 히스토리 (${history.length}회)`},{id:"detail",label:"상세정보"}].map(t=>(
-              <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,padding:"9px 2px",fontSize:11,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?"#0071CE":"#adb5bd",background:"none",border:"none",borderBottom:`2px solid ${activeTab===t.id?"#0071CE":"transparent"}`,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:-1}}>{t.label}</button>
-            ))}
-          </div>
-        </div>
 
-        {/* 메모 탭 */}
-        {activeTab==="memo"&&<>
-          <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:10}}>
-            {loading?<div style={{textAlign:"center",padding:"20px",color:"#adb5bd",fontSize:12}}>불러오는 중…</div>
-            :memos.length===0?<div style={{textAlign:"center",padding:"30px 0",color:"#adb5bd",fontSize:12}}>아직 메모가 없습니다. 첫 번째 메모를 남겨보세요!</div>
-            :memos.map(m=>(
-              <div key={m.id} style={{background:"#f7f8fa",borderRadius:10,padding:"10px 12px",border:"1px solid #f0f1f3"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                  <div style={{display:"flex",gap:7,alignItems:"center"}}><Avatar name={m.author} size={20} border="1px solid #f0f1f3"/><span style={{fontSize:11,fontWeight:700,color:"#374151"}}>{m.author}</span><span style={{fontSize:10,color:"#adb5bd"}}>{m.date}</span></div>
-                  {(user.isAdmin||user.name===m.author)&&<button onClick={()=>deleteMemo(m.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:11,padding:"0 2px"}}>✕</button>}
+// ========== 순위 입력 모달 ==========
+function RankInputModal({event,contract,onClose,onConfirm,existingData,onAddKeyword}){
+  const keywords=contract.keywords&&contract.keywords.length>0?contract.keywords:[];
+  const[ranks,setRanks]=useState(()=>{const init={};keywords.forEach(kw=>{init[kw]=existingData?.keywords?.[kw]?.rank||"";});return init;});
+  const[newKw,setNewKw]=useState("");const[kwSaving,setKwSaving]=useState(false);
+  const handleConfirm=async()=>{
+    const filled=keywords.filter(kw=>ranks[kw]&&parseInt(ranks[kw])>0);
+    if(filled.length===0)return alert("최소 1개 키워드의 순위를 입력해주세요");
+    const result={};
+    keywords.forEach(kw=>{if(ranks[kw]&&parseInt(ranks[kw])>0){
+      const prev=existingData?.keywords?.[kw]?.rank||(contract.initialRanks?.[kw])||null;
+      result[kw]={rank:parseInt(ranks[kw]),prevRank:prev?parseInt(prev):null,date:todayStr};
+    }});
+    onConfirm(result);
+  };
+  const handleAddKw=async()=>{const v=newKw.trim();if(!v)return;if(keywords.includes(v))return alert("이미 등록된 키워드입니다");setKwSaving(true);if(onAddKeyword)await onAddKeyword(v);setNewKw("");setKwSaving(false);};
+  const iS2={border:"1.5px solid #e5e7eb",borderRadius:7,padding:"7px 10px",fontSize:13,outline:"none",width:"64px",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif",padding:16}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:22,width:"100%",maxWidth:400,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+      <div style={{fontWeight:800,fontSize:15,color:"#0f1117",marginBottom:2}}>{event.rankIdx}차 순위체크</div>
+      <div style={{fontSize:12,color:"#6b7280",marginBottom:16}}>{contract.name} · {event.date}</div>
+      {keywords.length===0?(
+        <div style={{textAlign:"center",padding:"20px 0",color:"#adb5bd",fontSize:12,marginBottom:14}}>등록된 키워드가 없습니다.<br/>아래에서 키워드를 추가해주세요.</div>
+      ):(
+        <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:16}}>
+          {keywords.map(kw=>{
+            const prev=existingData?.keywords?.[kw]?.rank||(contract.initialRanks?.[kw])||null;
+            const cur=parseInt(ranks[kw])||0;
+            const diff=prev&&cur?parseInt(prev)-cur:null;
+            return(
+              <div key={kw} style={{display:"flex",alignItems:"center",gap:8,background:"#f7f8fa",borderRadius:10,padding:"10px 12px",border:"1px solid #f0f1f3"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:600,color:"#0f1117"}}>{kw}</div>
+                  {prev?<div style={{fontSize:10,color:"#adb5bd",marginTop:1}}>직전: {prev}위</div>:<div style={{fontSize:10,color:"#adb5bd",marginTop:1}}>시작순위 미입력</div>}
                 </div>
-                <div style={{fontSize:12,color:"#1e293b",whiteSpace:"pre-wrap",lineHeight:1.6}}>{m.text}</div>
+                <div style={{display:"flex",alignItems:"center",gap:5}}>
+                  {cur>0&&diff!==null&&<span style={{fontSize:11,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",minWidth:28,textAlign:"right"}}>{diff>0?"▲":diff<0?"▼":"—"}{Math.abs(diff)}</span>}
+                  <input type="number" min="1" value={ranks[kw]} onChange={e=>setRanks(r=>({...r,[kw]:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleConfirm()} placeholder="순위" style={iS2}/>
+                  <span style={{fontSize:11,color:"#adb5bd"}}>위</span>
+                </div>
               </div>
-            ))}
-            <div ref={bottomRef}/>
+            );
+          })}
+        </div>
+      )}
+      <div style={{background:"#f0f9ff",borderRadius:10,padding:"10px 12px",marginBottom:16,border:"1px solid #bae6fd"}}>
+        <div style={{fontSize:11,fontWeight:600,color:"#0369a1",marginBottom:7}}>+ 키워드 추가 (계약에 영구 저장)</div>
+        <div style={{display:"flex",gap:6}}>
+          <input value={newKw} onChange={e=>setNewKw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),handleAddKw())} placeholder="키워드 입력 후 Enter" style={{flex:1,border:"1px solid #bae6fd",borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#fff"}}/>
+          <button onClick={handleAddKw} disabled={kwSaving} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",whiteSpace:"nowrap"}}>{kwSaving?"저장중":"+ 추가"}</button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={onClose} style={{flex:1,background:"#f3f4f6",border:"none",borderRadius:9,padding:"11px",fontSize:13,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button>
+        <button onClick={handleConfirm} disabled={keywords.length===0} style={{flex:2,background:keywords.length>0?"#0071CE":"#e5e7eb",color:keywords.length>0?"#fff":"#9ca3af",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:keywords.length>0?"pointer":"not-allowed",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button>
+      </div>
+    </div>
+  </div>);
+}
+
+// ========== 순위 히스토리 패널 ==========
+function RankHistoryPanel({contract,user,onContractUpdate}){
+  const[localKws,setLocalKws]=useState(contract.keywords||[]);
+  const[localInitRanks,setLocalInitRanks]=useState(contract.initialRanks||{});
+  const[rankHistory,setRankHistory]=useState({});const[rankLoading,setRankLoading]=useState(true);
+  const[kwInput,setKwInput]=useState("");const[kwSaving,setKwSaving]=useState(false);
+  const[initEdits,setInitEdits]=useState({});const[editingRank,setEditingRank]=useState(null);
+  useEffect(()=>{loadHistory();},[]);
+  const loadHistory=async()=>{setRankLoading(true);const data=await st.get("ce:rankdata")||{};const myKeys=Object.keys(data).filter(k=>k.startsWith(`${contract.id}:순위체크:`));const hist={};myKeys.forEach(k=>{hist[k]=data[k];});setRankHistory(hist);setRankLoading(false);};
+  const saveContractField=async(fields)=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===contract.id);if(idx<0)return;list[idx]={...list[idx],...fields};await st.set("contracts:all",list);if(onContractUpdate)onContractUpdate([...list]);};
+  const handleAddKw=async()=>{const v=kwInput.trim();if(!v||localKws.includes(v))return alert("이미 있거나 빈 키워드입니다");setKwSaving(true);const updated=[...localKws,v];setLocalKws(updated);await saveContractField({keywords:updated});setKwInput("");setKwSaving(false);};
+  const handleRemoveKw=async(kw)=>{if(!window.confirm(`키워드 "${kw}"를 삭제할까요?`))return;const updated=localKws.filter(k=>k!==kw);setLocalKws(updated);await saveContractField({keywords:updated});};
+  const handleSaveInitRanks=async()=>{const toSave={};localKws.forEach(kw=>{const v=initEdits[kw]!==undefined?initEdits[kw]:localInitRanks[kw]||"";if(v&&parseInt(v)>0)toSave[kw]=parseInt(v);});const merged={...localInitRanks,...toSave};setLocalInitRanks(merged);setInitEdits({});await saveContractField({initialRanks:merged});alert("저장됐어요!");};
+  const handleRankEdit=async(ek,kw,newVal)=>{if(!newVal||isNaN(parseInt(newVal)))return;const data=await st.get("ce:rankdata")||{};if(!data[ek])return;data[ek].keywords[kw].rank=parseInt(newVal);await st.set("ce:rankdata",data);setRankHistory(prev=>({...prev,[ek]:{...prev[ek],keywords:{...prev[ek].keywords,[kw]:{...prev[ek].keywords[kw],rank:parseInt(newVal)}}}}));setEditingRank(null);};
+  const sortedKeys=Object.keys(rankHistory).sort();
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14,padding:"14px 0"}}>
+      {/* 키워드 관리 */}
+      <div style={{background:"#ecfeff",borderRadius:12,padding:"14px 16px",border:"1px solid #a5f3fc"}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#0891b2",marginBottom:10}}>순위 체크 키워드</div>
+        {localKws.length===0?<div style={{fontSize:12,color:"#adb5bd",marginBottom:10}}>등록된 키워드가 없습니다. 추가해주세요.</div>
+        :<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{localKws.map((kw,i)=>(<span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#fff",border:"1px solid #a5f3fc",borderRadius:99,padding:"3px 10px",fontSize:12,color:"#0891b2",fontWeight:600}}>{kw}<button onClick={()=>handleRemoveKw(kw)} style={{background:"none",border:"none",color:"#0891b2",cursor:"pointer",padding:0,fontSize:11,opacity:0.6}}>✕</button></span>))}</div>}
+        <div style={{display:"flex",gap:6}}>
+          <input value={kwInput} onChange={e=>setKwInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),handleAddKw())} placeholder="키워드 추가" style={{flex:1,border:"1px solid #a5f3fc",borderRadius:7,padding:"6px 10px",fontSize:12,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#fff"}}/>
+          <button onClick={handleAddKw} disabled={kwSaving} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{kwSaving?"저장중":"+ 추가"}</button>
+        </div>
+      </div>
+      {/* 계약 시작 시점 초기 순위 */}
+      {localKws.length>0&&(
+        <div style={{background:"#f0fdf4",borderRadius:12,padding:"14px 16px",border:"1px solid #bbf7d0"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#166534",marginBottom:10}}>계약 시작 시점 순위 ({contract.startDate})</div>
+          <div style={{display:"flex",flexDirection:"column",gap:7}}>
+            {localKws.map(kw=>{
+              const saved=localInitRanks[kw]||"";
+              const val=initEdits[kw]!==undefined?initEdits[kw]:saved;
+              return(
+                <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:12,fontWeight:500,flex:1,color:"#0f1117"}}>{kw}</span>
+                  <input type="number" min="1" value={val} onChange={e=>setInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                  <span style={{fontSize:11,color:"#6b7280"}}>위</span>
+                </div>
+              );
+            })}
           </div>
-          <div style={{padding:"12px 20px 18px",borderTop:"1px solid #f0f1f3",flexShrink:0}}>
-            <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-              <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addMemo();}}} placeholder="메모 입력 (Enter 저장, Shift+Enter 줄바꿈)" rows={2} style={{flex:1,border:"1px solid #f0f1f3",borderRadius:10,padding:"8px 12px",fontSize:12,outline:"none",resize:"none",fontFamily:"'Pretendard',-apple-system,sans-serif",lineHeight:1.5}}/>
-              <button onClick={addMemo} disabled={saving||!input.trim()} style={{background:input.trim()?"#0071CE":"#e5e7eb",color:input.trim()?"#fff":"#9ca3af",border:"none",borderRadius:10,padding:"10px 16px",fontSize:12,fontWeight:700,cursor:input.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",alignSelf:"stretch",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{saving?"저장중":"저장"}</button>
-            </div>
-            <div style={{fontSize:10,color:"#adb5bd",marginTop:4}}>작성자: {user.name} · {todayStr}</div>
-          </div>
-        </>}
+          <button onClick={handleSaveInitRanks} style={{marginTop:10,background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button>
+        </div>
+      )}
+      {/* 순위 체크 기록 */}
+      <div>
+        <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:10}}>순위 체크 기록</div>
+        {rankLoading?<div style={{textAlign:"center",padding:"20px",color:"#adb5bd",fontSize:12}}>불러오는 중…</div>
+        :sortedKeys.length===0?<div style={{textAlign:"center",padding:"24px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:10}}>아직 순위 체크 기록이 없습니다</div>
+        :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {sortedKeys.map((ek,idx)=>{
+            const rd=rankHistory[ek];
+            return(
+              <div key={ek} style={{background:"#f7f8fa",borderRadius:12,padding:"12px 14px",border:"1px solid #f0f1f3"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>{idx+1}차 순위체크</span>
+                  <span style={{fontSize:11,color:"#adb5bd"}}>{rd.date||""}</span>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {rd.keywords&&Object.entries(rd.keywords).map(([kw,v])=>{
+                    const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;
+                    const isEd=editingRank?.ek===ek&&editingRank?.kw===kw;
+                    return(
+                      <div key={kw} style={{display:"flex",alignItems:"center",gap:8,background:"#fff",borderRadius:8,padding:"8px 10px",border:"1px solid #f0f1f3"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:600,color:"#0f1117"}}>{kw}</div>
+                          {v.prevRank&&<div style={{fontSize:10,color:"#adb5bd"}}>직전: {v.prevRank}위</div>}
+                        </div>
+                        {isEd?(
+                          <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                            <input type="number" min="1" defaultValue={v.rank} autoFocus onKeyDown={e=>{if(e.key==="Enter")handleRankEdit(ek,kw,e.target.value);if(e.key==="Escape")setEditingRank(null);}} style={{width:60,border:"1.5px solid #0071CE",borderRadius:6,padding:"4px 6px",fontSize:12,textAlign:"center",outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                            <button onClick={ev=>{const inp=ev.target.parentElement.querySelector("input");handleRankEdit(ek,kw,inp.value);}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✓</button>
+                            <button onClick={()=>setEditingRank(null)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✕</button>
+                          </div>
+                        ):(
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            {diff!==null&&<span style={{fontSize:11,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280"}}>{diff>0?"▲":diff<0?"▼":"—"}{Math.abs(diff)}</span>}
+                            <span style={{fontSize:14,fontWeight:800,color:"#0f1117"}}>{v.rank}위</span>
+                            <button onClick={()=>setEditingRank({ek,kw})} style={{background:"none",border:"1px solid #e5e7eb",borderRadius:5,padding:"2px 6px",fontSize:10,color:"#adb5bd",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>수정</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>}
+      </div>
+    </div>
+  );
+}
 
 // ========== 로그인 화면 (새 디자인) ==========
 function LoginScreen({onLogin}){
@@ -573,100 +575,30 @@ function TaskCard({task,onCycle,onDelete,onEdit,showOwner,canEdit}){
     </div>
   </div>);
 }
-function RankInputModal({event,contract,onClose,onConfirm,existingData,onAddKeyword}){
-  const keywords=contract.keywords&&contract.keywords.length>0?contract.keywords:[];
-  const[ranks,setRanks]=useState(()=>{const init={};keywords.forEach(kw=>{init[kw]=existingData?.keywords?.[kw]?.rank||"";});return init;});
-  const[newKw,setNewKw]=useState("");const[saving,setSaving]=useState(false);
-  const handleConfirm=async()=>{
-    const filled=keywords.filter(kw=>ranks[kw]&&parseInt(ranks[kw])>0);
-    if(filled.length===0)return alert("최소 1개 키워드의 순위를 입력해주세요");
-    const result={};
-    keywords.forEach(kw=>{if(ranks[kw]&&parseInt(ranks[kw])>0){
-      const prev=existingData?.keywords?.[kw]?.rank||(contract.initialRanks?.[kw])||(event.initialRanks?.[kw])||null;
-      result[kw]={rank:parseInt(ranks[kw]),prevRank:prev?parseInt(prev):null,date:todayStr};
-    }});
-    onConfirm(result);
-  };
-  const handleAddKw=async()=>{const v=newKw.trim();if(!v)return;if(keywords.includes(v))return alert("이미 등록된 키워드입니다");setSaving(true);if(onAddKeyword)await onAddKeyword(v);setNewKw("");setSaving(false);};
-  const iS2={border:"1.5px solid #e5e7eb",borderRadius:7,padding:"7px 10px",fontSize:13,outline:"none",width:"64px",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"};
-  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif",padding:16}} onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:22,width:"100%",maxWidth:400,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
-      <div style={{fontWeight:800,fontSize:15,color:"#0f1117",marginBottom:2}}>{event.rankIdx}차 순위체크</div>
-      <div style={{fontSize:12,color:"#6b7280",marginBottom:16}}>{contract.name} · {event.date}</div>
-      {keywords.length===0?(
-        <div style={{textAlign:"center",padding:"20px 0",color:"#adb5bd",fontSize:12,marginBottom:14}}>등록된 키워드가 없습니다.<br/>아래에서 키워드를 추가해주세요.</div>
-      ):(
-        <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:16}}>
-          {keywords.map(kw=>{
-            const prev=existingData?.keywords?.[kw]?.rank||(contract.initialRanks?.[kw])||(event.initialRanks?.[kw])||null;
-            const cur=parseInt(ranks[kw])||0;
-            const diff=prev&&cur?parseInt(prev)-cur:null;
-            return(
-              <div key={kw} style={{display:"flex",alignItems:"center",gap:8,background:"#f7f8fa",borderRadius:10,padding:"10px 12px",border:"1px solid #f0f1f3"}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:12,fontWeight:600,color:"#0f1117"}}>{kw}</div>
-                  {prev?<div style={{fontSize:10,color:"#adb5bd",marginTop:1}}>직전: {prev}위</div>:<div style={{fontSize:10,color:"#adb5bd",marginTop:1}}>시작순위 미입력</div>}
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:5}}>
-                  {cur>0&&diff!==null&&<span style={{fontSize:11,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",minWidth:28,textAlign:"right"}}>{diff>0?"▲":diff<0?"▼":"—"}{Math.abs(diff)}</span>}
-                  <input type="number" min="1" value={ranks[kw]} onChange={e=>setRanks(r=>({...r,[kw]:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleConfirm()} placeholder="순위" style={iS2}/>
-                  <span style={{fontSize:11,color:"#adb5bd"}}>위</span>
-                </div>
-              </div>
-            );
-          })}
+function ContractEventCard({event,contract,isDone,onToggle,onMemo}){
+  const[exp,setExp]=useState(false);const ce=CE[event.type];
+  return(<div style={{background:"#fff",borderRadius:10,padding:"10px 12px",border:`1.5px solid ${ce.color}40`,borderLeft:`4px solid ${ce.color}`,opacity:isDone?0.65:1}}>
+    <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+      <button onClick={onToggle} style={{flexShrink:0,marginTop:1,width:20,height:20,borderRadius:"50%",border:`2px solid ${isDone?"#10b981":ce.color}`,background:isDone?"#10b981":ce.bg,cursor:"pointer",fontSize:9,color:isDone?"#fff":ce.color,display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone?"✓":""}</button>
+      <div style={{flex:1,minWidth:0,cursor:onMemo?"pointer":"default"}} onClick={onMemo}>
+        <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontSize:12,fontWeight:700,color:isDone?"#9ca3af":"#111827",textDecoration:isDone?"line-through":"none"}}>[{event.type}] {contract.name}</span>
+          <Badge label="계약" color={ce.color} bg={ce.bg}/>
+          {event.manager&&<Badge label={event.manager} color="#7c3aed" bg="#f5f3ff"/>}
         </div>
-      )}
-      <div style={{background:"#f0f9ff",borderRadius:10,padding:"10px 12px",marginBottom:16,border:"1px solid #bae6fd"}}>
-        <div style={{fontSize:11,fontWeight:600,color:"#0369a1",marginBottom:7}}>+ 키워드 추가 (계약에 영구 저장)</div>
-        <div style={{display:"flex",gap:6}}>
-          <input value={newKw} onChange={e=>setNewKw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),handleAddKw())} placeholder="키워드 입력 후 Enter" style={{flex:1,border:"1px solid #bae6fd",borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#fff"}}/>
-          <button onClick={handleAddKw} disabled={saving} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",whiteSpace:"nowrap"}}>{saving?"저장중":"+ 추가"}</button>
+        <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
+          {contract.phone&&<span style={{fontSize:10,color:"#6b7280"}}>{contract.phone}</span>}
+          {contract.total&&<span style={{fontSize:10,color:"#6b7280"}}>{contract.total}</span>}
+          <button onClick={e=>{e.stopPropagation();setExp(v=>!v);}} style={{fontSize:9,color:ce.color,background:ce.bg,border:"none",borderRadius:5,padding:"1px 6px",cursor:"pointer"}}>{exp?"접기":"상세"}</button>
         </div>
-      </div>
-      <div style={{display:"flex",gap:8}}>
-        <button onClick={onClose} style={{flex:1,background:"#f3f4f6",border:"none",borderRadius:9,padding:"11px",fontSize:13,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button>
-        <button onClick={handleConfirm} disabled={keywords.length===0} style={{flex:2,background:keywords.length>0?"#0071CE":"#e5e7eb",color:keywords.length>0?"#fff":"#9ca3af",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:keywords.length>0?"pointer":"not-allowed",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button>
+        {exp&&<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}} onClick={e=>e.stopPropagation()}>
+          {contract.link&&<a href={contract.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0071CE",wordBreak:"break-all"}}>{contract.link}</a>}
+          {contract.products&&<div style={{fontSize:11,color:"#374151",background:"#f8fafc",borderRadius:6,padding:"5px 7px",whiteSpace:"pre-line"}}><b>상품:</b>{"\n"}{contract.products}</div>}
+          {contract.notes&&<div style={{fontSize:11,color:"#6b7280"}}>{contract.notes}</div>}
+        </div>}
       </div>
     </div>
   </div>);
-}
-function ContractEventCard({event,contract,isDone,rankData,onToggle,onRankConfirm,onMemo}){
-  const[exp,setExp]=useState(false);
-  const[showRankModal,setShowRankModal]=useState(false);
-  const ce=CE[event.type]||CE["리포트"];
-  const isRankCheck=event.type==="순위체크";
-  const handleToggle=()=>{if(isRankCheck&&!isDone){setShowRankModal(true);return;}onToggle();};
-  const handleRankConfirm=(rankVal)=>{setShowRankModal(false);if(onRankConfirm)onRankConfirm(rankVal);else onToggle();};
-  const prevRank=rankData?.prevRank||event.initialRank||null;
-  const currRank=rankData?.rank||null;
-  const rankDiff=prevRank&&currRank?prevRank-currRank:null;
-  return(<>
-    {showRankModal&&<RankInputModal event={event} contract={contract} onClose={()=>setShowRankModal(false)} onConfirm={handleRankConfirm}/>}
-    <div style={{background:"#fff",borderRadius:10,padding:"10px 12px",border:`1.5px solid ${ce.color}40`,borderLeft:`4px solid ${ce.color}`,opacity:isDone?0.65:1}}>
-      <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
-        <button onClick={handleToggle} style={{flexShrink:0,marginTop:1,width:20,height:20,borderRadius:"50%",border:`2px solid ${isDone?"#10b981":ce.color}`,background:isDone?"#10b981":ce.bg,cursor:"pointer",fontSize:9,color:isDone?"#fff":ce.color,display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone?"✓":""}</button>
-        <div style={{flex:1,minWidth:0,cursor:onMemo?"pointer":"default"}} onClick={onMemo}>
-          <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:12,fontWeight:700,color:isDone?"#9ca3af":"#111827",textDecoration:isDone?"line-through":"none"}}>[{event.type}{isRankCheck?` ${event.rankIdx}차`:""}] {contract.name}</span>
-            <Badge label="계약" color={ce.color} bg={ce.bg}/>
-            {event.manager&&<Badge label={event.manager} color="#7c3aed" bg="#f5f3ff"/>}
-          </div>
-          <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
-            {contract.phone&&<span style={{fontSize:10,color:"#6b7280"}}>{contract.phone}</span>}
-            {contract.total&&<span style={{fontSize:10,color:"#6b7280"}}>{contract.total}</span>}
-            {isDone&&isRankCheck&&currRank&&<span style={{fontSize:10,fontWeight:700,color:rankDiff>0?"#10b981":rankDiff<0?"#ef4444":"#6b7280"}}>{rankDiff>0?"▲":rankDiff<0?"▼":"—"}{prevRank?`${prevRank}위→`:""}{currRank}위</span>}
-            <button onClick={e=>{e.stopPropagation();setExp(v=>!v);}} style={{fontSize:9,color:ce.color,background:ce.bg,border:"none",borderRadius:5,padding:"1px 6px",cursor:"pointer"}}>{exp?"접기":"상세"}</button>
-          </div>
-          {exp&&<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}} onClick={e=>e.stopPropagation()}>
-            {contract.link&&<a href={contract.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#0071CE",wordBreak:"break-all"}}>{contract.link}</a>}
-            {contract.products&&<div style={{fontSize:11,color:"#374151",background:"#f8fafc",borderRadius:6,padding:"5px 7px",whiteSpace:"pre-line"}}><b>상품:</b>{"\n"}{contract.products}</div>}
-            {contract.notes&&<div style={{fontSize:11,color:"#6b7280"}}>{contract.notes}</div>}
-          </div>}
-        </div>
-      </div>
-    </div>
-  </>);
 }
 function RepeatPicker({repeat,repeatDays,due,onChange}){const opts=[{v:"none",l:"반복 없음"},{v:"weekly",l:"매주"},{v:"monthly",l:"매월"},{v:"weekdays",l:"평일(월-금)"},{v:"custom",l:"요일 직접 설정"}];const toggle=d=>{const c=repeatDays||[];onChange("repeatDays",c.includes(d)?c.filter(x=>x!==d):[...c,d]);};const dueDow=due?DAYS_KR[new Date(due+"T00:00:00").getDay()]:"";return(<div><select value={repeat} onChange={e=>onChange("repeat",e.target.value)} style={{border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 10px",fontSize:12,background:"#fff",width:"100%",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{opts.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}</select>{repeat==="weekly"&&due&&<div style={{marginTop:4,fontSize:11,color:"#7c3aed",background:"#f5f3ff",borderRadius:7,padding:"4px 8px"}}>매주 <b>{dueDow}요일</b> ({due} 부터)</div>}{repeat==="custom"&&(<div style={{marginTop:6}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{DAYS_KR.map((d,i)=>(<button key={i} onClick={()=>toggle(i)} style={{width:30,height:30,borderRadius:"50%",border:`2px solid ${(repeatDays||[]).includes(i)?"#7c3aed":"#e5e7eb"}`,background:(repeatDays||[]).includes(i)?"#7c3aed":"#fff",color:(repeatDays||[]).includes(i)?"#fff":"#374151",fontSize:12,fontWeight:600,cursor:"pointer"}}>{d}</button>))}</div></div>)}</div>);}
 function TaskForm({form,setForm,onSubmit,onCancel,isEdit,isAdminUser,projectCategories}){
@@ -702,7 +634,7 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
   const[startDate,setStartDate]=useState(initial?.startDate||"");const[endDate,setEndDate]=useState(initial?.endDate||"");const[parseMsg,setParseMsg]=useState("");
   const[linkedMemoId,setLinkedMemoId]=useState(initial?.linkedMemoId||"");const[showManualLink,setShowManualLink]=useState(false);const[autoMatched,setAutoMatched]=useState(null);
   const iS={border:"1px solid #f0f1f3",borderRadius:8,padding:"8px 12px",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Pretendard',-apple-system,sans-serif"};
-  const handleParse=()=>{const r=parseMemo(memo);setParsed(p=>{const mergedKws=[...new Set([...(p.keywords||[]),...(r.keywords||[])])];return{...p,...r,keywords:mergedKws};});setParseMsg("파싱 완료!" + (r.keywords?.length>0?` (키워드 ${r.keywords.length}개 추출)`:""));if(r.name){const matched=allContracts.find(c=>c.name===r.name&&(!initial||c.id!==initial.id));if(matched){setAutoMatched(matched);setLinkedMemoId(matched.id);}else{setAutoMatched(null);}}};
+  const handleParse=()=>{const r=parseMemo(memo);setParsed(p=>{const mergedKws=[...new Set([...(p.keywords||[]),...(r.keywords||[])])];return{...p,...r,keywords:mergedKws};});setParseMsg("파싱 완료!"+(r.keywords?.length>0?` (키워드 ${r.keywords.length}개 추출)`:""));if(r.name){const matched=allContracts.find(c=>c.name===r.name&&(!initial||c.id!==initial.id));if(matched){setAutoMatched(matched);setLinkedMemoId(matched.id);}else{setAutoMatched(null);}}};
   return(<div style={{background:"#fff",borderRadius:14,padding:22,border:"1px solid #f0f1f3",marginBottom:12}}>
     <p style={{margin:"0 0 14px",fontWeight:700,fontSize:15,color:"#0f1117"}}>{initial?.id?"계약 수정":"계약업체 등록"}</p>
     {!initial?.id&&<div style={{marginBottom:14,background:"#f5f3ff",borderRadius:10,padding:14}}>
@@ -722,10 +654,10 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>총금액</label><input value={parsed.total} onChange={e=>setParsed(p=>({...p,total:e.target.value}))} placeholder="00만원" style={{...iS}}/></div><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>담당자</label><input value={parsed.manager} onChange={e=>setParsed(p=>({...p,manager:e.target.value}))} placeholder="담당자 이름" style={{...iS}}/></div></div>
     <div style={{marginBottom:8}}><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>특이사항</label><textarea value={parsed.notes} onChange={e=>setParsed(p=>({...p,notes:e.target.value}))} rows={3} style={{...iS,resize:"vertical"}}/></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 시작일 *</label><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} style={{...iS}}/></div><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 종료일 *</label><input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={{...iS}}/></div></div>
-    <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#0891b2",fontWeight:600,display:"block",marginBottom:5}}>순위 체크 키워드 (2~5개 권장)</label><div style={{display:"flex",gap:6,marginBottom:7,flexWrap:"wrap"}}>{(parsed.keywords||[]).map((kw,i)=>(<span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:99,padding:"3px 10px",fontSize:12,color:"#0891b2",fontWeight:600}}>{kw}<button onClick={()=>removeKeyword(kw)} style={{background:"none",border:"none",color:"#0891b2",cursor:"pointer",padding:0,fontSize:12,lineHeight:1}}>✕</button></span>))}</div><div style={{display:"flex",gap:6}}><input value={kwInput} onChange={e=>setKwInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),addKeyword())} placeholder="키워드 입력 후 Enter 또는 + 버튼" style={{...iS,flex:1}}/><button onClick={addKeyword} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+</button></div></div>
-    {(parsed.keywords||[]).length>0&&(<div style={{marginBottom:12,background:"#f0fdf4",borderRadius:10,padding:"12px 14px",border:"1px solid #bbf7d0"}}><label style={{fontSize:12,color:"#166534",fontWeight:600,display:"block",marginBottom:8}}>키워드별 시작 순위 (선택)</label><div style={{display:"flex",flexDirection:"column",gap:6}}>{(parsed.keywords||[]).map(kw=>(<div key={kw} style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:"#0f1117",fontWeight:500,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw}</span><input type="number" min="1" value={(parsed.initialRanks||{})[kw]||""} onChange={e=>setParsed(p=>({...p,initialRanks:{...(p.initialRanks||{}),[kw]:e.target.value}}))} placeholder="순위" style={{width:64,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/><span style={{fontSize:11,color:"#6b7280"}}>위</span></div>))}</div><div style={{fontSize:10,color:"#6b7280",marginTop:6}}>입력 시 이후 순위체크에서 상승/하락 자동 표시</div></div>)}
+    <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#0891b2",fontWeight:600,display:"block",marginBottom:5}}>순위 체크 키워드 (2~5개 권장)</label><div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:7}}>{(parsed.keywords||[]).map((kw,i)=>(<span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:99,padding:"3px 10px",fontSize:12,color:"#0891b2",fontWeight:600}}>{kw}<button onClick={()=>removeKeyword(kw)} style={{background:"none",border:"none",color:"#0891b2",cursor:"pointer",padding:0,fontSize:12,lineHeight:1}}>✕</button></span>))}</div><div style={{display:"flex",gap:6}}><input value={kwInput} onChange={e=>setKwInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),addKeyword())} placeholder="키워드 입력 후 Enter 또는 + 버튼" style={{...iS,flex:1}}/><button onClick={addKeyword} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+</button></div></div>
+    {(parsed.keywords||[]).length>0&&(<div style={{marginBottom:12,background:"#f0fdf4",borderRadius:10,padding:"12px 14px",border:"1px solid #bbf7d0"}}><label style={{fontSize:12,color:"#166534",fontWeight:600,display:"block",marginBottom:8}}>키워드별 시작 순위 (선택)</label><div style={{display:"flex",flexDirection:"column",gap:6}}>{(parsed.keywords||[]).map(kw=>(<div key={kw} style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:"#0f1117",fontWeight:500,flex:1}}>{kw}</span><input type="number" min="1" value={(parsed.initialRanks||{})[kw]||""} onChange={e=>setParsed(p=>({...p,initialRanks:{...(p.initialRanks||{}),[kw]:e.target.value}}))} placeholder="순위" style={{width:64,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/><span style={{fontSize:11,color:"#6b7280"}}>위</span></div>))}</div><div style={{fontSize:10,color:"#6b7280",marginTop:6}}>입력 시 이후 순위체크에서 상승/하락 자동 표시</div></div>)}
     <div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 14px",marginBottom:12,fontSize:12,color:"#166534"}}>[순위체크] 계약 시작일부터 10일 단위 자동 생성 · [리포트] 종료 3영업일 전</div>
-    <div style={{display:"flex",gap:8}}><button onClick={()=>{if(!parsed.name.trim()||!startDate||!endDate)return alert("상호명과 계약 기간은 필수입니다.");if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");const finalInitialRanks={};(parsed.keywords||[]).forEach(kw=>{if(parsed.initialRanks?.[kw])finalInitialRanks[kw]=parseInt(parsed.initialRanks[kw]);});onSubmit({...parsed,startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitialRanks});}} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button></div>
+    <div style={{display:"flex",gap:8}}><button onClick={()=>{if(!parsed.name.trim()||!startDate||!endDate)return alert("상호명과 계약 기간은 필수입니다.");if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");const finalInitRanks={};(parsed.keywords||[]).forEach(kw=>{if(parsed.initialRanks?.[kw])finalInitRanks[kw]=parseInt(parsed.initialRanks[kw]);});onSubmit({...parsed,startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitRanks});}} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button></div>
   </div>);
 }
 function DailyAlertModal({items,onClose}){
@@ -861,8 +793,8 @@ function MainApp({user,onLogout}){
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[contractMonth,setContractMonth]=useState("all");const[contractStatus,setContractStatus]=useState("all");
-  const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");  const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");
-  const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
+  const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");
+  const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());
   const[calFilter,setCalFilter]=useState("all");const[selectedDay,setSelectedDay]=useState(null);
   const[fOwner,setFOwner]=useState("all");const[fStatus,setFStatus]=useState("all");const[fPriority,setFPriority]=useState("all");const[fProject,setFProject]=useState("all");
@@ -882,7 +814,7 @@ function MainApp({user,onLogout}){
   const[analysisMonth,setAnalysisMonth]=useState(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
   const[analysisData,setAnalysisData]=useState(null);const[loadingAnalysis,setLoadingAnalysis]=useState(false);
 
-  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadProfiles();loadProjectCategories();loadAccounts();},[]);// rankDataMap loaded inside loadCompletions
+  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadProfiles();loadProjectCategories();loadAccounts();},[]);
   useEffect(()=>{if(selTs)loadReports(selTs);},[selTs]);
   useEffect(()=>{loadDateFinalReports(reportViewDate);},[reportViewDate]);
   useEffect(()=>{
@@ -910,10 +842,10 @@ function MainApp({user,onLogout}){
   const loadContracts=async()=>{const c=await st.get("contracts:all")||[];setContracts(c);};
   const saveContract=async c=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0)list[idx]=c;else list.push(c);await st.set("contracts:all",list);setContracts([...list]);setShowCF(false);setEditContract(null);};
   const deleteContract=async id=>{const list=(await st.get("contracts:all")||[]).filter(c=>c.id!==id);await st.set("contracts:all",list);setContracts(list);};
-  const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);const r=await st.get("ce:rankdata")||{};setRankDataMap(r);};
-  const toggleCE=async(e,forceTo)=>{const data=await st.get("ce:completions")||{};const k=ceKey(e);data[k]=forceTo!==undefined?forceTo:!data[k];await st.set("ce:completions",data);setCompletions({...data});};
+  const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);};
   const handleRankConfirm=async(event,keywordsResult)=>{const k=ceKey(event);const newRankData=await st.get("ce:rankdata")||{};newRankData[k]={keywords:keywordsResult,date:todayStr};await st.set("ce:rankdata",newRankData);setRankDataMap({...newRankData});const cData=await st.get("ce:completions")||{};cData[k]=true;await st.set("ce:completions",cData);setCompletions({...cData});};
   const addKeywordToContract=async(contractId,kw)=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(c=>c.id===contractId);if(idx<0)return;const existing=list[idx].keywords||[];if(existing.includes(kw))return;list[idx]={...list[idx],keywords:[...existing,kw]};await st.set("contracts:all",list);setContracts([...list]);};
+  const toggleCE=async(e,forceTo)=>{const data=await st.get("ce:completions")||{};const k=ceKey(e);data[k]=forceTo!==undefined?forceTo:!data[k];await st.set("ce:completions",data);setCompletions({...data});};
   const loadProfiles=async()=>{const p=await st.get("profiles:all")||{};setProfiles(p);};
   const updateProfile=async(name,img)=>{const p=await st.get("profiles:all")||{};p[name]=img;await st.set("profiles:all",p);setProfiles({...p});};
   const loadProjectCategories=async()=>{const p=await st.get("config:projects")||[];setProjectCategories(p);};
@@ -962,8 +894,8 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
   return(
     <div style={{display:"flex",minHeight:"100vh",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#f7f8fa"}}>
       {showProfile&&<ProfileModal user={user} profiles={profiles} onUpdateProfile={updateProfile} onClose={()=>setShowProfile(false)} contracts={contracts}/>}
-      {rankModalEvent&&rankModalContract&&<RankInputModal event={rankModalEvent} contract={rankModalContract} existingData={rankDataMap[ceKey(rankModalEvent)]} onClose={()=>{setRankModalEvent(null);setRankModalContract(null);}} onConfirm={async(kwResult)=>{await handleRankConfirm(rankModalEvent,kwResult);setRankModalEvent(null);setRankModalContract(null);}} onAddKeyword={async(kw)=>addKeywordToContract(rankModalContract.id,kw)}/>}
-      {memoContract&&<ContractMemoModal contract={memoContract} user={user} onClose={()=>setMemoContract(null)} allContracts={contracts} rankDataMap={rankDataMap} completions={completions} onRankEdit={newData=>setRankDataMap({...newData})} onContractUpdate={list=>setContracts([...list])}/>}
+      {memoContract&&<ContractMemoModal contract={memoContract} user={user} onClose={()=>setMemoContract(null)} allContracts={contracts} rankDataMap={rankDataMap} completions={completions} onContractUpdate={list=>setContracts([...list])}/>}
+      {rankModalEvent&&rankModalContract&&<RankInputModal event={rankModalEvent} contract={rankModalContract} existingData={rankDataMap[ceKey(rankModalEvent)]} onClose={()=>{setRankModalEvent(null);setRankModalContract(null);}} onConfirm={async kwResult=>{await handleRankConfirm(rankModalEvent,kwResult);setRankModalEvent(null);setRankModalContract(null);}} onAddKeyword={async kw=>addKeywordToContract(rankModalContract.id,kw)}/>}
       {editingReport&&<AdminEditReportModal report={editingReport} dateStr={reportViewDate} onClose={()=>setEditingReport(null)} onSave={handleAdminSaveReport}/>}
       {dailyAlertItems&&dailyAlertItems!=='PENDING'&&Array.isArray(dailyAlertItems)&&<DailyAlertModal items={dailyAlertItems} onClose={()=>setDailyAlertItems(null)}/>}
       <Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)} navOrder={navOrder} setNavOrder={setNavOrder}/>
@@ -1010,7 +942,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               <div style={{display:"flex",flexDirection:window.innerWidth<=768?"column":"row",gap:14,alignItems:"flex-start"}}>
                 <div style={{flex:window.innerWidth<=768?"none":"0 0 420px",width:window.innerWidth<=768?"100%":"auto",maxWidth:window.innerWidth<=768?"100%":420,background:"#fff",borderRadius:12,padding:"14px 16px",border:"1px solid #f0f1f3"}}>
                   <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>오늘 할 일</span><span style={{background:"#fef2f2",color:"#ef4444",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{todayTasks.length+todayCE.length}</span></div>
-                  {todayTasks.length===0&&todayCE.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>오늘 할 일이 없습니다</div>:<div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:window.innerWidth<=768?300:9999,overflowY:window.innerWidth<=768?"auto":"visible"}}>{todayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} rankData={rankDataMap[ceKey(e)]} onToggle={()=>toggleCE(e)} onRankConfirm={(rv)=>handleRankConfirm(e,rv)} onMemo={()=>setMemoContract(c)}/>:null;})}{todayTasks.map(t=><TaskCard key={t.id+t._sk} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}
+                  {todayTasks.length===0&&todayCE.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>오늘 할 일이 없습니다</div>:<div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:window.innerWidth<=768?300:9999,overflowY:window.innerWidth<=768?"auto":"visible"}}>{todayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>toggleCE(e)} onMemo={()=>setMemoContract(c)}/>:null;})}{todayTasks.map(t=><TaskCard key={t.id+t._sk} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}
                 </div>
                 <div style={{flex:1,minWidth:0,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}>
                   <div onClick={()=>setShowAllTasks(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer"}}><div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>전체 할 일</span><span style={{background:"#f7f8fa",color:"#6b7280",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{allItems.length}개</span></div><span style={{fontSize:10,fontWeight:600,color:"#0071CE",background:"#f0f7ff",borderRadius:6,padding:"3px 8px"}}>{showAllTasks?"숨기기 ▲":"전체보기 ▼"}</span></div>
@@ -1027,7 +959,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:3}}>{DAYS_KR.map((d,i)=>(<div key={d} style={{textAlign:"center",fontSize:window.innerWidth<=768?9:11,fontWeight:700,color:i===0?"#ef4444":i===6?"#0071CE":"#adb5bd",padding:"3px 0"}}>{d}</div>))}</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>{cells.map((day,i)=>{if(!day)return <div key={i}/>;const ds=`${calY}-${String(calM+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;const isToday=ds===todayStr;const isSel=selectedDay===ds;const dow=(firstDay+day-1)%7;const cell=tasksByDay[day]||{t:[],e:[]};const allCellItems=[...cell.e.map(e=>({...e,_ce:true})),...cell.t];return(<div key={i} onClick={()=>setSelectedDay(isSel?null:ds)} style={{minHeight:window.innerWidth<=768?120:82,background:isSel?"#e8f4fd":isToday?"#f0f7ff":"#fff",border:`1px solid ${isSel?"#0071CE":isToday?"#93c5fd":"#f0f1f3"}`,borderRadius:6,padding:window.innerWidth<=768?"3px 2px":"5px 4px",cursor:"pointer",overflow:"hidden",boxSizing:"border-box"}}><div style={{fontSize:window.innerWidth<=768?10:11,fontWeight:isToday?800:500,color:isToday?"#0071CE":dow===0?"#ef4444":dow===6?"#3b82f6":"#374151",marginBottom:2,textAlign:"center",lineHeight:1.2}}>{isToday?<span style={{background:"#0071CE",color:"#fff",borderRadius:"50%",width:16,height:16,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:9}}>{day}</span>:day}</div><div style={{display:"flex",flexDirection:"column",gap:1}}>{allCellItems.slice(0,window.innerWidth<=768?3:3).map((item,ti)=>{const iD=item._ce?!!completions[ceKey(item)]:item.status==="done";const rawLabel=item._ce?item.type[0]+"."+item.name:item.title;const label=window.innerWidth<=768?(rawLabel.length>5?rawLabel.slice(0,5)+"…":rawLabel):rawLabel;const bg=item._ce?CE[item.type].bg:P[item.priority].bg;const color=item._ce?CE[item.type].color:P[item.priority].color;return <div key={ti} title={rawLabel} style={{fontSize:window.innerWidth<=768?8:9,background:bg,color,borderRadius:2,padding:"1px 2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,textDecoration:iD?"line-through":"none",opacity:iD?0.6:1,lineHeight:1.3,marginBottom:1}}>{label}</div>;})} {allCellItems.length>3&&<div style={{fontSize:7,color:"#9ca3af",textAlign:"center",fontWeight:600}}>+{allCellItems.length-3}</div>}</div></div>);})} </div>
               </div>
-              {selectedDay&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}><div style={{padding:"12px 18px",borderBottom:"1px solid #f0f1f3",background:selectedDay===todayStr?"#f0f7ff":"#f7f8fa",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>{new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span>{selectedDay===todayStr&&<span style={{fontSize:10,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:99,padding:"2px 7px"}}>오늘</span>}</div><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#adb5bd"}}>{selDayTasks.length+selDayCE.length}개</span><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:15}}>✕</button></div></div><div style={{padding:"14px 18px"}}>{selDayTasks.length===0&&selDayCE.length===0?<div style={{textAlign:"center",padding:"16px 0",color:"#adb5bd",fontSize:12}}>이 날 일정이 없어요</div>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:7}}>{selDayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} rankData={rankDataMap[ceKey(e)]} onToggle={()=>toggleCE(e)} onRankConfirm={(rv)=>handleRankConfirm(e,rv)} onMemo={()=>setMemoContract(c)}/>:null;})}{selDayTasks.map(t=><TaskCard key={t.id+(t._sk||"")} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}</div></div>)}
+              {selectedDay&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}><div style={{padding:"12px 18px",borderBottom:"1px solid #f0f1f3",background:selectedDay===todayStr?"#f0f7ff":"#f7f8fa",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>{new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span>{selectedDay===todayStr&&<span style={{fontSize:10,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:99,padding:"2px 7px"}}>오늘</span>}</div><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#adb5bd"}}>{selDayTasks.length+selDayCE.length}개</span><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:15}}>✕</button></div></div><div style={{padding:"14px 18px"}}>{selDayTasks.length===0&&selDayCE.length===0?<div style={{textAlign:"center",padding:"16px 0",color:"#adb5bd",fontSize:12}}>이 날 일정이 없어요</div>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:7}}>{selDayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>toggleCE(e)} onMemo={()=>setMemoContract(c)}/>:null;})}{selDayTasks.map(t=><TaskCard key={t.id+(t._sk||"")} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}</div></div>)}
             </div>
           )}
           {tab==="revenue"&&<RevenueCalendarTab contracts={contracts} user={user} profiles={profiles}/>}
@@ -1036,68 +968,82 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               {/* 세부탭 */}
               <div style={{display:"flex",background:"#fff",borderRadius:12,padding:4,marginBottom:14,border:"1px solid #f0f1f3",gap:4}}>
                 {[{id:"list",label:"업체 목록"},{id:"rank",label:"순위 관리"}].map(t=>(
-                  <button key={t.id} onClick={()=>setContractSubTab(t.id)} style={{flex:1,padding:"9px",borderRadius:9,border:"none",fontSize:13,fontWeight:contractSubTab===t.id?700:500,cursor:"pointer",background:contractSubTab===t.id?"#0071CE":"transparent",color:contractSubTab===t.id?"#fff":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"all 0.15s"}}>{t.label}</button>
+                  <button key={t.id} onClick={()=>setContractSubTab(t.id)} style={{flex:1,padding:"9px",borderRadius:9,border:"none",fontSize:13,fontWeight:contractSubTab===t.id?700:500,cursor:"pointer",background:contractSubTab===t.id?"#0071CE":"transparent",color:contractSubTab===t.id?"#fff":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{t.label}</button>
                 ))}
               </div>
 
               {/* ===== 업체목록 탭 ===== */}
               {contractSubTab==="list"&&(<div>
-                {window.innerWidth<=768&&user.isAdmin&&<button onClick={()=>{setEditContract(null);setShowCF(v=>!v);}} style={{width:"100%",background:"#8468D3",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:12}}>+ 계약 등록</button>}
-                {showCF&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}} allContracts={contracts}/>}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-                  <div style={{background:"linear-gradient(135deg,#f0f7ff,#dbeafe)",borderRadius:12,padding:"12px 16px",border:"1px solid #bfdbfe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#1e40af",fontWeight:700,marginBottom:2}}>신규 계약</div><div style={{fontSize:22,fontWeight:900,color:"#0071CE"}}>{renewalStats.new.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#3b82f6",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#0071CE"}}>{fmtAmount(renewalStats.new.amount)}</div></div></div></div>
-                  <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:12,padding:"12px 16px",border:"1px solid #ddd6fe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#5b21b6",fontWeight:700,marginBottom:2}}>재연장</div><div style={{fontSize:22,fontWeight:900,color:"#8468D3"}}>{renewalStats.renewal.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#8468D3",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#8468D3"}}>{fmtAmount(renewalStats.renewal.amount)}</div></div></div></div>
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
-                  <div style={{position:"relative"}}><input value={contractSearch} onChange={e=>{setContractSearch(e.target.value);setContractPage(1);}} placeholder="상호명 검색..." style={{width:"100%",border:"1.5px solid #f0f1f3",borderRadius:9,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>{contractSearch&&<button onClick={()=>{setContractSearch("");setContractPage(1);}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:14,padding:0}}>✕</button>}</div>
-                  <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>월별:</span><button onClick={()=>{setContractMonth("all");setContractPage(1);}} style={{border:`1.5px solid ${contractMonth==="all"?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth==="all"?"#f0f7ff":"#fff",color:contractMonth==="all"?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{contractMonthOptions.map(mo=>{const[y,m]=mo.split("-");return(<button key={mo} onClick={()=>{setContractMonth(mo);setContractPage(1);}} style={{border:`1.5px solid ${contractMonth===mo?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth===mo?"#f0f7ff":"#fff",color:contractMonth===mo?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{parseInt(y)}년 {parseInt(m)}월</button>);})}</div>
-                  <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>상태:</span>{[{v:"all",l:"전체",c:"#6b7280"},{v:"active",l:"진행중",c:"#10b981"},{v:"ended",l:"종료",c:"#9ca3af"},{v:"cancelled",l:"해지",c:"#ef4444"}].map(({v,l,c})=>(<button key={v} onClick={()=>{setContractStatus(v);setContractPage(1);}} style={{border:`1.5px solid ${contractStatus===v?c:"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractStatus===v?c+"18":"#fff",color:contractStatus===v?c:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>))}{user.isAdmin&&managers.length>0&&(<><span style={{fontSize:11,fontWeight:600,color:"#6b7280",marginLeft:4,flexShrink:0}}>담당자:</span><button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#f5f3ff":"#fff",color:contractManager==="all"?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{managers.map(m=>(<button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{m}</button>))}</>)}</div>
-                  {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span><button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>필터 초기화</button></div>)}
-                </div>
-                {filteredContracts.length===0&&!showCF?(<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}><div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":contractStatus==="cancelled"?"해지된 업체가 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div></div>)
-                :<div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,alignItems:"start"}}>
-                  {pagedContracts.map(c=>{
-                    const isCancelled=!!c.cancelled;
-                    const isActive=!isCancelled&&c.endDate>=todayStr;
-                    const startParts=c.startDate?c.startDate.split("-"):["","",""];
-                    const handleToggleCancel=async(e)=>{e.stopPropagation();if(isCancelled){if(!window.confirm("해지를 취소하고 복구할까요?"))return;}else{if(!window.confirm(`"${c.name}" 업체를 해지 처리할까요?`))return;}const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0){list[idx]={...list[idx],cancelled:!isCancelled};await st.set("contracts:all",list);setContracts([...list]);}};
-                    return(
-                      <div key={c.id} onClick={()=>setMemoContract(c)} style={{background:isCancelled?"#fff5f5":"#fff",borderRadius:12,border:`1px solid ${isCancelled?"#fca5a5":"#f0f1f3"}`,padding:"11px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",boxSizing:"border-box",width:"100%"}} onMouseEnter={e=>e.currentTarget.style.background=isCancelled?"#fff0f0":"#f7f9ff"} onMouseLeave={e=>e.currentTarget.style.background=isCancelled?"#fff5f5":"#fff"}>
-                        <div style={{display:"flex",flexDirection:"column",lineHeight:1.2,flexShrink:0,width:52}}>
-                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#adb5bd",fontWeight:600}}>{startParts[0]}년 {startParts[1]}월</span>
-                          <span style={{fontSize:20,fontWeight:800,color:isCancelled?"#ef4444":"#0071CE",lineHeight:1}}>{startParts[2]}</span>
+              {window.innerWidth<=768&&user.isAdmin&&<button onClick={()=>{setEditContract(null);setShowCF(v=>!v);}} style={{width:"100%",background:"#8468D3",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:12}}>+ 계약 등록</button>}
+              {showCF&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}} allContracts={contracts}/>}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                <div style={{background:"linear-gradient(135deg,#f0f7ff,#dbeafe)",borderRadius:12,padding:"12px 16px",border:"1px solid #bfdbfe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#1e40af",fontWeight:700,marginBottom:2}}>신규 계약</div><div style={{fontSize:22,fontWeight:900,color:"#0071CE"}}>{renewalStats.new.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#3b82f6",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#0071CE"}}>{fmtAmount(renewalStats.new.amount)}</div></div></div></div>
+                <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:12,padding:"12px 16px",border:"1px solid #ddd6fe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#5b21b6",fontWeight:700,marginBottom:2}}>재연장</div><div style={{fontSize:22,fontWeight:900,color:"#8468D3"}}>{renewalStats.renewal.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#8468D3",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#8468D3"}}>{fmtAmount(renewalStats.renewal.amount)}</div></div></div></div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+                <div style={{position:"relative"}}><input value={contractSearch} onChange={e=>{setContractSearch(e.target.value);setContractPage(1);}} placeholder="상호명 검색..." style={{width:"100%",border:"1.5px solid #f0f1f3",borderRadius:9,padding:"7px 12px",fontSize:12,outline:"none",boxSizing:"border-box",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>{contractSearch&&<button onClick={()=>{setContractSearch("");setContractPage(1);}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:14,padding:0}}>✕</button>}</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>월별:</span><button onClick={()=>{setContractMonth("all");setContractPage(1);}} style={{border:`1.5px solid ${contractMonth==="all"?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth==="all"?"#f0f7ff":"#fff",color:contractMonth==="all"?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{contractMonthOptions.map(mo=>{const[y,m]=mo.split("-");return(<button key={mo} onClick={()=>{setContractMonth(mo);setContractPage(1);}} style={{border:`1.5px solid ${contractMonth===mo?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth===mo?"#f0f7ff":"#fff",color:contractMonth===mo?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{parseInt(y)}년 {parseInt(m)}월</button>);})}</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>상태:</span>{[{v:"all",l:"전체",c:"#6b7280"},{v:"active",l:"진행중",c:"#10b981"},{v:"ended",l:"종료",c:"#9ca3af"},{v:"cancelled",l:"해지",c:"#ef4444"}].map(({v,l,c})=>(<button key={v} onClick={()=>{setContractStatus(v);setContractPage(1);}} style={{border:`1.5px solid ${contractStatus===v?c:"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractStatus===v?c+"18":"#fff",color:contractStatus===v?c:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>))}{user.isAdmin&&managers.length>0&&(<><span style={{fontSize:11,fontWeight:600,color:"#6b7280",marginLeft:4,flexShrink:0}}>담당자:</span><button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#f5f3ff":"#fff",color:contractManager==="all"?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{managers.map(m=>(<button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{m}</button>))}</>)}</div>
+                {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span><button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>필터 초기화</button></div>)}
+              </div>
+              {filteredContracts.length===0&&!showCF?(<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}><div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":contractStatus==="cancelled"?"해지된 업체가 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div></div>)
+              :<div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,alignItems:"start"}}>
+                {pagedContracts.map(c=>{
+                  const evts=genEvents(c);
+                  const isCancelled=!!c.cancelled;
+                  const isActive=!isCancelled&&c.endDate>=todayStr;
+                  const rankEvts=evts.filter(e=>e.type==="순위체크");const rpt=evts.find(e=>e.type==="리포트");
+                  const rpt=evts.find(e=>e.type==="리포트");
+                  const startParts=c.startDate?c.startDate.split("-"):["","",""];
+                  const handleToggleCancel=async(e)=>{e.stopPropagation();if(isCancelled){if(!window.confirm("해지를 취소하고 복구할까요?"))return;}else{if(!window.confirm(`"${c.name}" 업체를 해지 처리할까요?`))return;}const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0){list[idx]={...list[idx],cancelled:!isCancelled};await st.set("contracts:all",list);setContracts([...list]);}};
+                  return(
+                    <div key={c.id} style={{background:isCancelled?"#fff5f5":"#fff",borderRadius:12,border:`1px solid ${isCancelled?"#fca5a5":"#f0f1f3"}`,padding:"12px 14px",display:"flex",gap:0,alignItems:"stretch",cursor:"pointer",transition:"box-shadow 0.15s",width:"100%",overflow:"hidden",boxSizing:"border-box"}} onMouseEnter={e=>e.currentTarget.style.boxShadow=isCancelled?"0 4px 16px rgba(239,68,68,0.12)":"0 4px 16px rgba(0,113,206,0.10)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"} onClick={()=>setMemoContract(c)}>
+                      {/* 날짜 열 */}
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,width:44,borderRight:`1px solid ${isCancelled?"#fecaca":"#f0f1f3"}`,marginRight:14,paddingRight:14,gap:1}}>
+                        <div style={{fontSize:9,color:isCancelled?"#fca5a5":"#adb5bd",fontWeight:600}}>{startParts[1]}월</div>
+                        <div style={{fontSize:20,fontWeight:800,color:isCancelled?"#ef4444":"#0071CE",lineHeight:1}}>{startParts[2]}</div>
+                        <div style={{fontSize:8,color:isCancelled?"#fca5a5":"#adb5bd"}}>{startParts[0]}</div>
+                      </div>
+                      {/* 가운데: 상호명+담당자+기간 */}
+                      <div style={{display:"flex",flexDirection:"column",justifyContent:"center",flex:1,minWidth:0,gap:4}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                          <span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{c.isRenewal?"R":"N"}</span>
+                          <span style={{fontWeight:800,fontSize:14,color:isCancelled?"#ef4444":"#0f1117",textDecoration:isCancelled?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+                          {isCancelled?<Badge label="해지" color="#ef4444" bg="#fee2e2"/>:<Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/>}
                         </div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",marginBottom:3}}>
-                            <span style={{fontSize:11,fontWeight:800,color:c.isRenewal?"#8468D3":"#0071CE",background:c.isRenewal?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 6px",border:`1px solid ${c.isRenewal?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{c.isRenewal?"R":"N"}</span>
-                            <span style={{fontWeight:700,fontSize:13,color:isCancelled?"#ef4444":"#0f1117",textDecoration:isCancelled?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
-                            {isCancelled?<Badge label="해지" color="#ef4444" bg="#fee2e2"/>:<Badge label={isActive?"진행중":"종료"} color={isActive?"#10b981":"#9ca3af"} bg={isActive?"#d1fae5":"#f3f4f6"}/>}
-                          </div>
-                          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                            {c.manager&&<span style={{fontSize:11,color:isCancelled?"#fca5a5":"#8468D3",fontWeight:600}}>{c.manager}</span>}
-                            {c.total&&<span style={{fontSize:11,color:isCancelled?"#ef4444":"#0071CE",fontWeight:700}}>{c.total}</span>}
-                            <span style={{fontSize:10,color:"#adb5bd"}}>{c.startDate} ~ {c.endDate}</span>
-                            {c.keywords&&c.keywords.length>0&&<span style={{fontSize:10,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"1px 7px",border:"1px solid #a5f3fc"}}>{c.keywords.length}개 키워드</span>}
-                          </div>
+                        {c.manager&&<div style={{fontSize:11,color:isCancelled?"#fca5a5":"#8468D3",fontWeight:600}}>{c.manager}</div>}
+                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#6b7280",fontWeight:500}}>{c.startDate}</span>
+                          <span style={{fontSize:10,color:"#d1d5db"}}>~</span>
+                          <span style={{fontSize:10,color:isCancelled?"#fca5a5":"#6b7280",fontWeight:500}}>{c.endDate}</span>
                         </div>
-                        <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                      </div>
+                      {/* 오른쪽: 금액+뱃지+버튼 */}
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",justifyContent:"space-between",flexShrink:0,marginLeft:12,gap:4}} onClick={e=>e.stopPropagation()}>
+                        <div style={{display:"flex",gap:3,alignItems:"center"}}>
+                          <button onClick={()=>setMemoContract(c)} style={{background:"#f5f3ff",border:"1px solid #e9d5ff",color:"#8468D3",cursor:"pointer",padding:"3px 7px",borderRadius:6,fontSize:10,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>메모</button>
                           {user.isAdmin&&<>
                             <button onClick={handleToggleCancel} style={{background:isCancelled?"#fff7ed":"#fff5f5",border:`1px solid ${isCancelled?"#fed7aa":"#fca5a5"}`,color:isCancelled?"#ea580c":"#ef4444",cursor:"pointer",padding:"3px 7px",borderRadius:6,fontSize:10,fontWeight:600,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{isCancelled?"복구":"해지"}</button>
                             <button onClick={()=>{setEditContract(c);setShowCF(true);}} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",padding:2,fontSize:11}}>✏️</button>
                             <button onClick={()=>deleteContract(c.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",padding:2,fontSize:11}}>✕</button>
                           </>}
                         </div>
+                        {c.total&&<div style={{fontSize:12,color:isCancelled?"#ef4444":"#0071CE",fontWeight:700}}>{c.total}</div>}
+                        <div style={{display:"flex",gap:3,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                          {!isCancelled&&c.keywords&&c.keywords.length>0&&<span style={{fontSize:10,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"1px 7px",border:"1px solid #a5f3fc"}}>{c.keywords.length}개 키워드</span>}
+                          {isCancelled&&<Badge label="해지 업체" color="#ef4444" bg="#fee2e2"/>}
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>}
-                {totalPages>1&&(<div style={{display:"flex",justifyContent:"center",gap:5,marginTop:12}}>{Array.from({length:totalPages},(_,i)=>(<button key={i} onClick={()=>setContractPage(i+1)} style={{width:30,height:30,borderRadius:7,border:`1.5px solid ${contractPage===i+1?"#0071CE":"#f0f1f3"}`,background:contractPage===i+1?"#0071CE":"#fff",color:contractPage===i+1?"#fff":"#6b7280",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{i+1}</button>))}</div>)}
+                    </div>
+                  );
+                })}
+              </div>}
+              {totalPages>1&&(<div style={{display:"flex",justifyContent:"center",gap:5,marginTop:12}}>{Array.from({length:totalPages},(_,i)=>(<button key={i} onClick={()=>setContractPage(i+1)} style={{width:30,height:30,borderRadius:7,border:`1.5px solid ${contractPage===i+1?"#0071CE":"#f0f1f3"}`,background:contractPage===i+1?"#0071CE":"#fff",color:contractPage===i+1?"#fff":"#6b7280",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{i+1}</button>))}</div>)}
               </div>)}
 
               {/* ===== 순위관리 탭 ===== */}
               {contractSubTab==="rank"&&(()=>{
                 const activeContracts=visibleContracts.filter(c=>!c.cancelled&&c.endDate>=todayStr);
-                // 각 업체의 다음 순위체크 날짜 계산 → 임박 순 정렬
                 const withNext=activeContracts.map(c=>{
                   const evts=genEvents(c);
                   const rankEvts=evts.filter(e=>e.type==="순위체크");
@@ -1105,21 +1051,19 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                   const pendingRank=rankEvts.find(e=>!completions[ceKey(e)]);
                   const nextDate=pendingRank?.date||rpt?.date||c.endDate;
                   const daysLeft=Math.ceil((new Date(nextDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
-                  return{c,evts,rankEvts,rpt,pendingRank,daysLeft,nextDate};
+                  return{c,rankEvts,rpt,pendingRank,daysLeft};
                 }).sort((a,b)=>a.daysLeft-b.daysLeft);
                 const needCheck=withNext.filter(x=>x.pendingRank&&x.daysLeft<=0);
                 const upcoming=withNext.filter(x=>x.pendingRank&&x.daysLeft>0);
                 const allDone=withNext.filter(x=>!x.pendingRank);
-                const renderRankCard=({c,rankEvts,rpt,daysLeft})=>{
-                  const isCancelled=false;
-                  const startParts=c.startDate?c.startDate.split("-"):["","",""];
+                const renderCard=({c,rankEvts,rpt})=>{
+                  const sp=c.startDate?c.startDate.split("-"):["","",""];
                   return(
-                    <div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden",boxSizing:"border-box"}}>
-                      {/* 업체 헤더 - 클릭하면 모달 */}
+                    <div key={c.id} style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}>
                       <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:"1px solid #f7f8fa",cursor:"pointer",background:"#fafbfc"}} onClick={()=>setMemoContract(c)}>
-                        <div style={{display:"flex",flexDirection:"column",lineHeight:1.1,flexShrink:0,width:48}}>
-                          <span style={{fontSize:9,color:"#adb5bd",fontWeight:600}}>{startParts[0]}년 {startParts[1]}월</span>
-                          <span style={{fontSize:18,fontWeight:800,color:"#0071CE",lineHeight:1}}>{startParts[2]}</span>
+                        <div style={{display:"flex",flexDirection:"column",lineHeight:1.1,flexShrink:0,width:46}}>
+                          <span style={{fontSize:9,color:"#adb5bd",fontWeight:600}}>{sp[0]}년 {sp[1]}월</span>
+                          <span style={{fontSize:18,fontWeight:800,color:"#0071CE",lineHeight:1}}>{sp[2]}</span>
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
@@ -1127,23 +1071,18 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                             <span style={{fontWeight:700,fontSize:13,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
                             {c.manager&&<span style={{fontSize:11,color:"#8468D3",fontWeight:600}}>{c.manager}</span>}
                           </div>
-                          <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
+                          <div style={{display:"flex",gap:5,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
                             {c.total&&<span style={{fontSize:11,color:"#0071CE",fontWeight:700}}>{c.total}</span>}
                             <span style={{fontSize:10,color:"#adb5bd"}}>{c.startDate} ~ {c.endDate}</span>
-                            {c.keywords&&c.keywords.length>0&&<div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{c.keywords.map((kw,ki)=>(<span key={ki} style={{fontSize:10,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"1px 7px",border:"1px solid #a5f3fc"}}>{kw}</span>))}</div>}
+                            {c.keywords&&c.keywords.length>0&&c.keywords.map((kw,ki)=>(<span key={ki} style={{fontSize:10,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"1px 7px",border:"1px solid #a5f3fc"}}>{kw}</span>))}
                           </div>
                         </div>
-                        <span style={{fontSize:10,color:"#adb5bd"}}>상세 ›</span>
+                        <span style={{fontSize:10,color:"#adb5bd",flexShrink:0}}>상세 ›</span>
                       </div>
-                      {/* 순위체크 + 리포트 체크박스 행 */}
                       <div style={{display:"flex",gap:6,padding:"10px 14px",flexWrap:"wrap",alignItems:"center"}} onClick={e=>e.stopPropagation()}>
                         {rankEvts.map((e,ri)=>{
-                          const ek=ceKey(e);
-                          const isDone=!!completions[ek];
-                          const rd=rankDataMap[ek];
-                          const isToday=e.date===todayStr;
-                          const isPast=e.date<todayStr;
-                          const isFuture=e.date>todayStr;
+                          const ek=ceKey(e);const isDone=!!completions[ek];const rd=rankDataMap[ek];
+                          const isToday=e.date===todayStr;const isPast=e.date<todayStr;const isFuture=e.date>todayStr;
                           const dl=Math.ceil((new Date(e.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
                           return(
                             <div key={ri} style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f0fdf4":(isToday||isPast)?"#fef2f2":"#f7f8fa",borderRadius:8,padding:"6px 10px",border:`1.5px solid ${isDone?"#6ee7b7":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`,cursor:isDone?"default":"pointer"}} onClick={()=>{if(!isDone){setRankModalEvent(e);setRankModalContract(c);}}}>
@@ -1152,31 +1091,26 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                               </div>
                               <div>
                                 <div style={{fontSize:11,fontWeight:600,color:(isToday||isPast)&&!isDone?"#ef4444":isDone?"#10b981":"#374151",whiteSpace:"nowrap"}}>
-                                  {e.rankIdx}차 {e.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" ⚠ 지남":isFuture?` D-${dl}`:""}
+                                  {e.rankIdx}차 {e.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" ⚠지남":isFuture?` D-${dl}`:""}
                                 </div>
-                                {isDone&&rd?.keywords&&(()=>{
-                                  return(<div style={{display:"flex",gap:4,marginTop:2,flexWrap:"wrap"}}>{Object.entries(rd.keywords).map(([kw,v])=>{const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;return(<span key={kw} style={{fontSize:10,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",fontWeight:600}}>{kw} {diff>0?"▲":diff<0?"▼":"—"}{v.rank}위</span>);})}</div>);
-                                })()}
-                                {!isDone&&(c.keywords||[]).length>0&&<div style={{fontSize:10,color:"#adb5bd",marginTop:1}}>{(c.keywords).join(" · ")}</div>}
+                                {isDone&&rd?.keywords&&<div style={{display:"flex",gap:4,marginTop:1,flexWrap:"wrap"}}>{Object.entries(rd.keywords).map(([kw,v])=>{const diff=v.prevRank&&v.rank?v.prevRank-v.rank:null;return(<span key={kw} style={{fontSize:10,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280",fontWeight:600}}>{kw} {diff>0?"▲":diff<0?"▼":"—"}{v.rank}위</span>);})}</div>}
+                                {!isDone&&(c.keywords||[]).length>0&&<div style={{fontSize:10,color:"#adb5bd",marginTop:1}}>{c.keywords.join(" · ")}</div>}
                               </div>
                             </div>
                           );
                         })}
                         {rpt&&(()=>{
-                          const ek=ceKey(rpt);
-                          const isDone=!!completions[ek];
-                          const isToday=rpt.date===todayStr;
-                          const isPast=rpt.date<todayStr;
-                          const isFuture=rpt.date>todayStr;
+                          const ek=ceKey(rpt);const isDone=!!completions[ek];
+                          const isToday=rpt.date===todayStr;const isPast=rpt.date<todayStr;const isFuture=rpt.date>todayStr;
                           const dl=Math.ceil((new Date(rpt.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
                           return(
-                            <div style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f5f3ff":(isToday||isPast)?"#fef2f2":"#f7f8fa",borderRadius:8,padding:"6px 10px",border:`1.5px solid ${isDone?"#c4b5fd":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`}} onClick={async(ev)=>{ev.stopPropagation();if(!isDone)await toggleCE(rpt);}}>
-                              <div style={{width:15,height:15,borderRadius:3,border:`1.5px solid ${isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#7c3aed":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:isDone?"default":"pointer"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:5,background:isDone?"#f5f3ff":(isToday||isPast)?"#fef2f2":"#f7f8fa",borderRadius:8,padding:"6px 10px",border:`1.5px solid ${isDone?"#c4b5fd":(isToday||isPast)?"#fca5a5":"#e5e7eb"}`}}>
+                              <div style={{width:15,height:15,borderRadius:3,border:`1.5px solid ${isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#d1d5db"}`,background:isDone?"#7c3aed":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:isDone?"default":"pointer"}} onClick={async()=>{if(!isDone)await toggleCE(rpt);}}>
                                 {isDone&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}
                               </div>
                               <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                                <div style={{fontSize:11,fontWeight:600,color:isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#374151",whiteSpace:"nowrap"}}>리포트 {rpt.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" ⚠ 지남":isFuture?` D-${dl}`:""}</div>
-                                {isDone&&<span style={{fontSize:9,color:"#adb5bd",cursor:"pointer",textDecoration:"underline"}} onClick={async(ev)=>{ev.stopPropagation();if(window.confirm("리포트 완료를 취소할까요?"))await toggleCE(rpt,false);}}>완료 취소</span>}
+                                <div style={{fontSize:11,fontWeight:600,color:isDone?"#7c3aed":(isToday||isPast)?"#ef4444":"#374151",whiteSpace:"nowrap"}}>리포트 {rpt.date.slice(5)}{isToday?" (오늘)":isPast&&!isDone?" ⚠지남":isFuture?` D-${dl}`:""}</div>
+                                {isDone&&<span style={{fontSize:9,color:"#adb5bd",cursor:"pointer",textDecoration:"underline"}} onClick={async ev=>{ev.stopPropagation();if(window.confirm("리포트 완료를 취소할까요?"))await toggleCE(rpt,false);}}>완료 취소</span>}
                               </div>
                             </div>
                           );
@@ -1187,31 +1121,15 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                 };
                 return(
                   <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                    {needCheck.length>0&&(<div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                        <span style={{fontSize:12,fontWeight:700,color:"#ef4444",background:"#fef2f2",borderRadius:99,padding:"3px 12px",border:"1px solid #fecaca"}}>⚠ 체크 필요 · 오늘/지남 ({needCheck.length})</span>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:8}}>{needCheck.map(x=>renderRankCard(x))}</div>
-                    </div>)}
-                    {upcoming.length>0&&(<div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                        <span style={{fontSize:12,fontWeight:700,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"3px 12px",border:"1px solid #a5f3fc"}}>예정 ({upcoming.length})</span>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:8}}>{upcoming.map(x=>renderRankCard(x))}</div>
-                    </div>)}
-                    {allDone.length>0&&(<div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                        <span style={{fontSize:12,fontWeight:700,color:"#10b981",background:"#f0fdf4",borderRadius:99,padding:"3px 12px",border:"1px solid #bbf7d0"}}>완료 ({allDone.length})</span>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:8}}>{allDone.map(x=>renderRankCard(x))}</div>
-                    </div>)}
+                    {needCheck.length>0&&(<div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#ef4444",background:"#fef2f2",borderRadius:99,padding:"3px 12px",border:"1px solid #fecaca"}}>⚠ 체크 필요 · 오늘/지남 ({needCheck.length})</span></div><div style={{display:"flex",flexDirection:"column",gap:8}}>{needCheck.map(x=>renderCard(x))}</div></div>)}
+                    {upcoming.length>0&&(<div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#0891b2",background:"#ecfeff",borderRadius:99,padding:"3px 12px",border:"1px solid #a5f3fc"}}>예정 ({upcoming.length})</span></div><div style={{display:"flex",flexDirection:"column",gap:8}}>{upcoming.map(x=>renderCard(x))}</div></div>)}
+                    {allDone.length>0&&(<div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#10b981",background:"#f0fdf4",borderRadius:99,padding:"3px 12px",border:"1px solid #bbf7d0"}}>완료 ({allDone.length})</span></div><div style={{display:"flex",flexDirection:"column",gap:8}}>{allDone.map(x=>renderCard(x))}</div></div>)}
                     {withNext.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}>진행중인 계약 업체가 없습니다</div>}
                   </div>
                 );
               })()}
             </div>
           )}
-          {tab==="report"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
