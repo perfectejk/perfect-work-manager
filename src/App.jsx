@@ -1129,6 +1129,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               })()}
             </div>
           )}
+          {tab==="report"&&(
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
