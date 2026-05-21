@@ -993,7 +993,6 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                   const isCancelled=!!c.cancelled;
                   const isActive=!isCancelled&&c.endDate>=todayStr;
                   const rankEvts=evts.filter(e=>e.type==="순위체크");const rpt=evts.find(e=>e.type==="리포트");
-                  const rpt=evts.find(e=>e.type==="리포트");
                   const startParts=c.startDate?c.startDate.split("-"):["","",""];
                   const handleToggleCancel=async(e)=>{e.stopPropagation();if(isCancelled){if(!window.confirm("해지를 취소하고 복구할까요?"))return;}else{if(!window.confirm(`"${c.name}" 업체를 해지 처리할까요?`))return;}const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0){list[idx]={...list[idx],cancelled:!isCancelled};await st.set("contracts:all",list);setContracts([...list]);}};
                   return(
