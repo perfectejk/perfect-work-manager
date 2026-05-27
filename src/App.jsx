@@ -530,6 +530,109 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
 }
 
 // ========== 순위관리 탭 컴포넌트 ==========
+function WeeklyTab({contracts,webhookUrl,genEvents,st}){
+  const now=new Date();
+  const dayOfWeek=now.getDay();
+  const monday=new Date(now);monday.setDate(now.getDate()-(dayOfWeek===0?6:dayOfWeek-1));
+  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
+  const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const weekStart=fmt(monday);const weekEnd=fmt(sunday);
+  const nextMonday=new Date(monday);nextMonday.setDate(monday.getDate()+7);
+  const nextSunday=new Date(nextMonday);nextSunday.setDate(nextMonday.getDate()+6);
+  const nextWeekStart=fmt(nextMonday);const nextWeekEnd=fmt(nextSunday);
+  const nm=new Date(now.getFullYear(),now.getMonth()+1,1);
+  const nmEnd=new Date(now.getFullYear(),now.getMonth()+2,0);
+  const nextMonthStart=fmt(nm);const nextMonthEnd=fmt(nmEnd);
+  const [weekMemos,setWeekMemos]=useState([]);
+  const [loadingWeek,setLoadingWeek]=useState(false);
+  const [weekLoaded,setWeekLoaded]=useState(false);
+  const expiringNext=contracts.filter(c=>!c.cancelled&&c.endDate&&c.endDate>=nextMonthStart&&c.endDate<=nextMonthEnd);
+  const nextCallContracts=contracts.filter(c=>{if(c.cancelled)return false;const evts=genEvents(c);return evts.some(e=>e.type==="관리전화"&&e.date>=nextWeekStart&&e.date<=nextWeekEnd);});
+  const loadWeekMemos=async()=>{
+    setLoadingWeek(true);
+    const results=[];
+    for(const c of contracts){
+      const mk=`contract:memos:${c.linkedMemoId||c.id}`;
+      const ms=await st.get(mk)||[];
+      ms.forEach(m=>{if(m.date&&m.date>=weekStart&&(m.priority==="urgent"||m.priority==="caution")){results.push({...m,contractName:c.name,contractId:c.id});}});
+    }
+    results.sort((a,b)=>{if(a.priority==="urgent"&&b.priority!=="urgent")return -1;if(b.priority==="urgent"&&a.priority!=="urgent")return 1;return b.date.localeCompare(a.date);});
+    setWeekMemos(results);setLoadingWeek(false);setWeekLoaded(true);
+  };
+  const sendWeeklyDiscord=async()=>{
+    const wh=webhookUrl||await st.get("wt:webhook");
+    if(!wh){alert("Discord 웹훅이 설정되지 않았습니다.\n관리자 설정 > 알림 설정에서 먼저 등록해주세요.");return;}
+    const urgentList=weekMemos.filter(m=>m.priority==="urgent");
+    const cautionList=weekMemos.filter(m=>m.priority==="caution");
+    let msg=`📋 **주간 계약 요약** (${weekStart} ~ ${weekEnd})\n\n`;
+    if(urgentList.length>0){msg+=`🚨 **긴급 (${urgentList.length}건)**\n`;urgentList.forEach(m=>{msg+=`• ${m.contractName} — ${m.text.slice(0,60)}${m.text.length>60?"...":""}\n`;});msg+="\n";}
+    if(cautionList.length>0){msg+=`⚠️ **주의 (${cautionList.length}건)**\n`;cautionList.forEach(m=>{msg+=`• ${m.contractName} — ${m.text.slice(0,60)}${m.text.length>60?"...":""}\n`;});msg+="\n";}
+    if(expiringNext.length>0){msg+=`🔄 **다음 달 종료 예정 (${expiringNext.length}건)**\n`;expiringNext.forEach(c=>{msg+=`• ${c.name} (종료: ${c.endDate})${c.manager?` 담당: ${c.manager}`:""}\n`;});msg+="\n";}
+    if(nextCallContracts.length>0){msg+=`📞 **다음 주 관리전화 예정 (${nextCallContracts.length}건)**\n`;nextCallContracts.forEach(c=>{msg+=`• ${c.name}${c.phone?` (${c.phone})`:""}${c.manager?` 담당: ${c.manager}`:""}\n`;});}
+    if(urgentList.length===0&&cautionList.length===0&&expiringNext.length===0&&nextCallContracts.length===0)msg+="이번 주 특이사항 없음\n";
+    try{await fetch(wh,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:msg})});alert("Discord로 전송 완료!");}catch(e){alert("전송 실패: "+e.message);}
+  };
+  const bS={fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+        <div><div style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>📋 주간 요약</div><div style={{fontSize:11,color:"#adb5bd",marginTop:2}}>{weekStart} ~ {weekEnd}</div></div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={loadWeekMemos} disabled={loadingWeek} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...bS}}>{loadingWeek?"불러오는 중…":weekLoaded?"새로고침":"메모 불러오기"}</button>
+          <button onClick={sendWeeklyDiscord} style={{background:"#5865F2",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...bS}}>📨 Discord 전송</button>
+        </div>
+      </div>
+      {/* 🚨 긴급 */}
+      {weekLoaded&&<div style={{background:"#fef2f2",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fecaca"}}>
+        <div style={{fontWeight:700,fontSize:12,color:"#ef4444",marginBottom:weekMemos.filter(m=>m.priority==="urgent").length?8:0}}>🚨 긴급 ({weekMemos.filter(m=>m.priority==="urgent").length}건)</div>
+        {weekMemos.filter(m=>m.priority==="urgent").length===0?<div style={{fontSize:12,color:"#adb5bd"}}>이번 주 긴급 메모 없음</div>
+        :weekMemos.filter(m=>m.priority==="urgent").map((m,i)=>(
+          <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #fecaca"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{m.contractName}</span><span style={{fontSize:10,color:"#adb5bd"}}>{m.date} · {m.author}</span></div>
+            <div style={{fontSize:12,color:"#374151",lineHeight:1.5}}>{m.text}</div>
+          </div>
+        ))}
+      </div>}
+      {/* ⚠️ 주의 */}
+      {weekLoaded&&<div style={{background:"#fffbeb",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fde68a"}}>
+        <div style={{fontWeight:700,fontSize:12,color:"#d97706",marginBottom:weekMemos.filter(m=>m.priority==="caution").length?8:0}}>⚠️ 주의 ({weekMemos.filter(m=>m.priority==="caution").length}건)</div>
+        {weekMemos.filter(m=>m.priority==="caution").length===0?<div style={{fontSize:12,color:"#adb5bd"}}>이번 주 주의 메모 없음</div>
+        :weekMemos.filter(m=>m.priority==="caution").map((m,i)=>(
+          <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #fde68a"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{m.contractName}</span><span style={{fontSize:10,color:"#adb5bd"}}>{m.date} · {m.author}</span></div>
+            <div style={{fontSize:12,color:"#374151",lineHeight:1.5}}>{m.text}</div>
+          </div>
+        ))}
+      </div>}
+      {/* 🔄 다음 달 종료 예정 */}
+      <div style={{background:"#f0f7ff",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #bfdbfe"}}>
+        <div style={{fontWeight:700,fontSize:12,color:"#0071CE",marginBottom:expiringNext.length?8:0}}>🔄 다음 달 종료 예정 — 재계약 논의 필요 ({expiringNext.length}건)</div>
+        {expiringNext.length===0?<div style={{fontSize:12,color:"#adb5bd"}}>해당 없음</div>
+        :expiringNext.sort((a,b)=>a.endDate.localeCompare(b.endDate)).map((c,i)=>(
+          <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #bfdbfe",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div><div style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{c.name}</div><div style={{fontSize:11,color:"#6b7280",marginTop:2}}>{c.manager&&`담당: ${c.manager} · `}종료: {c.endDate}</div></div>
+            <div style={{fontSize:12,color:"#0071CE",fontWeight:700}}>{c.total||""}</div>
+          </div>
+        ))}
+      </div>
+      {/* 📞 다음 주 관리전화 예정 */}
+      <div style={{background:"#f0fdf4",borderRadius:12,padding:"12px 14px",border:"1px solid #bbf7d0"}}>
+        <div style={{fontWeight:700,fontSize:12,color:"#16a34a",marginBottom:nextCallContracts.length?8:0}}>📞 다음 주 관리전화 예정 ({nextCallContracts.length}건)</div>
+        {nextCallContracts.length===0?<div style={{fontSize:12,color:"#adb5bd"}}>다음 주 관리전화 예정 없음</div>
+        :nextCallContracts.map((c,i)=>{
+          const evts=genEvents(c);
+          const callEvt=evts.filter(e=>e.type==="관리전화"&&e.date>=nextWeekStart&&e.date<=nextWeekEnd).sort((a,b)=>a.date.localeCompare(b.date))[0];
+          return(
+            <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #bbf7d0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div><div style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{c.name}</div><div style={{fontSize:11,color:"#6b7280",marginTop:2}}>{c.manager&&`담당: ${c.manager} · `}{callEvt?.date}</div></div>
+              {c.phone&&<div style={{fontSize:11,color:"#16a34a",fontWeight:600}}>{c.phone}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 function RankManageTab({contracts,completions,rankDataMap,setMemoContract,setRankModalEvent,setRankModalContract,toggleCE}){
   const[search,setSearch]=useState("");
   const[statusFilter,setStatusFilter]=useState("active");// active | ended | all
@@ -1382,119 +1485,9 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               </div>)}
 
               {/* ===== 주간요약 탭 ===== */}
-              {contractSubTab==="weekly"&&(()=>{
-                const now=new Date();
-                const dayOfWeek=now.getDay();
-                const monday=new Date(now);monday.setDate(now.getDate()-(dayOfWeek===0?6:dayOfWeek-1));
-                const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
-                const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-                const weekStart=fmt(monday);const weekEnd=fmt(sunday);
-                const nextMonday=new Date(monday);nextMonday.setDate(monday.getDate()+7);
-                const nextSunday=new Date(nextMonday);nextSunday.setDate(nextMonday.getDate()+6);
-                const nextWeekStart=fmt(nextMonday);const nextWeekEnd=fmt(nextSunday);
-                // 다음 달 종료 예정
-                const nm=new Date(now.getFullYear(),now.getMonth()+1,1);
-                const nmEnd=new Date(now.getFullYear(),now.getMonth()+2,0);
-                const nextMonthStart=fmt(nm);const nextMonthEnd=fmt(nmEnd);
-                const expiringNext=contracts.filter(c=>!c.cancelled&&c.endDate&&c.endDate>=nextMonthStart&&c.endDate<=nextMonthEnd);
-                // 다음 주 관리전화 예정
-                const nextCallContracts=contracts.filter(c=>{if(c.cancelled)return false;const evts=genEvents(c);return evts.some(e=>e.type==="관리전화"&&e.date>=nextWeekStart&&e.date<=nextWeekEnd);});
-                // 이번주 메모 (priority별) — 모든 계약 메모 순회는 무겁기 때문에 visibleContracts 기반
-                const [weekMemos,setWeekMemos]=React.useState([]);
-                const [loadingWeek,setLoadingWeek]=React.useState(false);
-                const [weekLoaded,setWeekLoaded]=React.useState(false);
-                const loadWeekMemos=async()=>{
-                  setLoadingWeek(true);
-                  const results=[];
-                  for(const c of contracts){
-                    const mk=`contract:memos:${c.linkedMemoId||c.id}`;
-                    const ms=await st.get(mk)||[];
-                    ms.forEach(m=>{if(m.date&&m.date>=weekStart&&(m.priority==="urgent"||m.priority==="caution")){results.push({...m,contractName:c.name,contractId:c.id});}});
-                  }
-                  results.sort((a,b)=>{if(a.priority==="urgent"&&b.priority!=="urgent")return -1;if(b.priority==="urgent"&&a.priority!=="urgent")return 1;return b.date.localeCompare(a.date);});
-                  setWeekMemos(results);setLoadingWeek(false);setWeekLoaded(true);
-                };
-                const sendWeeklyDiscord=async()=>{
-                  const wh=await st.get("wt:webhook");
-                  if(!wh){alert("Discord 웹훅이 설정되지 않았습니다.\n관리자 설정 > 알림 설정에서 먼저 등록해주세요.");return;}
-                  const urgentList=weekMemos.filter(m=>m.priority==="urgent");
-                  const cautionList=weekMemos.filter(m=>m.priority==="caution");
-                  let msg=`📋 **주간 계약 요약** (${weekStart} ~ ${weekEnd})\n\n`;
-                  if(urgentList.length>0){msg+=`🚨 **긴급 (${urgentList.length}건)**\n`;urgentList.forEach(m=>{msg+=`• ${m.contractName} — ${m.text.slice(0,60)}${m.text.length>60?"...":""}\n`;});msg+="\n";}
-                  if(cautionList.length>0){msg+=`⚠️ **주의 (${cautionList.length}건)**\n`;cautionList.forEach(m=>{msg+=`• ${m.contractName} — ${m.text.slice(0,60)}${m.text.length>60?"...":""}\n`;});msg+="\n";}
-                  if(expiringNext.length>0){msg+=`🔄 **다음 달 종료 예정 — 재계약 논의 필요 (${expiringNext.length}건)**\n`;expiringNext.forEach(c=>{msg+=`• ${c.name} (종료: ${c.endDate}) ${c.manager?`담당: ${c.manager}`:""}\n`;});msg+="\n";}
-                  if(urgentList.length===0&&cautionList.length===0&&expiringNext.length===0)msg+="이번 주 특이사항 없음\n";
-                  try{await fetch(wh,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:msg})});alert("Discord로 전송 완료!");}catch(e){alert("전송 실패: "+e.message);}
-                };
-                return(
-                  <div>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                      <div><div style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>📋 주간 요약</div><div style={{fontSize:11,color:"#adb5bd",marginTop:2}}>{weekStart} ~ {weekEnd}</div></div>
-                      <div style={{display:"flex",gap:6}}>
-                        {!weekLoaded&&<button onClick={loadWeekMemos} disabled={loadingWeek} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{loadingWeek?"불러오는 중…":"메모 불러오기"}</button>}
-                        {weekLoaded&&<button onClick={loadWeekMemos} disabled={loadingWeek} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>새로고침</button>}
-                        <button onClick={sendWeeklyDiscord} style={{background:"#5865F2",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>📨 Discord 전송</button>
-                      </div>
-                    </div>
+              {contractSubTab==="weekly"&&<WeeklyTab contracts={contracts} webhookUrl={webhookUrl} genEvents={genEvents} st={st}/>}
 
-                    {/* 🚨 긴급 메모 */}
-                    {weekLoaded&&(<>
-                      <div style={{background:"#fef2f2",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fecaca"}}>
-                        <div style={{fontWeight:700,fontSize:12,color:"#ef4444",marginBottom:weekMemos.filter(m=>m.priority==="urgent").length?8:0}}>🚨 긴급 ({weekMemos.filter(m=>m.priority==="urgent").length}건)</div>
-                        {weekMemos.filter(m=>m.priority==="urgent").length===0?<div style={{fontSize:12,color:"#adb5bd"}}>이번 주 긴급 메모 없음</div>
-                        :weekMemos.filter(m=>m.priority==="urgent").map((m,i)=>(
-                          <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #fecaca"}}>
-                            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{m.contractName}</span><span style={{fontSize:10,color:"#adb5bd"}}>{m.date} · {m.author}</span></div>
-                            <div style={{fontSize:12,color:"#374151",lineHeight:1.5}}>{m.text}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* ⚠️ 주의 메모 */}
-                      <div style={{background:"#fffbeb",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fde68a"}}>
-                        <div style={{fontWeight:700,fontSize:12,color:"#d97706",marginBottom:weekMemos.filter(m=>m.priority==="caution").length?8:0}}>⚠️ 주의 ({weekMemos.filter(m=>m.priority==="caution").length}건)</div>
-                        {weekMemos.filter(m=>m.priority==="caution").length===0?<div style={{fontSize:12,color:"#adb5bd"}}>이번 주 주의 메모 없음</div>
-                        :weekMemos.filter(m=>m.priority==="caution").map((m,i)=>(
-                          <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #fde68a"}}>
-                            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{m.contractName}</span><span style={{fontSize:10,color:"#adb5bd"}}>{m.date} · {m.author}</span></div>
-                            <div style={{fontSize:12,color:"#374151",lineHeight:1.5}}>{m.text}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </>)}
-
-                    {/* 🔄 다음 달 종료 예정 */}
-                    <div style={{background:"#f0f7ff",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #bfdbfe"}}>
-                      <div style={{fontWeight:700,fontSize:12,color:"#0071CE",marginBottom:expiringNext.length?8:0}}>🔄 다음 달 종료 예정 — 재계약 논의 필요 ({expiringNext.length}건)</div>
-                      {expiringNext.length===0?<div style={{fontSize:12,color:"#adb5bd"}}>해당 없음</div>
-                      :expiringNext.sort((a,b)=>a.endDate.localeCompare(b.endDate)).map((c,i)=>(
-                        <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #bfdbfe",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div><div style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{c.name}</div><div style={{fontSize:11,color:"#6b7280",marginTop:2}}>{c.manager&&`담당: ${c.manager} · `}종료: {c.endDate}</div></div>
-                          <div style={{fontSize:12,color:"#0071CE",fontWeight:700}}>{c.total||""}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* 📞 다음 주 관리전화 예정 */}
-                    <div style={{background:"#f0fdf4",borderRadius:12,padding:"12px 14px",border:"1px solid #bbf7d0"}}>
-                      <div style={{fontWeight:700,fontSize:12,color:"#16a34a",marginBottom:nextCallContracts.length?8:0}}>📞 다음 주 관리전화 예정 ({nextCallContracts.length}건)</div>
-                      {nextCallContracts.length===0?<div style={{fontSize:12,color:"#adb5bd"}}>다음 주 관리전화 예정 없음</div>
-                      :nextCallContracts.map((c,i)=>{
-                        const evts=genEvents(c);
-                        const callEvt=evts.filter(e=>e.type==="관리전화"&&e.date>=nextWeekStart&&e.date<=nextWeekEnd).sort((a,b)=>a.date.localeCompare(b.date))[0];
-                        return(
-                          <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #bbf7d0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                            <div><div style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{c.name}</div><div style={{fontSize:11,color:"#6b7280",marginTop:2}}>{c.manager&&`담당: ${c.manager} · `}{callEvt?.date}</div></div>
-                            {c.phone&&<div style={{fontSize:11,color:"#16a34a",fontWeight:600}}>{c.phone}</div>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* ===== 순위관리 탭 ===== */}
+                            {/* ===== 순위관리 탭 ===== */}
               {contractSubTab==="rank"&&(()=>{
                 // 진행중 + 종료 모두 포함 (해지 제외)
                 const rankTargets=visibleContracts.filter(c=>!c.cancelled);
