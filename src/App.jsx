@@ -476,7 +476,27 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
   const handleRemoveKw=async(kw)=>{if(!window.confirm(`키워드 "${kw}"를 삭제할까요?`))return;const updated=localKws.filter(k=>k!==kw);setLocalKws(updated);await saveContractField({keywords:updated});};
   const handleSaveInitRanks=async()=>{const toSave={};localKws.forEach(kw=>{const v=initEdits[kw]!==undefined?initEdits[kw]:localInitRanks[kw]||"";if(v&&parseInt(v)>0)toSave[kw]=parseInt(v);});const merged={...localInitRanks,...toSave};setLocalInitRanks(merged);setInitEdits({});await saveContractField({initialRanks:merged});alert("저장됐어요!");};
   const handleRankEdit=async(ek,kw,newVal)=>{if(!newVal||isNaN(parseInt(newVal)))return;const data=await st.get("ce:rankdata")||{};if(!data[ek])return;data[ek].keywords[kw].rank=parseInt(newVal);await st.set("ce:rankdata",data);setRankHistory(prev=>({...prev,[ek]:{...prev[ek],keywords:{...prev[ek].keywords,[kw]:{...prev[ek].keywords[kw],rank:parseInt(newVal)}}}}));setEditingRank(null);};
-  const sortedKeys=Object.keys(rankHistory).sort();
+  const sortedKeys=useMemo(()=>{
+    const allKeys=Object.keys(rankHistory).sort((a,b)=>{
+      // 날짜 먼저 비교
+      const da=rankHistory[a]?.date||a.split(":")[2]||"";
+      const db=rankHistory[b]?.date||b.split(":")[2]||"";
+      if(da!==db)return da.localeCompare(db);
+      // 날짜 같으면 현재 계약 우선
+      const aCurrent=a.startsWith(`${contract.id}:`);
+      const bCurrent=b.startsWith(`${contract.id}:`);
+      if(aCurrent&&!bCurrent)return-1;
+      if(!aCurrent&&bCurrent)return 1;
+      return 0;
+    });
+    // 날짜 중복 제거: 같은 날짜면 첫번째(현재계약 우선)만 유지
+    const seen=new Set();
+    return allKeys.filter(k=>{
+      const d=rankHistory[k]?.date||k.split(":")[2]||"";
+      if(seen.has(d))return false;
+      seen.add(d);return true;
+    });
+  },[rankHistory,contract.id]);
   // 테이블용: 모든 키워드 수집
   const allKws=useMemo(()=>{const set=new Set(localKws);sortedKeys.forEach(ek=>{const rd=rankHistory[ek];if(rd?.keywords)Object.keys(rd.keywords).forEach(k=>set.add(k));});return[...set];},[localKws,sortedKeys,rankHistory]);
   // 테이블 셀: initialRanks → 1차 → 2차 ...
@@ -1442,11 +1462,17 @@ function MainApp({user,onLogout}){
     if(!window.confirm("이 순위체크 기록을 삭제할까요?"))return;
     const k=ceKey(event);
     const newRankData=await st.get("ce:rankdata")||{};
-    delete newRankData[k];
+    // 같은 날짜의 모든 키 삭제 (중복 저장된 경우 포함)
+    const targetDate=event.date;
+    Object.keys(newRankData).forEach(key=>{
+      if(key.includes(`:순위체크:${targetDate}`)&&(key.startsWith(`${event.cid}:`)||key===k))delete newRankData[key];
+    });
     await st.set("ce:rankdata",newRankData);
     setRankDataMap({...newRankData});
     const cData=await st.get("ce:completions")||{};
-    delete cData[k];
+    Object.keys(cData).forEach(key=>{
+      if(key.includes(`:순위체크:${targetDate}`)&&(key.startsWith(`${event.cid}:`)||key===k))delete cData[key];
+    });
     await st.set("ce:completions",cData);
     setCompletions({...cData});
   };
