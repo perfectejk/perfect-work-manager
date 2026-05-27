@@ -71,7 +71,7 @@ const getWeekLabel=(dateStr)=>{const d=new Date(dateStr+"T00:00:00");return`${d.
 const downloadWeeklyExcel=(allData)=>{const finalRows=[];Object.entries(allData).forEach(([date,tsByDate])=>{Object.entries(tsByDate).forEach(([ts,reps])=>{if(ts==="최종마감"){reps.forEach(r=>{finalRows.push({...r,date});});}});});if(finalRows.length===0){alert("최종마감 데이터가 없습니다.");return;}const weekMap={};finalRows.forEach(r=>{const wk=getWeekLabel(r.date);if(!weekMap[wk])weekMap[wk]={};if(!weekMap[wk][r.name])weekMap[wk][r.name]=[];weekMap[wk][r.name].push(r);});const wb=XLSX.utils.book_new();const allMetrics=[...METRICS,...FINAL_METRICS];const metricKeys=allMetrics.map(m=>m.key);const metricLabels=allMetrics.map(m=>m.label+(m.unit?`(${m.unit})`:""));const sumRows=[["주차","사원",...metricLabels]];const sortedWeeks=Object.keys(weekMap).sort();sortedWeeks.forEach(wk=>{const names=Object.keys(weekMap[wk]).sort();names.forEach(name=>{const records=weekMap[wk][name];const totals=metricKeys.map(k=>records.reduce((s,r)=>s+(Number(r[k])||0),0));sumRows.push([wk,name,...totals]);});const allNames=Object.keys(weekMap[wk]);const wkTotals=metricKeys.map(k=>allNames.reduce((s,name)=>s+weekMap[wk][name].reduce((ss,r)=>ss+(Number(r[k])||0),0),0));sumRows.push([wk,"【주차 합계】",...wkTotals]);sumRows.push([]);});const ws1=XLSX.utils.aoa_to_sheet(sumRows);XLSX.utils.book_append_sheet(wb,ws1,"주차별_사원별_총합");const avgRows=[["주차","사원",...metricLabels,"보고일수"]];sortedWeeks.forEach(wk=>{const names=Object.keys(weekMap[wk]).sort();names.forEach(name=>{const records=weekMap[wk][name];const cnt=records.length;const avgs=metricKeys.map(k=>{const tot=records.reduce((s,r)=>s+(Number(r[k])||0),0);return cnt>0?Math.round((tot/cnt)*100)/100:0;});avgRows.push([wk,name,...avgs,cnt]);});avgRows.push([]);});const ws2=XLSX.utils.aoa_to_sheet(avgRows);XLSX.utils.book_append_sheet(wb,ws2,"주차별_사원별_평균");const teamRows=[["주차",...metricLabels,"참여인원"]];sortedWeeks.forEach(wk=>{const allRecords=[];Object.values(weekMap[wk]).forEach(recs=>allRecords.push(...recs));const cnt=allRecords.length;const avgs=metricKeys.map(k=>{const tot=allRecords.reduce((s,r)=>s+(Number(r[k])||0),0);return cnt>0?Math.round((tot/cnt)*100)/100:0;});const memberCount=Object.keys(weekMap[wk]).length;teamRows.push([wk,...avgs,memberCount]);});const ws3=XLSX.utils.aoa_to_sheet(teamRows);XLSX.utils.book_append_sheet(wb,ws3,"전체_주차별_평균");XLSX.writeFile(wb,"주차별_업무량_분석.xlsx");};
 const ACOLORS=["#2563eb","#7c3aed","#db2777","#ea580c","#16a34a","#0891b2"];
 function Avatar({name,img,size=32,onClick,border}){const bg=ACOLORS[(name||"?").charCodeAt(0)%ACOLORS.length];return(<div onClick={onClick} style={{width:size,height:size,borderRadius:"50%",overflow:"hidden",flexShrink:0,cursor:onClick?"pointer":"default",border:border||"2px solid rgba(255,255,255,0.4)",boxSizing:"border-box"}}>{img?<img src={img} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={name}/>:<div style={{width:"100%",height:"100%",background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.38,fontWeight:700,color:"#fff"}}>{(name||"?").slice(0,1).toUpperCase()}</div>}</div>);}
-function ProfileModal({user,profiles,onUpdateProfile,onClose,contracts}){const fileRef=useRef();const myImg=profiles[user.name];const myContracts=contracts.filter(c=>c.manager===user.name);const monthlyMap={};myContracts.forEach(c=>{if(!c.startDate)return;const[y,m]=c.startDate.split("-");const key=`${y}-${m}`;if(!monthlyMap[key])monthlyMap[key]={year:parseInt(y),month:parseInt(m),count:0,amount:0};monthlyMap[key].count++;monthlyMap[key].amount+=parseAmount(c.total);});const monthly=Object.values(monthlyMap).sort((a,b)=>b.year-a.year||b.month-a.month);const totalCount=myContracts.length;const totalAmount=myContracts.reduce((s,c)=>s+parseAmount(c.total),0);const handleFile=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onUpdateProfile(user.name,ev.target.result);r.readAsDataURL(f);};return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}} onClick={onClose}><div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:28,width:380,maxWidth:"90vw",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><span style={{fontSize:15,fontWeight:700,color:"#0f1117"}}>내 프로필</span><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#adb5bd"}}>✕</button></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,marginBottom:20}}><Avatar name={user.name} img={myImg} size={80} border="3px solid #f0f1f3"/><div style={{fontWeight:700,fontSize:16,color:"#0f1117"}}>{user.name}</div><div style={{fontSize:12,color:"#adb5bd",background:"#f7f8fa",borderRadius:99,padding:"3px 10px"}}>{user.isAdmin?"관리자":user.role==="manager"?"중간관리자":"사원"}</div><button onClick={()=>fileRef.current.click()} style={{background:"#f0f7ff",color:"#0071CE",border:"1px solid #bfdbfe",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>프로필 사진 변경</button><input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/></div><div style={{borderTop:"1px solid #f0f1f3",paddingTop:16}}><div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:10}}>내 매출 현황</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}><div style={{background:"#f0f7ff",borderRadius:10,padding:"12px 14px",textAlign:"center"}}><div style={{fontSize:22,fontWeight:800,color:"#0071CE"}}>{totalCount}건</div><div style={{fontSize:11,color:"#adb5bd",marginTop:2}}>누적 계약</div></div><div style={{background:"#f5f3ff",borderRadius:10,padding:"12px 14px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:"#8468D3"}}>{fmtAmount(totalAmount)}</div><div style={{fontSize:11,color:"#adb5bd",marginTop:2}}>누적 매출</div></div></div>{monthly.length>0?(<div style={{maxHeight:160,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>{monthly.map((s,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f7f8fa",borderRadius:8,padding:"8px 12px"}}><span style={{fontSize:12,fontWeight:600,color:"#374151"}}>{s.year}년 {s.month}월</span><div style={{display:"flex",gap:12}}><span style={{fontSize:12,color:"#0071CE",fontWeight:600}}>{s.count}건</span><span style={{fontSize:12,color:"#8468D3",fontWeight:600}}>{fmtAmount(s.amount)}</span></div></div>))}</div>):<p style={{fontSize:13,color:"#adb5bd",textAlign:"center",padding:"12px 0"}}>아직 담당 계약이 없습니다</p>}</div></div></div>);}
+function ProfileModal({user,profiles,onUpdateProfile,onClose,contracts}){const fileRef=useRef();const myImg=profiles[user.name];const myContracts=contracts.filter(c=>c.manager===user.name);const monthlyMap={};myContracts.forEach(c=>{if(!c.startDate)return;const[y,m]=c.startDate.split("-");const key=`${y}-${m}`;if(!monthlyMap[key])monthlyMap[key]={year:parseInt(y),month:parseInt(m),count:0,amount:0};monthlyMap[key].count++;monthlyMap[key].amount+=parseAmount(c.total);});const monthly=Object.values(monthlyMap).sort((a,b)=>b.year-a.year||b.month-a.month);const totalCount=myContracts.length;const totalAmount=myContracts.reduce((s,c)=>s+parseAmount(c.total),0);const handleFile=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onUpdateProfile(user.name,ev.target.result);r.readAsDataURL(f);};return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}} onClick={onClose}><div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:28,width:380,maxWidth:"90vw",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><span style={{fontSize:15,fontWeight:700,color:"#0f1117"}}>내 프로필</span><button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#adb5bd"}}>✕</button></div><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,marginBottom:20}}><Avatar name={user.name} img={myImg} size={80} border="3px solid #f0f1f3"/><div style={{fontWeight:700,fontSize:16,color:"#0f1117"}}>{user.name}</div><div style={{fontSize:12,color:"#adb5bd",background:"#f7f8fa",borderRadius:99,padding:"3px 10px"}}>{user.isAdmin?"슈퍼관리자":user.role==="manager"?"관리자":"사원"}</div><button onClick={()=>fileRef.current.click()} style={{background:"#f0f7ff",color:"#0071CE",border:"1px solid #bfdbfe",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>프로필 사진 변경</button><input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/></div><div style={{borderTop:"1px solid #f0f1f3",paddingTop:16}}><div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:10}}>내 매출 현황</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}><div style={{background:"#f0f7ff",borderRadius:10,padding:"12px 14px",textAlign:"center"}}><div style={{fontSize:22,fontWeight:800,color:"#0071CE"}}>{totalCount}건</div><div style={{fontSize:11,color:"#adb5bd",marginTop:2}}>누적 계약</div></div><div style={{background:"#f5f3ff",borderRadius:10,padding:"12px 14px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:"#8468D3"}}>{fmtAmount(totalAmount)}</div><div style={{fontSize:11,color:"#adb5bd",marginTop:2}}>누적 매출</div></div></div>{monthly.length>0?(<div style={{maxHeight:160,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>{monthly.map((s,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f7f8fa",borderRadius:8,padding:"8px 12px"}}><span style={{fontSize:12,fontWeight:600,color:"#374151"}}>{s.year}년 {s.month}월</span><div style={{display:"flex",gap:12}}><span style={{fontSize:12,color:"#0071CE",fontWeight:600}}>{s.count}건</span><span style={{fontSize:12,color:"#8468D3",fontWeight:600}}>{fmtAmount(s.amount)}</span></div></div>))}</div>):<p style={{fontSize:13,color:"#adb5bd",textAlign:"center",padding:"12px 0"}}>아직 담당 계약이 없습니다</p>}</div></div></div>);}
 const Badge=({label,color,bg})=><span style={{fontSize:11,fontWeight:600,color,background:bg,borderRadius:6,padding:"2px 7px",whiteSpace:"nowrap"}}>{label}</span>;
 function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,completions,onRankEdit,onContractUpdate}){
   const[memos,setMemos]=useState([]);const[input,setInput]=useState("");const[memoPriority,setMemoPriority]=useState("normal");const[saving,setSaving]=useState(false);const[loading,setLoading]=useState(true);const[activeTab,setActiveTab]=useState("memo");const bottomRef=useRef();
@@ -531,7 +531,7 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
 }
 
 // ========== 순위관리 탭 컴포넌트 ==========
-function WeeklyTab({contracts,webhookUrl,rankWebhookUrl,genEvents,st}){
+function WeeklyTab({contracts,webhookUrl,rankWebhookUrl,st}){
   const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const todayFmt=fmt(new Date());
   const [dateA,setDateA]=useState(todayFmt);
@@ -539,10 +539,7 @@ function WeeklyTab({contracts,webhookUrl,rankWebhookUrl,genEvents,st}){
   const [memos,setMemos]=useState([]);
   const [loading,setLoading]=useState(false);
   const [loaded,setLoaded]=useState(false);
-  const [rankResults,setRankResults]=useState([]);
-  const [rankLoading,setRankLoading]=useState(false);
-  const [rankLoaded,setRankLoaded]=useState(false);
-  const [checkedRanks,setCheckedRanks]=useState(new Set());
+
   const PRIORITY_ORDER={urgent:0,caution:1,normal:2};
   // 시작일/종료일 정렬 (어떤 순서로 선택해도 작은날짜=시작, 큰날짜=종료)
   const rangeStart=dateA<=dateB?dateA:dateB;
@@ -582,62 +579,6 @@ function WeeklyTab({contracts,webhookUrl,rankWebhookUrl,genEvents,st}){
     if(normalList.length>0){msg+=`📝 **일반 (${normalList.length}건)**\n`;normalList.forEach(m=>{msg+=fmtMemo(m);});msg+=line+"\n\n";}
     if(memos.length===0)msg+="해당 기간 메모 없음\n";
     if(msg.length>1900){msg=msg.slice(0,1900)+"\n...\n(내용이 길어 일부 생략됨)";}
-    try{await fetch(wh,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:msg})});alert("Discord로 전송 완료!");}catch(e){alert("전송 실패: "+e.message);}
-  };
-  // 순위 하락 불러오기
-  const loadRankResults=async()=>{
-    setRankLoading(true);
-    const results=[];
-    for(const c of contracts){
-      if(c.cancelled)continue;
-      const evts=genEvents(c);
-      const rankEvts=evts.filter(e=>e.type==="순위체크"&&e.date>=rangeStart&&e.date<=rangeEnd);
-      if(rankEvts.length===0)continue;
-      for(const evt of rankEvts){
-        const key=`${c.id}:순위체크:${evt.date}`;
-        const data=await st.get(key);
-        if(!data)continue;
-        // 이전 순위체크 데이터 찾기
-        const allRankEvts=evts.filter(e=>e.type==="순위체크").sort((a,b)=>a.date.localeCompare(b.date));
-        const curIdx=allRankEvts.findIndex(e=>e.date===evt.date);
-        const prevEvt=curIdx>0?allRankEvts[curIdx-1]:null;
-        const prevData=prevEvt?await st.get(`${c.id}:순위체크:${prevEvt.date}`):null;
-        const drops=[];
-        Object.entries(data).forEach(([kw,curRank])=>{
-          if(kw==="savedAt")return;
-          const prevRank=prevData?prevData[kw]:null;
-          const initial=(c.initialRanks||{})[kw];
-          const baseRank=prevRank||initial||null;
-          if(baseRank&&parseInt(curRank)>parseInt(baseRank)){
-            drops.push({kw,prev:parseInt(baseRank),cur:parseInt(curRank),diff:parseInt(curRank)-parseInt(baseRank)});
-          }
-        });
-        if(drops.length>0){
-          results.push({contractName:c.name,contractId:c.id,date:evt.date,rankIdx:evt.rankIdx,drops,manager:c.manager||""});
-        }
-      }
-    }
-    results.sort((a,b)=>b.drops.reduce((s,d)=>s+d.diff,0)-a.drops.reduce((s,d)=>s+d.diff,0));
-    setRankResults(results);setRankLoading(false);setRankLoaded(true);
-    setCheckedRanks(new Set(results.map(r=>r.contractId+":"+r.date)));
-  };
-  // 순위 Discord 전송
-  const sendRankDiscord=async()=>{
-    if(!rankLoaded){alert("먼저 '순위 불러오기' 버튼을 눌러주세요!");return;}
-    const wh=rankWebhookUrl||await st.get("wt:rankWebhook")||webhookUrl||await st.get("wt:webhook");
-    if(!wh){alert("Discord 웹훅이 설정되지 않았습니다.\n관리자 설정 > 알림 설정에서 먼저 등록해주세요.");return;}
-    const targets=rankResults.filter(r=>checkedRanks.has(r.contractId+":"+r.date));
-    if(targets.length===0){alert("전송할 업체를 선택해주세요.");return;}
-    const label=isSameDay?rangeStart:`${rangeStart} ~ ${rangeEnd}`;
-    const line="─────────────────────────";
-    let msg=`📊 **순위 하락 알림** (${label})\n\n`;
-    targets.forEach(r=>{
-      msg+=`${line}\n🏢 **${r.contractName}**${r.manager?` · ${r.manager}`:""}\n`;
-      msg+=`📅 ${r.date} (${r.rankIdx}차 체크)\n`;
-      r.drops.forEach(d=>{msg+=`🔻 ${d.kw}: ${d.prev}위 → ${d.cur}위 (▼${d.diff})\n`;});
-    });
-    msg+=line;
-    if(msg.length>1900){msg=msg.slice(0,1900)+"\n...(일부 생략)";}
     try{await fetch(wh,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:msg})});alert("Discord로 전송 완료!");}catch(e){alert("전송 실패: "+e.message);}
   };
   const bS={fontFamily:"'Pretendard',-apple-system,sans-serif"};
@@ -681,50 +622,6 @@ function WeeklyTab({contracts,webhookUrl,rankWebhookUrl,genEvents,st}){
       {/* 결과 */}
       {!loaded&&<div style={{textAlign:"center",padding:"30px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:12,border:"1px solid #f0f1f3"}}>기간을 선택하고 메모 불러오기를 눌러주세요</div>}
       {loaded&&memos.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:12,border:"1px solid #f0f1f3"}}>해당 기간에 등록된 메모가 없습니다</div>}
-      {/* ─── 순위 하락 섹션 ─── */}
-      <div style={{marginTop:20,paddingTop:16,borderTop:"2px dashed #f0f1f3"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
-          <div style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>📊 순위 하락 업체</div>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={loadRankResults} disabled={rankLoading} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...bS}}>{rankLoading?"불러오는 중…":"순위 불러오기"}</button>
-            <button onClick={sendRankDiscord} style={{background:"#5865F2",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...bS}}>📨 순위 전송</button>
-          </div>
-        </div>
-        {!rankLoaded&&<div style={{textAlign:"center",padding:"20px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:12,border:"1px solid #f0f1f3"}}>기간 선택 후 순위 불러오기를 눌러주세요</div>}
-        {rankLoaded&&rankResults.length===0&&<div style={{textAlign:"center",padding:"20px 0",color:"#adb5bd",fontSize:12,background:"#f0fdf4",borderRadius:12,border:"1px solid #bbf7d0"}}>✅ 해당 기간 순위 하락 업체 없음</div>}
-        {rankLoaded&&rankResults.length>0&&<>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <span style={{fontSize:11,color:"#6b7280",fontWeight:600}}>하락 업체 {rankResults.length}건</span>
-            <button onClick={()=>setCheckedRanks(new Set(rankResults.map(r=>r.contractId+":"+r.date)))} style={{fontSize:11,color:"#0071CE",background:"none",border:"none",cursor:"pointer",...bS}}>전체 선택</button>
-            <button onClick={()=>setCheckedRanks(new Set())} style={{fontSize:11,color:"#9ca3af",background:"none",border:"none",cursor:"pointer",...bS}}>선택 해제</button>
-            <span style={{fontSize:11,color:"#0071CE",fontWeight:700,background:"#f0f7ff",borderRadius:6,padding:"2px 8px",border:"1px solid #bfdbfe"}}>{checkedRanks.size}건 선택됨</span>
-          </div>
-          {rankResults.map((r,i)=>{
-            const rKey=r.contractId+":"+r.date;
-            const isChecked=checkedRanks.has(rKey);
-            const totalDrop=r.drops.reduce((s,d)=>s+d.diff,0);
-            return(
-              <div key={i} onClick={()=>setCheckedRanks(prev=>{const next=new Set(prev);isChecked?next.delete(rKey):next.add(rKey);return next;})} style={{background:isChecked?"#fef2f2":"#fff",borderRadius:10,padding:"11px 14px",marginBottom:8,border:`1.5px solid ${isChecked?"#fca5a5":"#f0f1f3"}`,cursor:"pointer",transition:"all 0.1s"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                  <input type="checkbox" checked={isChecked} onChange={()=>{}} style={{width:15,height:15,accentColor:"#ef4444",cursor:"pointer"}}/>
-                  <span style={{fontSize:14,fontWeight:900,color:"#0f1117",flex:1}}>{r.contractName}</span>
-                  {r.manager&&<span style={{fontSize:11,color:"#8468D3",fontWeight:600}}>{r.manager}</span>}
-                  <span style={{fontSize:11,fontWeight:700,color:"#ef4444",background:"#fef2f2",borderRadius:6,padding:"2px 7px",border:"1px solid #fecaca"}}>▼{totalDrop} 합산</span>
-                </div>
-                <div style={{fontSize:10,color:"#adb5bd",marginBottom:6}}>📅 {r.date} ({r.rankIdx}차 체크)</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                  {r.drops.map((d,di)=>(
-                    <span key={di} style={{fontSize:11,background:"#fff5f5",borderRadius:6,padding:"3px 8px",border:"1px solid #fecaca",color:"#991b1b",fontWeight:600}}>
-                      {d.kw} {d.prev}위→{d.cur}위 <b>▼{d.diff}</b>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </>}
-      </div>
-
       {loaded&&memos.length>0&&<>
         <div style={{fontSize:11,color:"#6b7280",marginBottom:10,fontWeight:600}}>총 {memos.length}건 · 긴급 {urgentList.length} · 주의 {cautionList.length} · 일반 {normalList.length}</div>
         {/* 🚨 긴급 */}
@@ -884,7 +781,7 @@ function LoginScreen({onLogin}){
         <div style={{fontSize:20,fontWeight:800,color:"#0f1117",marginBottom:4,letterSpacing:"-0.5px"}}>로그인</div>
         <div style={{fontSize:12,color:"#adb5bd",marginBottom:20,fontWeight:400}}>계정 정보를 입력하세요</div>
         <div style={{display:"flex",background:"#f7f8fa",borderRadius:10,padding:3,marginBottom:20,border:"1px solid #f0f1f3"}}>
-          {[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(<button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,padding:"10px",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",background:isAdmin===v?"#0071CE":"transparent",color:isAdmin===v?"#fff":"#adb5bd",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"all 0.15s"}}>{l}</button>))}
+          {[{v:false,l:"사원"},{v:true,l:"슈퍼관리자"}].map(({v,l})=>(<button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,padding:"10px",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",background:isAdmin===v?"#0071CE":"transparent",color:isAdmin===v?"#fff":"#adb5bd",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"all 0.15s"}}>{l}</button>))}
         </div>
         <div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>이름</div><input type="text" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="이름을 입력하세요" style={{...iS,padding:"12px 14px",fontSize:14}}/></div>
         <div style={{marginBottom:24}}><div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.6px",marginBottom:6,textTransform:"uppercase"}}>비밀번호</div><input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="비밀번호를 입력하세요" style={{...iS,padding:"12px 14px",fontSize:14}}/></div>
@@ -921,7 +818,7 @@ function LoginScreen({onLogin}){
           <div style={{fontSize:22,fontWeight:800,color:"#0f1117",marginBottom:4,letterSpacing:"-0.5px"}}>로그인</div>
           <div style={{fontSize:12,color:"#adb5bd",marginBottom:24,fontWeight:400}}>계정 정보를 입력하세요</div>
           <div style={{display:"flex",background:"#f7f8fa",borderRadius:10,padding:3,marginBottom:20,border:"1px solid #f0f1f3"}}>
-            {[{v:false,l:"사원"},{v:true,l:"관리자"}].map(({v,l})=>(
+            {[{v:false,l:"사원"},{v:true,l:"슈퍼관리자"}].map(({v,l})=>(
               <button key={String(v)} onClick={()=>{setIsAdmin(v);setErr("");}} style={{flex:1,padding:"8px",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:isAdmin===v?"#0071CE":"transparent",color:isAdmin===v?"#fff":"#adb5bd",fontFamily:"'Pretendard',-apple-system,sans-serif",transition:"all 0.15s"}}>{l}</button>
             ))}
           </div>
@@ -994,7 +891,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
               </div>
               <div style={{minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:600,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
-                <div style={{fontSize:10,color:"#adb5bd"}}>{user.isAdmin?"관리자":user.role==="manager"?"중간관리자":"사원"}</div>
+                <div style={{fontSize:10,color:"#adb5bd"}}>{user.isAdmin?"슈퍼관리자":user.role==="manager"?"관리자":"사원"}</div>
               </div>
             </button>
             <button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,border:"none",background:"transparent",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
@@ -1032,7 +929,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
           </div>
           <div style={{minWidth:0}}>
             <div style={{fontSize:11,fontWeight:600,color:"#0f1117",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
-            <div style={{fontSize:9,color:"#adb5bd",fontWeight:500}}>{user.isAdmin?"관리자":user.role==="manager"?"중간관리자":"사원"}</div>
+            <div style={{fontSize:9,color:"#adb5bd",fontWeight:500}}>{user.isAdmin?"슈퍼관리자":user.role==="manager"?"관리자":"사원"}</div>
           </div>
         </div>
       </div>
@@ -1300,8 +1197,8 @@ function RevenueCalendarTab({contracts,user,profiles}){
   </div>);}
 
 // ========== 매출 랭킹 탭 (BEST/2ND/3RD 뱃지) ==========
-function RankingTab({contracts,profiles,accounts}){const now=new Date();const[selYear,setSelYear]=useState(now.getFullYear());const[selMonth,setSelMonth]=useState(now.getMonth()+1);const managerStats=useMemo(()=>{const map={};contracts.forEach(c=>{if(!c.manager||!c.startDate)return;const[y,m]=c.startDate.split("-");if(parseInt(y)!==selYear||parseInt(m)!==selMonth)return;if(!map[c.manager])map[c.manager]={name:c.manager,count:0,amount:0};map[c.manager].count++;map[c.manager].amount+=parseAmount(c.total);});return Object.values(map).sort((a,b)=>b.amount-a.amount);},[contracts,selYear,selMonth]);const top=managerStats.slice(0,3);const rest=managerStats.slice(3);const podium=[{rank:2,size:100,height:120,color:"#94a3b8",border:"#94a3b8"},{rank:1,size:140,height:160,color:"#0071CE",border:"#8468D3"},{rank:3,size:80,height:90,color:"#b45309",border:"#b45309"}];return(<div><div style={{background:"#fff",borderRadius:14,padding:"14px 20px",marginBottom:20,border:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:12}}><select value={selYear} onChange={e=>setSelYear(parseInt(e.target.value))} style={{border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 10px",fontSize:12,background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}년</option>)}</select><select value={selMonth} onChange={e=>setSelMonth(parseInt(e.target.value))} style={{border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 10px",fontSize:12,background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{i+1}월</option>)}</select><span style={{fontSize:13,fontWeight:600,color:"#0f1117"}}>{selYear}년 {selMonth}월 매출 랭킹</span></div>{managerStats.length===0?(<div style={{background:"#fff",borderRadius:14,padding:"60px 20px",border:"1px solid #f0f1f3",textAlign:"center"}}><div style={{fontSize:14,color:"#adb5bd"}}>이 달 계약 데이터가 없습니다</div></div>):(<><div style={{background:"linear-gradient(160deg,#f0f5ff,#e8f4fd)",borderRadius:20,padding:"32px 20px 0",marginBottom:16,overflow:"hidden",border:"1px solid #dbeafe"}}><div style={{textAlign:"center",fontSize:14,fontWeight:800,color:"#0f1117",marginBottom:24}}>{selYear}년 {selMonth}월 TOP 3</div><div style={{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:12}}>{podium.map(({rank,size,height,color,border})=>{const s=top[rank-1];if(!s)return <div key={rank} style={{width:size+40,height:height+size+60}}/>;return(<div key={rank} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}><div style={{position:"relative",marginBottom:rank===1?18:12}}><div style={{width:size,height:size,borderRadius:"50%",border:rank===1?"4px solid transparent":"3px solid "+border,background:rank===1?"linear-gradient(white,white) padding-box, linear-gradient(135deg,#8468D3,#0071CE) border-box":"none",overflow:"hidden",boxShadow:rank===1?"0 8px 28px rgba(132,104,211,0.35)":"0 4px 12px rgba(0,0,0,0.1)"}}>{profiles[s.name]?<img src={profiles[s.name]} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={s.name}/>:<div style={{width:"100%",height:"100%",background:ACOLORS[s.name.charCodeAt(0)%ACOLORS.length],display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.38,fontWeight:800,color:"#fff"}}>{s.name.slice(0,1)}</div>}</div>{rank===1&&<div style={{position:"absolute",bottom:-14,left:"50%",transform:"translateX(-50%)",background:"linear-gradient(135deg,#8468D3,#0071CE)",color:"#fff",borderRadius:99,padding:"4px 14px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",letterSpacing:"0.8px",border:"2px solid #fff",boxShadow:"0 2px 10px rgba(132,104,211,0.4)"}}>BEST</div>}{rank===2&&<div style={{position:"absolute",bottom:-10,left:"50%",transform:"translateX(-50%)",background:"#94a3b8",color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,whiteSpace:"nowrap",border:"2px solid #fff"}}>2ND</div>}{rank===3&&<div style={{position:"absolute",bottom:-10,left:"50%",transform:"translateX(-50%)",background:"#b45309",color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,whiteSpace:"nowrap",border:"2px solid #fff"}}>3RD</div>}</div><div style={{fontSize:rank===1?14:12,fontWeight:800,color:"#0f1117",marginBottom:2,marginTop:4,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{s.name}</div><div style={{fontSize:rank===1?13:11,color:rank===1?"#0071CE":"#6b7280",fontWeight:700,marginBottom:8,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{fmtAmount(s.amount)}</div><div style={{width:size+40,height,background:"#fff",borderRadius:"12px 12px 0 0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 -2px 12px rgba(0,0,0,0.06)",border:"1px solid #f0f1f3",borderBottom:"none"}}><div style={{fontSize:rank===1?32:24,fontWeight:900,color:rank===1?"#0071CE":color,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{rank}</div><div style={{fontSize:11,color:"#adb5bd",fontWeight:600,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{s.count}건</div></div></div>);})}
-</div></div>{rest.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>{rest.map((s,i)=>(<div key={s.name} style={{background:"#fff",borderRadius:14,padding:"14px 18px",border:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:14}}><div style={{width:32,height:32,borderRadius:8,background:"#f7f8fa",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#adb5bd",flexShrink:0}}>{i+4}</div><Avatar name={s.name} img={profiles[s.name]} size={40} border="2px solid #f0f1f3"/><div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#0f1117",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{s.name}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:14,fontWeight:800,color:"#0f1117",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{fmtAmount(s.amount)}</div><div style={{fontSize:11,color:"#adb5bd",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{s.count}건</div></div></div>))}</div>)}{accounts.filter(a=>!managerStats.find(s=>s.name===a.name)).length>0&&(<div style={{marginTop:12,background:"#f7f8fa",borderRadius:12,padding:"12px 16px",border:"1px solid #f0f1f3"}}><div style={{fontSize:12,color:"#adb5bd",marginBottom:8,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>이달 계약 없음</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{accounts.filter(a=>!managerStats.find(s=>s.name===a.name)).map(a=>(<div key={a.name} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",borderRadius:8,padding:"5px 10px",border:"1px solid #f0f1f3"}}><Avatar name={a.name} img={profiles[a.name]} size={22} border="1px solid #f0f1f3"/><span style={{fontSize:12,color:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{a.name}</span></div>))}</div></div>)}</>)}</div>);}
+function RankingTab({contracts,profiles,accounts}){const now=new Date();const[selYear,setSelYear]=useState(now.getFullYear());const[selMonth,setSelMonth]=useState(now.getMonth()+1);const managerStats=useMemo(()=>{const staffNames=new Set(accounts.filter(a=>!a.role||a.role==="staff").map(a=>a.name));const map={};contracts.forEach(c=>{if(!c.manager||!c.startDate)return;if(!staffNames.has(c.manager))return;const[y,m]=c.startDate.split("-");if(parseInt(y)!==selYear||parseInt(m)!==selMonth)return;if(!map[c.manager])map[c.manager]={name:c.manager,count:0,amount:0};map[c.manager].count++;map[c.manager].amount+=parseAmount(c.total);});return Object.values(map).sort((a,b)=>b.amount-a.amount);},[contracts,selYear,selMonth,accounts]);const top=managerStats.slice(0,3);const rest=managerStats.slice(3);const podium=[{rank:2,size:100,height:120,color:"#94a3b8",border:"#94a3b8"},{rank:1,size:140,height:160,color:"#0071CE",border:"#8468D3"},{rank:3,size:80,height:90,color:"#b45309",border:"#b45309"}];return(<div><div style={{background:"#fff",borderRadius:14,padding:"14px 20px",marginBottom:20,border:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:12}}><select value={selYear} onChange={e=>setSelYear(parseInt(e.target.value))} style={{border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 10px",fontSize:12,background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}년</option>)}</select><select value={selMonth} onChange={e=>setSelMonth(parseInt(e.target.value))} style={{border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 10px",fontSize:12,background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{i+1}월</option>)}</select><span style={{fontSize:13,fontWeight:600,color:"#0f1117"}}>{selYear}년 {selMonth}월 매출 랭킹</span></div>{managerStats.length===0?(<div style={{background:"#fff",borderRadius:14,padding:"60px 20px",border:"1px solid #f0f1f3",textAlign:"center"}}><div style={{fontSize:14,color:"#adb5bd"}}>이 달 계약 데이터가 없습니다</div></div>):(<><div style={{background:"linear-gradient(160deg,#f0f5ff,#e8f4fd)",borderRadius:20,padding:"32px 20px 0",marginBottom:16,overflow:"hidden",border:"1px solid #dbeafe"}}><div style={{textAlign:"center",fontSize:14,fontWeight:800,color:"#0f1117",marginBottom:24}}>{selYear}년 {selMonth}월 TOP 3</div><div style={{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:12}}>{podium.map(({rank,size,height,color,border})=>{const s=top[rank-1];if(!s)return <div key={rank} style={{width:size+40,height:height+size+60}}/>;return(<div key={rank} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}><div style={{position:"relative",marginBottom:rank===1?18:12}}><div style={{width:size,height:size,borderRadius:"50%",border:rank===1?"4px solid transparent":"3px solid "+border,background:rank===1?"linear-gradient(white,white) padding-box, linear-gradient(135deg,#8468D3,#0071CE) border-box":"none",overflow:"hidden",boxShadow:rank===1?"0 8px 28px rgba(132,104,211,0.35)":"0 4px 12px rgba(0,0,0,0.1)"}}>{profiles[s.name]?<img src={profiles[s.name]} style={{width:"100%",height:"100%",objectFit:"cover"}} alt={s.name}/>:<div style={{width:"100%",height:"100%",background:ACOLORS[s.name.charCodeAt(0)%ACOLORS.length],display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.38,fontWeight:800,color:"#fff"}}>{s.name.slice(0,1)}</div>}</div>{rank===1&&<div style={{position:"absolute",bottom:-14,left:"50%",transform:"translateX(-50%)",background:"linear-gradient(135deg,#8468D3,#0071CE)",color:"#fff",borderRadius:99,padding:"4px 14px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",letterSpacing:"0.8px",border:"2px solid #fff",boxShadow:"0 2px 10px rgba(132,104,211,0.4)"}}>BEST</div>}{rank===2&&<div style={{position:"absolute",bottom:-10,left:"50%",transform:"translateX(-50%)",background:"#94a3b8",color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,whiteSpace:"nowrap",border:"2px solid #fff"}}>2ND</div>}{rank===3&&<div style={{position:"absolute",bottom:-10,left:"50%",transform:"translateX(-50%)",background:"#b45309",color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,whiteSpace:"nowrap",border:"2px solid #fff"}}>3RD</div>}</div><div style={{fontSize:rank===1?14:12,fontWeight:800,color:"#0f1117",marginBottom:2,marginTop:4,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{s.name}</div><div style={{fontSize:rank===1?13:11,color:rank===1?"#0071CE":"#6b7280",fontWeight:700,marginBottom:8,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{fmtAmount(s.amount)}</div><div style={{width:size+40,height,background:"#fff",borderRadius:"12px 12px 0 0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:"0 -2px 12px rgba(0,0,0,0.06)",border:"1px solid #f0f1f3",borderBottom:"none"}}><div style={{fontSize:rank===1?32:24,fontWeight:900,color:rank===1?"#0071CE":color,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{rank}</div><div style={{fontSize:11,color:"#adb5bd",fontWeight:600,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{s.count}건</div></div></div>);})}
+</div></div>{rest.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>{rest.map((s,i)=>(<div key={s.name} style={{background:"#fff",borderRadius:14,padding:"14px 18px",border:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:14}}><div style={{width:32,height:32,borderRadius:8,background:"#f7f8fa",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#adb5bd",flexShrink:0}}>{i+4}</div><Avatar name={s.name} img={profiles[s.name]} size={40} border="2px solid #f0f1f3"/><div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#0f1117",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{s.name}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:14,fontWeight:800,color:"#0f1117",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{fmtAmount(s.amount)}</div><div style={{fontSize:11,color:"#adb5bd",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{s.count}건</div></div></div>))}</div>)}{accounts.filter(a=>(!a.role||a.role==="staff")&&!managerStats.find(s=>s.name===a.name)).length>0&&(<div style={{marginTop:12,background:"#f7f8fa",borderRadius:12,padding:"12px 16px",border:"1px solid #f0f1f3"}}><div style={{fontSize:12,color:"#adb5bd",marginBottom:8,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>이달 계약 없음</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{accounts.filter(a=>(!a.role||a.role==="staff")&&!managerStats.find(s=>s.name===a.name)).map(a=>(<div key={a.name} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",borderRadius:8,padding:"5px 10px",border:"1px solid #f0f1f3"}}><Avatar name={a.name} img={profiles[a.name]} size={22} border="1px solid #f0f1f3"/><span style={{fontSize:12,color:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{a.name}</span></div>))}</div></div>)}</>)}</div>);}
 
 function AdminTab({projectCategories,setProjectCategories,targets,setTargets,accounts,setAccounts,webhookUrl,setWebhookUrl,rankWebhookUrl,setRankWebhookUrl,allData,loadAllData,loadingAll,contracts,navOrder,setNavOrder}){
   const[newProjInput,setNewProjInput]=useState("");const[newAccName,setNewAccName]=useState("");const[newAccPw,setNewAccPw]=useState("");const[editTargets,setEditTargets]=useState(targets);const[section,setSection]=useState("accounts");
@@ -1323,7 +1220,7 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
     </div>
     <div style={{display:"flex",gap:6,alignItems:"center"}}>
       <span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>권한:</span>
-      {[{v:"staff",l:"사원"},{v:"manager",l:"중간관리자"}].map(({v,l})=>(
+      {[{v:"staff",l:"사원"},{v:"manager",l:"관리자"}].map(({v,l})=>(
         <button key={v} onClick={()=>setNewAccRole(v)} style={{border:`1.5px solid ${newAccRole===v?"#0071CE":"#e5e7eb"}`,borderRadius:99,padding:"3px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:newAccRole===v?"#f0f7ff":"#fff",color:newAccRole===v?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>
       ))}
       <button onClick={addAccount} style={{marginLeft:"auto",background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 생성</button>
@@ -1333,7 +1230,7 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
   <div style={{display:"flex",flexDirection:"column",gap:5}}>
     {accounts.map(a=>(
       <div key={a.name} style={{display:"flex",alignItems:"center",gap:8,background:"#f7f8fa",borderRadius:9,padding:"9px 12px",border:"1px solid #f0f1f3"}}>
-        <span style={{fontSize:10,fontWeight:700,color:a.role==="manager"?"#8468D3":"#0071CE",background:a.role==="manager"?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 7px",border:`1px solid ${a.role==="manager"?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{a.role==="manager"?"중간관리자":"사원"}</span>
+        <span style={{fontSize:10,fontWeight:700,color:a.role==="manager"?"#8468D3":"#0071CE",background:a.role==="manager"?"#f5f3ff":"#f0f7ff",borderRadius:5,padding:"1px 7px",border:`1px solid ${a.role==="manager"?"#e9d5ff":"#bfd7f5"}`,flexShrink:0}}>{a.role==="manager"?"관리자":"사원"}</span>
         <span style={{fontWeight:600,fontSize:12,color:"#0f1117",flex:1}}>{a.name}</span>
         <span style={{fontSize:11,color:"#adb5bd",fontFamily:"monospace"}}>{a.password}</span>
         <button onClick={()=>delAccount(a.name)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:12,fontFamily:"'Pretendard',-apple-system,sans-serif",flexShrink:0}}>삭제</button>
@@ -1689,7 +1586,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               </div>)}
 
               {/* ===== 주간요약 탭 ===== */}
-              {contractSubTab==="weekly"&&<WeeklyTab contracts={contracts} webhookUrl={webhookUrl} rankWebhookUrl={rankWebhookUrl} genEvents={genEvents} st={st}/>}
+              {contractSubTab==="weekly"&&<WeeklyTab contracts={contracts} webhookUrl={webhookUrl} rankWebhookUrl={rankWebhookUrl} st={st}/>}
 
                             {/* ===== 순위관리 탭 ===== */}
               {contractSubTab==="rank"&&(()=>{
