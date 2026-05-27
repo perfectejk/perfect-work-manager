@@ -1097,7 +1097,7 @@ function MainApp({user,onLogout}){
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[contractMonth,setContractMonth]=useState("all");const[contractStatus,setContractStatus]=useState("all");
-  const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");
+  const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");const[checkedIds,setCheckedIds]=useState(new Set());
   const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());
   const[calFilter,setCalFilter]=useState("all");const[selectedDay,setSelectedDay]=useState(null);
@@ -1290,35 +1290,45 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                 <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>월별:</span><button onClick={()=>{setContractMonth("all");setContractPage(1);}} style={{border:`1.5px solid ${contractMonth==="all"?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth==="all"?"#f0f7ff":"#fff",color:contractMonth==="all"?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{contractMonthOptions.map(mo=>{const[y,m]=mo.split("-");return(<button key={mo} onClick={()=>{setContractMonth(mo);setContractPage(1);}} style={{border:`1.5px solid ${contractMonth===mo?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractMonth===mo?"#f0f7ff":"#fff",color:contractMonth===mo?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{parseInt(y)}년 {parseInt(m)}월</button>);})}</div>
                 <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:11,fontWeight:600,color:"#6b7280",flexShrink:0}}>상태:</span>{[{v:"all",l:"전체",c:"#6b7280"},{v:"active",l:"진행중",c:"#10b981"},{v:"ended",l:"종료",c:"#9ca3af"},{v:"cancelled",l:"해지",c:"#ef4444"}].map(({v,l,c})=>(<button key={v} onClick={()=>{setContractStatus(v);setContractPage(1);}} style={{border:`1.5px solid ${contractStatus===v?c:"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractStatus===v?c+"18":"#fff",color:contractStatus===v?c:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>))}{user.isAdmin&&managers.length>0&&(<><span style={{fontSize:11,fontWeight:600,color:"#6b7280",marginLeft:4,flexShrink:0}}>담당자:</span><button onClick={()=>{setContractManager("all");setContractPage(1);}} style={{border:`1.5px solid ${contractManager==="all"?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager==="all"?"#f5f3ff":"#fff",color:contractManager==="all"?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체</button>{managers.map(m=>(<button key={m} onClick={()=>{setContractManager(m);setContractPage(1);}} style={{border:`1.5px solid ${contractManager===m?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:600,cursor:"pointer",background:contractManager===m?"#f5f3ff":"#fff",color:contractManager===m?"#8468D3":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{m}</button>))}</>)}</div>
                 {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span><button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>필터 초기화</button></div>)}
-                <div style={{display:"flex",justifyContent:"flex-end"}}>
-                  <button onClick={async()=>{
-                    const rows=[["상호명","담당자","상태","계약시작","계약종료","금액","전화번호","키워드","상품내역","서비스내역","플레이스링크","특이사항","메모내용"]];
-                    for(const c of filteredContracts){
-                      const isCancelled=!!c.cancelled;
-                      const isActive=!isCancelled&&c.endDate>=todayStr;
-                      const status=isCancelled?"해지":isActive?"진행중":"종료";
-                      const memoKey=`contract:memos:${c.linkedMemoId||c.id}`;
-                      const memos=await st.get(memoKey)||[];
-                      const memoText=memos.map(m=>`[${m.date}] ${m.author}: ${m.text}`).join("\n");
-                      rows.push([
-                        c.name||"",c.manager||"",status,
-                        c.startDate||"",c.endDate||"",c.total||"",
-                        c.phone||"",
-                        (c.keywords||[]).join(", "),
-                        c.products||"",c.services||"",
-                        c.link||"",
-                        c.notes||"",memoText
-                      ]);
-                    }
-                    const ws=XLSX.utils.aoa_to_sheet(rows);
-                    ws["!cols"]=[{wch:20},{wch:8},{wch:6},{wch:12},{wch:12},{wch:10},{wch:14},{wch:30},{wch:30},{wch:30},{wch:35},{wch:25},{wch:60}];
-                    const wb=XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb,ws,"업체목록");
-                    const label=contractSearch||contractStatus!=="all"||contractMonth!=="all"?`_필터적용`:"";;
-                    XLSX.writeFile(wb,`업체목록${label}_${todayStr}.xlsx`);
-                  }} style={{display:"flex",alignItems:"center",gap:5,background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
-                    📥 엑셀 다운로드 ({filteredContracts.length}건)
-                  </button>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    {checkedIds.size>0&&<span style={{fontSize:11,color:"#0071CE",fontWeight:700,background:"#f0f7ff",borderRadius:6,padding:"3px 9px",border:"1px solid #bfdbfe"}}>{checkedIds.size}개 선택됨</span>}
+                    {checkedIds.size>0&&<button onClick={()=>setCheckedIds(new Set())} style={{fontSize:11,color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>선택 해제</button>}
+                  </div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {checkedIds.size>0&&<button onClick={async()=>{
+                      const target=filteredContracts.filter(c=>checkedIds.has(c.id));
+                      const rows=[["상호명","상태","계약시작","계약종료","금액","전화번호","키워드","상품내역","서비스내역","플레이스링크","계약 특이사항","관리 특이사항"]];
+                      for(const c of target){
+                        const isCancelled=!!c.cancelled;const isActive=!isCancelled&&c.endDate>=todayStr;
+                        const status=isCancelled?"해지":isActive?"진행중":"종료";
+                        const memoKey=`contract:memos:${c.linkedMemoId||c.id}`;
+                        const memos=await st.get(memoKey)||[];
+                        const memoText=memos.map(m=>`[${m.date}] ${m.author}: ${m.text}`).join("\n");
+                        rows.push([c.name||"",status,c.startDate||"",c.endDate||"",c.total||"",c.phone||"",(c.keywords||[]).join(", "),c.products||"",c.services||"",c.link||"",c.notes||"",memoText]);
+                      }
+                      const ws=XLSX.utils.aoa_to_sheet(rows);
+                      ws["!cols"]=[{wch:20},{wch:6},{wch:12},{wch:12},{wch:10},{wch:14},{wch:30},{wch:30},{wch:30},{wch:35},{wch:30},{wch:60}];
+                      const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"선택업체");
+                      XLSX.writeFile(wb,`업체목록_선택${checkedIds.size}건_${todayStr}.xlsx`);
+                    }} style={{display:"flex",alignItems:"center",gap:4,background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>✅ 선택 다운로드 ({checkedIds.size}건)</button>}
+                    <button onClick={async()=>{
+                      const rows=[["상호명","상태","계약시작","계약종료","금액","전화번호","키워드","상품내역","서비스내역","플레이스링크","계약 특이사항","관리 특이사항"]];
+                      for(const c of filteredContracts){
+                        const isCancelled=!!c.cancelled;const isActive=!isCancelled&&c.endDate>=todayStr;
+                        const status=isCancelled?"해지":isActive?"진행중":"종료";
+                        const memoKey=`contract:memos:${c.linkedMemoId||c.id}`;
+                        const memos=await st.get(memoKey)||[];
+                        const memoText=memos.map(m=>`[${m.date}] ${m.author}: ${m.text}`).join("\n");
+                        rows.push([c.name||"",status,c.startDate||"",c.endDate||"",c.total||"",c.phone||"",(c.keywords||[]).join(", "),c.products||"",c.services||"",c.link||"",c.notes||"",memoText]);
+                      }
+                      const ws=XLSX.utils.aoa_to_sheet(rows);
+                      ws["!cols"]=[{wch:20},{wch:6},{wch:12},{wch:12},{wch:10},{wch:14},{wch:30},{wch:30},{wch:30},{wch:35},{wch:30},{wch:60}];
+                      const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"업체목록");
+                      const label=contractSearch||contractStatus!=="all"||contractMonth!=="all"?"_필터적용":"";
+                      XLSX.writeFile(wb,`업체목록${label}_${todayStr}.xlsx`);
+                    }} style={{display:"flex",alignItems:"center",gap:5,background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>📥 전체 다운로드 ({filteredContracts.length}건)</button>
+                  </div>
                 </div>
               </div>
               {filteredContracts.length===0&&!showCF?(<div style={{textAlign:"center",padding:"40px 0",color:"#adb5bd",fontSize:13,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3"}}><div>{contractSearch?`"${contractSearch}"에 해당하는 업체가 없습니다`:contractMonth!=="all"?"해당 월에 계약한 업체가 없습니다":contractStatus==="active"?"진행중인 계약이 없습니다":contractStatus==="ended"?"종료된 계약이 없습니다":contractStatus==="cancelled"?"해지된 업체가 없습니다":user.isAdmin?"등록된 계약업체가 없습니다.":"담당 계약업체가 없습니다."}</div></div>)
@@ -1332,6 +1342,10 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                   const handleToggleCancel=async(e)=>{e.stopPropagation();if(isCancelled){if(!window.confirm("해지를 취소하고 복구할까요?"))return;}else{if(!window.confirm(`"${c.name}" 업체를 해지 처리할까요?`))return;}const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0){list[idx]={...list[idx],cancelled:!isCancelled};await st.set("contracts:all",list);setContracts([...list]);}};
                   return(
                     <div key={c.id} style={{background:isCancelled?"#fff5f5":"#fff",borderRadius:12,border:`1px solid ${isCancelled?"#fca5a5":"#f0f1f3"}`,padding:"12px 14px",display:"flex",gap:0,alignItems:"stretch",cursor:"pointer",transition:"box-shadow 0.15s",width:"100%",overflow:"hidden",boxSizing:"border-box"}} onMouseEnter={e=>e.currentTarget.style.boxShadow=isCancelled?"0 4px 16px rgba(239,68,68,0.12)":"0 4px 16px rgba(0,113,206,0.10)"} onMouseLeave={e=>e.currentTarget.style.boxShadow="none"} onClick={()=>setMemoContract(c)}>
+                      {/* 체크박스 */}
+                      <div style={{display:"flex",alignItems:"center",flexShrink:0,marginRight:8}} onClick={e=>e.stopPropagation()}>
+                        <input type="checkbox" checked={checkedIds.has(c.id)} onChange={e=>{setCheckedIds(prev=>{const next=new Set(prev);e.target.checked?next.add(c.id):next.delete(c.id);return next;});}} style={{width:16,height:16,cursor:"pointer",accentColor:"#0071CE"}}/>
+                      </div>
                       {/* 날짜 열 */}
                       <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,width:44,borderRight:`1px solid ${isCancelled?"#fecaca":"#f0f1f3"}`,marginRight:14,paddingRight:14,gap:1}}>
                         <div style={{fontSize:9,color:isCancelled?"#fca5a5":"#adb5bd",fontWeight:600}}>{startParts[1]}월</div>
