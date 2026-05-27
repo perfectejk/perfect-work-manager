@@ -286,74 +286,61 @@ function RankInputModal({event,contract,onClose,onConfirm,onDelete,existingData,
 // ========== 공유 텍스트 박스 ==========
 function ShareTextBox({contract,allKws,sortedKeys,rankHistory,localInitRanks}){
   const fS={fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  const[copiedMid,setCopiedMid]=useState(false);
   const[copiedA,setCopiedA]=useState(false);
   const[copiedB,setCopiedB]=useState(false);
-  const[selUpTo,setSelUpTo]=useState(""); // 선택 회차 key
-  // originDate: linkedMemoId 체인에서 가장 오래된 startDate
+  const[selEk,setSelEk]=useState(""); // 중간점검: 선택 회차 key
   const[originDate,setOriginDate]=useState(contract.startDate);
   useEffect(()=>{
     const findOrigin=async()=>{
       const list=await st.get("contracts:all")||[];
-      let date=contract.startDate;
-      let prevId=contract.linkedMemoId;
+      let date=contract.startDate;let prevId=contract.linkedMemoId;
       const visited=new Set([contract.id]);
-      while(prevId&&!visited.has(prevId)){
-        visited.add(prevId);
-        const prev=list.find(c=>c.id===prevId);
-        if(prev?.startDate)date=prev.startDate;
-        prevId=prev?.linkedMemoId;
-      }
+      while(prevId&&!visited.has(prevId)){visited.add(prevId);const prev=list.find(c=>c.id===prevId);if(prev?.startDate)date=prev.startDate;prevId=prev?.linkedMemoId;}
       setOriginDate(date);
     };
     if(contract.linkedMemoId)findOrigin();
   },[contract.id]);
 
-  // 선택 회차까지의 키 목록
-  const keysUpTo=selUpTo?sortedKeys.slice(0,sortedKeys.indexOf(selUpTo)+1):sortedKeys;
+  const copy=(text,setter)=>{navigator.clipboard.writeText(text).then(()=>{setter(true);setTimeout(()=>setter(false),2000);}).catch(()=>{});};
 
-  // 순위 결과 텍스트 생성
-  const genRankText=()=>{
-    const initDate=originDate?.slice(5).replace("-","/");
+  // ── 중간점검 텍스트: 선택 회차의 직전회차→선택회차 변화 ──
+  const genMidText=()=>{
     const lines=["📊 키워드 순위 결과"];
-    // 초기 순위
-    const hasInit=allKws.some(kw=>localInitRanks[kw]);
-    if(hasInit){
-      lines.push(` ━━ 초기 순위 (${initDate}) ━━ `);
-      allKws.forEach(kw=>{if(localInitRanks[kw])lines.push(`${kw}   ${localInitRanks[kw]}위 `);});
-      lines.push("");
-    }
-    // 최종 순위
-    lines.push(` ━━ 최종 순위 현황 ━━ `);
+    const targetKey=selEk||sortedKeys[sortedKeys.length-1];
+    if(!targetKey)return"순위 체크 기록이 없습니다.";
+    const targetIdx=sortedKeys.indexOf(targetKey);
+    const prevKey=targetIdx>0?sortedKeys[targetIdx-1]:null;
     allKws.forEach(kw=>{
-      const kwKeys=keysUpTo.filter(ek=>rankHistory[ek]?.keywords?.[kw]);
-      if(kwKeys.length===0)return;
-      const latestKey=kwKeys[kwKeys.length-1];
-      const latestRank=rankHistory[latestKey]?.keywords?.[kw]?.rank;
-      const latestDate=rankHistory[latestKey]?.date?.slice(5).replace("-","/");
-      const initRank=localInitRanks[kw];
-      // 누적: initRank - latestRank > 0 → 상승(순위숫자 낮아짐)
-      const cumDiff=initRank&&latestRank?initRank-latestRank:null;
-      const cumStr=cumDiff!==null?(cumDiff>0?`▲${cumDiff}`:cumDiff<0?`▼${Math.abs(cumDiff)}`:"변동없음"):"";
-      lines.push(` `);
-      lines.push(` 키워드 : ${kw} `);
-      lines.push(`${latestDate} ${latestRank}위 ${cumStr?` (누적 ${cumStr})`:""}`);
-      lines.push(` `);
+      const curVal=rankHistory[targetKey]?.keywords?.[kw];
+      if(!curVal)return;
+      const curRank=curVal.rank;
+      const curDate=rankHistory[targetKey]?.date?.slice(5).replace("-","/");
+      // 직전: 직전 회차 기록 우선, 없으면 initialRanks
+      const prevRankFromHistory=prevKey?rankHistory[prevKey]?.keywords?.[kw]?.rank:null;
+      const prevRank=prevRankFromHistory||(localInitRanks[kw])||null;
+      const prevDate=prevKey?rankHistory[prevKey]?.date?.slice(5).replace("-","/"):originDate?.slice(5).replace("-","/");
+      const diff=prevRank&&curRank?prevRank-curRank:null;
+      const arrow=diff===null?"":(diff>0?`▲${diff}`:diff<0?`▼${Math.abs(diff)}`:"");
+      lines.push(`키워드 : ${kw}`);
+      if(prevRank&&prevDate){
+        lines.push(`${prevDate} ${prevRank}위 → ${curDate} ${curRank}위 ${arrow}`);
+      }else{
+        lines.push(`${curDate} ${curRank}위 ${arrow}`);
+      }
     });
-    lines.push("");
-    lines.push("000 키워드에서 이번 달 순위가 눈에 띄게 올라왔습니다 !");
-    lines.push("사실 플레이스 작업은 첫 달이 기반을 다지는 단계예요.");
-    lines.push("알고리즘이 매장을 인식하고 신뢰도를 쌓아가는 시기라");
-    lines.push("위와같은 변화는 첫 달임에도 불구하고 정말 좋은 출발선으로 판단됩니다 !");
+    lines.push("——————————");
+    lines.push("중간 점검 결과 공유드립니다 😊");
+    lines.push("담당자로서 매일 체크하며 관리하고 있고,");
+    lines.push("순위가 꾸준히 오르고 있어 저도 뿌듯하네요!");
+    lines.push("앞으로도 놓치는 부분 없이 꼼꼼하게 챙겨드릴게요.");
+    lines.push("언제든 궁금한 점 있으시면 편하게 연락 주세요 🙏");
     return lines.join("\n");
   };
 
-  // 재연장 카톡 텍스트 생성 - 상품내역/서비스내역 자동 반영
+  // ── 리포트용 1: 재연장 카톡 ──
   const genRenewalText=()=>{
-    // products, services 각 줄을 ✔ 항목으로 변환
-    const toItems=str=>{
-      if(!str)return[];
-      return str.split(/\n/).map(s=>s.trim()).filter(Boolean).map(s=>`✔ ${s}`);
-    };
+    const toItems=str=>{if(!str)return[];return str.split(/\n/).map(s=>s.trim()).filter(Boolean).map(s=>`✔ ${s}`);};
     const items=[...toItems(contract.products),...toItems(contract.services)];
     const workList=items.length>0?items.join("\n"):"✔ (서비스 내역을 등록해주세요)";
     return`안녕하세요 대표님 😊
@@ -367,36 +354,88 @@ ${workList}
 결과 바로 남겨드릴게요 !!`;
   };
 
-  const copy=(text,setter)=>{
-    navigator.clipboard.writeText(text).then(()=>{setter(true);setTimeout(()=>setter(false),2000);}).catch(()=>{});
+  // ── 리포트용 2: 순위 결과 (최종 기준, 상승폭 최대 키워드 자동) ──
+  const genRankText=()=>{
+    const initDate=originDate?.slice(5).replace("-","/");
+    const lines=["📊 키워드 순위 결과"];
+    const hasInit=allKws.some(kw=>localInitRanks[kw]);
+    if(hasInit){
+      lines.push(` ━━ 초기 순위 (${initDate}) ━━ `);
+      allKws.forEach(kw=>{if(localInitRanks[kw])lines.push(`${kw}   ${localInitRanks[kw]}위 `);});
+      lines.push("");
+    }
+    lines.push(` ━━ 최종 순위 현황 ━━ `);
+    // 상승폭 최대 키워드 계산
+    let bestKw="";let bestDiff=-Infinity;
+    allKws.forEach(kw=>{
+      const kwKeys=sortedKeys.filter(ek=>rankHistory[ek]?.keywords?.[kw]);
+      if(kwKeys.length===0)return;
+      const latestRank=rankHistory[kwKeys[kwKeys.length-1]]?.keywords?.[kw]?.rank;
+      const initRank=localInitRanks[kw];
+      const diff=initRank&&latestRank?initRank-latestRank:null;
+      if(diff!==null&&diff>bestDiff){bestDiff=diff;bestKw=kw;}
+    });
+    allKws.forEach(kw=>{
+      const kwKeys=sortedKeys.filter(ek=>rankHistory[ek]?.keywords?.[kw]);
+      if(kwKeys.length===0)return;
+      const latestKey=kwKeys[kwKeys.length-1];
+      const latestRank=rankHistory[latestKey]?.keywords?.[kw]?.rank;
+      const latestDate=rankHistory[latestKey]?.date?.slice(5).replace("-","/");
+      const initRank=localInitRanks[kw];
+      const cumDiff=initRank&&latestRank?initRank-latestRank:null;
+      const cumStr=cumDiff!==null?(cumDiff>0?`▲${cumDiff}`:cumDiff<0?`▼${Math.abs(cumDiff)}`:"변동없음"):"";
+      lines.push(` `);lines.push(` 키워드 : ${kw} `);
+      lines.push(`${latestDate} ${latestRank}위 ${cumStr?` (누적 ${cumStr})`:""}`);
+      lines.push(` `);
+    });
+    lines.push("");
+    const bestLabel=bestKw||"해당";
+    lines.push(`${bestLabel} 키워드에서 이번 달 순위가 눈에 띄게 올라왔습니다 !`);
+    lines.push("사실 플레이스 작업은 첫 달이 기반을 다지는 단계예요.");
+    lines.push("알고리즘이 매장을 인식하고 신뢰도를 쌓아가는 시기라");
+    lines.push("위와같은 변화는 첫 달임에도 불구하고 정말 좋은 출발선으로 판단됩니다 !");
+    return lines.join("\n");
   };
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {/* 회차 선택 */}
-      {sortedKeys.length>0&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-        <span style={{fontSize:11,fontWeight:700,color:"#6b7280",...fS}}>순위 기준 회차:</span>
-        <button onClick={()=>setSelUpTo("")} style={{border:`1.5px solid ${!selUpTo?"#0071CE":"#e5e7eb"}`,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",background:!selUpTo?"#f0f7ff":"#fff",color:!selUpTo?"#0071CE":"#6b7280",...fS}}>전체</button>
-        {sortedKeys.map((ek,i)=>{
-          const rd=rankHistory[ek];
-          const label=`${i+1}차 ${rd.date?.slice(5)||""}`;
-          const isSel=selUpTo===ek;
-          return(<button key={ek} onClick={()=>setSelUpTo(ek)} style={{border:`1.5px solid ${isSel?"#8468D3":"#e5e7eb"}`,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",background:isSel?"#f5f3ff":"#fff",color:isSel?"#8468D3":"#6b7280",...fS}}>{label}</button>);
-        })}
-      </div>}
-      {/* 버튼 1: 재연장 카톡 */}
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {/* ── 중간점검 텍스트 ── */}
+      <div style={{background:"#f0fdf4",borderRadius:12,padding:"14px 16px",border:"1px solid #bbf7d0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#166534",...fS}}>중간점검 텍스트</div>
+          <button onClick={()=>copy(genMidText(),setCopiedMid)} style={{background:copiedMid?"#10b981":"#16a34a",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...fS}}>{copiedMid?"✓ 복사됨!":"텍스트 복사"}</button>
+        </div>
+        {/* 회차 선택 */}
+        {sortedKeys.length>0&&<div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:10}}>
+          <span style={{fontSize:11,color:"#6b7280",fontWeight:600,...fS}}>기준 회차:</span>
+          {sortedKeys.map((ek,i)=>{
+            const rd=rankHistory[ek];const isSel=selEk===ek;
+            return(<button key={ek} onClick={()=>setSelEk(isSel?"":ek)} style={{border:`1.5px solid ${isSel?"#16a34a":"#e5e7eb"}`,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",background:isSel?"#f0fdf4":"#fff",color:isSel?"#16a34a":"#6b7280",...fS}}>{i+1}차 {rd.date?.slice(5)||""}</button>);
+          })}
+        </div>}
+        <div style={{background:"#fff",borderRadius:8,padding:"12px 14px",fontSize:11,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap",border:"1px solid #bbf7d0",...fS}}>{genMidText()}</div>
+      </div>
+
+      {/* ── 리포트용 구분선 ── */}
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{flex:1,height:1,background:"#f0f1f3"}}/>
+        <span style={{fontSize:11,color:"#adb5bd",fontWeight:600,...fS}}>리포트용 텍스트</span>
+        <div style={{flex:1,height:1,background:"#f0f1f3"}}/>
+      </div>
+
+      {/* ── 리포트1: 재연장 카톡 ── */}
       <div style={{background:"#f5f3ff",borderRadius:12,padding:"14px 16px",border:"1px solid #e9d5ff"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div style={{fontSize:12,fontWeight:700,color:"#8468D3",...fS}}>재연장 카톡 문자</div>
+          <div style={{fontSize:12,fontWeight:700,color:"#8468D3",...fS}}>① 재연장 카톡</div>
           <button onClick={()=>copy(genRenewalText(),setCopiedA)} style={{background:copiedA?"#10b981":"#8468D3",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...fS}}>{copiedA?"✓ 복사됨!":"텍스트 복사"}</button>
         </div>
         <div style={{background:"#fff",borderRadius:8,padding:"12px 14px",fontSize:11,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap",border:"1px solid #e9d5ff",...fS}}>{genRenewalText()}</div>
-
       </div>
-      {/* 버튼 2: 순위 결과 */}
+
+      {/* ── 리포트2: 순위 결과 ── */}
       <div style={{background:"#f0f7ff",borderRadius:12,padding:"14px 16px",border:"1px solid #bfdbfe"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div style={{fontSize:12,fontWeight:700,color:"#0071CE",...fS}}>순위 결과 텍스트</div>
+          <div style={{fontSize:12,fontWeight:700,color:"#0071CE",...fS}}>② 순위 결과</div>
           <button onClick={()=>copy(genRankText(),setCopiedB)} style={{background:copiedB?"#10b981":"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...fS}}>{copiedB?"✓ 복사됨!":"텍스트 복사"}</button>
         </div>
         <div style={{background:"#fff",borderRadius:8,padding:"12px 14px",fontSize:11,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap",border:"1px solid #dbeafe",...fS}}>{genRankText()}</div>
