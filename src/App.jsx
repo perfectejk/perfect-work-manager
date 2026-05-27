@@ -1383,35 +1383,35 @@ function MainApp({user,onLogout}){
     cData[k]=true;
     await st.set("ce:completions",cData);
     setCompletions({...cData});
-    // ── 순위 하락 자동 감지 → Discord 전송 ──
+    // ── 순위체크 저장 → Discord 즉시 전송 ──
     try{
       const wh=await st.get("wt:rankWebhook")||await st.get("wt:webhook");
       if(!wh)return;
       const contract=contracts.find(c=>c.id===event.cid);
       if(!contract)return;
-      // 이전 순위체크 데이터 찾기
+      const line="─────────────────────────";
+      let msg=`📊 **순위체크 완료** · ${event.date}\n${line}\n`;
+      msg+=`🏢 **${contract.name}**${contract.manager?` · ${contract.manager}`:""}\n`;
+      msg+=`📅 ${event.rankIdx}차 순위체크\n`;
+      // 이전 회차 날짜 찾기
       const genEvts=genEvents(contract);
       const rankEvts=genEvts.filter(e=>e.type==="순위체크").sort((a,b)=>a.date.localeCompare(b.date));
       const curIdx=rankEvts.findIndex(e=>e.date===event.date);
       const prevEvt=curIdx>0?rankEvts[curIdx-1]:null;
-      const prevData=prevEvt?newRankData[ceKey(prevEvt)]:null;
-      // 하락 키워드 찾기
-      const drops=[];
-      Object.entries(keywordsResult).forEach(([kw,curRank])=>{
-        const prevRank=prevData?.keywords?.[kw];
-        const initial=(contract.initialRanks||{})[kw];
-        const baseRank=prevRank||initial||null;
-        if(baseRank&&parseInt(curRank)>parseInt(baseRank)){
-          drops.push({kw,prev:parseInt(baseRank),cur:parseInt(curRank),diff:parseInt(curRank)-parseInt(baseRank)});
+      const prevDate=prevEvt?prevEvt.date:null;
+      const curDateFmt=event.date.slice(5).replace("-","/");
+      const prevDateFmt=prevDate?prevDate.slice(5).replace("-","/"):null;
+      Object.entries(keywordsResult).forEach(([kw,val])=>{
+        const cur=typeof val==="object"?val.rank:parseInt(val);
+        const prev=typeof val==="object"&&val.prevRank?val.prevRank:null;
+        const diff=prev&&cur?prev-cur:null;
+        const arrow=diff===null?"":diff>0?`▲${diff}`:diff<0?`▼${Math.abs(diff)}`:"—";
+        if(prev&&prevDateFmt){
+          msg+=`• ${kw}\n  ${prevDateFmt} ${prev}위 → ${curDateFmt} ${cur}위 (${arrow})\n`;
+        }else{
+          msg+=`• ${kw}: ${curDateFmt} **${cur}위**\n`;
         }
       });
-      if(drops.length===0)return;
-      // 하락 있으면 전송
-      const line="─────────────────────────";
-      let msg=`📊 **순위 하락 감지** · ${event.date}\n${line}\n`;
-      msg+=`🏢 **${contract.name}**${contract.manager?` · ${contract.manager}`:""}\n`;
-      msg+=`📅 ${event.rankIdx}차 순위체크\n`;
-      drops.forEach(d=>{msg+=`🔻 ${d.kw}: ${d.prev}위 → ${d.cur}위 (▼${d.diff})\n`;});
       msg+=line;
       await fetch(wh,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:msg})});
     }catch(e){}
