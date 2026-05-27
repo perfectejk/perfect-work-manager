@@ -231,7 +231,8 @@ function RankInputModal({event,contract,onClose,onConfirm,onDelete,existingData,
     if(filled.length===0)return alert("최소 1개 키워드의 순위를 입력해주세요");
     const result={};
     keywords.forEach(kw=>{if(ranks[kw]&&parseInt(ranks[kw])>0){
-      const prev=existingData?.keywords?.[kw]?.rank||(contract.initialRanks?.[kw])||null;
+      // 수정 시엔 기존 prevRank 유지, 신규 시엔 initialRanks 사용
+      const prev=existingData?.keywords?.[kw]?.prevRank||(contract.initialRanks?.[kw])||null;
       result[kw]={rank:parseInt(ranks[kw]),prevRank:prev?parseInt(prev):null,date:event.date||todayStr};
     }});
     onConfirm(result);
@@ -247,7 +248,7 @@ function RankInputModal({event,contract,onClose,onConfirm,onDelete,existingData,
       ):(
         <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:16}}>
           {keywords.map(kw=>{
-            const prev=existingData?.keywords?.[kw]?.rank||(contract.initialRanks?.[kw])||null;
+            const prev=existingData?.keywords?.[kw]?.prevRank||(contract.initialRanks?.[kw])||null;
             const cur=parseInt(ranks[kw])||0;
             const diff=prev&&cur?parseInt(prev)-cur:null;
             return(
@@ -284,8 +285,11 @@ function RankInputModal({event,contract,onClose,onConfirm,onDelete,existingData,
 
 // ========== 공유 텍스트 박스 ==========
 function ShareTextBox({contract,allKws,sortedKeys,rankHistory,localInitRanks}){
-  const[copied,setCopied]=useState(false);
-  // 시작순위 날짜: linkedMemoId 체인에서 가장 오래된 startDate 사용
+  const fS={fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  const[copiedA,setCopiedA]=useState(false);
+  const[copiedB,setCopiedB]=useState(false);
+  const[selUpTo,setSelUpTo]=useState(""); // 선택 회차 key
+  // originDate: linkedMemoId 체인에서 가장 오래된 startDate
   const[originDate,setOriginDate]=useState(contract.startDate);
   useEffect(()=>{
     const findOrigin=async()=>{
@@ -303,66 +307,99 @@ function ShareTextBox({contract,allKws,sortedKeys,rankHistory,localInitRanks}){
     };
     if(contract.linkedMemoId)findOrigin();
   },[contract.id]);
-  const generateShareText=()=>{
-    const lines=["📊 네이버 플레이스 키워드 순위 현황",""];
-    // ── 작업 전 초기 순위 섹션 ──
+
+  // 선택 회차까지의 키 목록
+  const keysUpTo=selUpTo?sortedKeys.slice(0,sortedKeys.indexOf(selUpTo)+1):sortedKeys;
+
+  // 순위 결과 텍스트 생성
+  const genRankText=()=>{
     const initDate=originDate?.slice(5).replace("-","/");
-    const hasInitRanks=allKws.some(kw=>localInitRanks[kw]);
-    if(hasInitRanks){
-      lines.push(`━━ 작업 전 초기 순위 (${initDate}) ━━`);
-      allKws.forEach(kw=>{
-        const initRank=localInitRanks[kw];
-        if(initRank)lines.push(`${kw}   ${initRank}위`);
-      });
+    const lines=["📊 키워드 순위 결과"];
+    // 초기 순위
+    const hasInit=allKws.some(kw=>localInitRanks[kw]);
+    if(hasInit){
+      lines.push(` ━━ 초기 순위 (${initDate}) ━━ `);
+      allKws.forEach(kw=>{if(localInitRanks[kw])lines.push(`${kw}   ${localInitRanks[kw]}위 `);});
       lines.push("");
     }
-    // ── 최근 순위 변동 섹션 ──
-    lines.push("━━ 최근 순위 변동 현황 ━━");
-    lines.push("");
+    // 최종 순위
+    lines.push(` ━━ 최종 순위 현황 ━━ `);
     allKws.forEach(kw=>{
-      // 이 키워드의 체크 기록 있는 것만 최근 3개
-      const kwKeys=sortedKeys.filter(ek=>rankHistory[ek]?.keywords?.[kw]);
+      const kwKeys=keysUpTo.filter(ek=>rankHistory[ek]?.keywords?.[kw]);
       if(kwKeys.length===0)return;
-      const recentKeys=kwKeys.slice(-3);
-      const latestKey=recentKeys[recentKeys.length-1];
+      const latestKey=kwKeys[kwKeys.length-1];
       const latestRank=rankHistory[latestKey]?.keywords?.[kw]?.rank;
+      const latestDate=rankHistory[latestKey]?.date?.slice(5).replace("-","/");
       const initRank=localInitRanks[kw];
-      // 누적 = 초기순위 대비 현재순위
+      // 누적: initRank - latestRank > 0 → 상승(순위숫자 낮아짐)
       const cumDiff=initRank&&latestRank?initRank-latestRank:null;
       const cumStr=cumDiff!==null?(cumDiff>0?`▲${cumDiff}`:cumDiff<0?`▼${Math.abs(cumDiff)}`:"변동없음"):"";
-      lines.push(`키워드 : ${kw}`);
-      // 최근 3개 체크 화살표 연결
-      const checkParts=recentKeys.map(ek=>{
-        const rd=rankHistory[ek];
-        const date=rd.date?.slice(5).replace("-","/");
-        const rank=rd.keywords?.[kw]?.rank;
-        return`${date} ${rank}위`;
-      });
-      lines.push(`${checkParts.join(" → ")}${cumStr?`  (누적 ${cumStr})`:""}`);
-      lines.push("");
+      lines.push(` `);
+      lines.push(` 키워드 : ${kw} `);
+      lines.push(`${latestDate} ${latestRank}위 ${cumStr?` (누적 ${cumStr})`:""}`);
+      lines.push(` `);
     });
-    lines.push("━━━━━━━━━━━━━━━━━━━");
-    lines.push("중간 점검 결과 공유드립니다 😊");
-    lines.push("담당자로서 매일 체크하며 관리하고 있고,");
-    lines.push("순위가 꾸준히 오르고 있어 저도 뿌듯하네요!");
-    lines.push("앞으로도 놓치는 부분 없이 꼼꼼하게 챙겨드릴게요.");
-    lines.push("언제든 궁금한 점 있으시면 편하게 연락 주세요 🙏");
+    lines.push("");
+    lines.push("000 키워드에서 이번 달 순위가 눈에 띄게 올라왔습니다 !");
+    lines.push("사실 플레이스 작업은 첫 달이 기반을 다지는 단계예요.");
+    lines.push("알고리즘이 매장을 인식하고 신뢰도를 쌓아가는 시기라");
+    lines.push("위와같은 변화는 첫 달임에도 불구하고 정말 좋은 출발선으로 판단됩니다 !");
     return lines.join("\n");
   };
-  const handleCopy=()=>{
-    const text=generateShareText();
-    navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}).catch(()=>{});
+
+  // 재연장 카톡 텍스트 생성 - 상품내역/서비스내역 자동 반영
+  const genRenewalText=()=>{
+    // products, services 각 줄을 ✔ 항목으로 변환
+    const toItems=str=>{
+      if(!str)return[];
+      return str.split(/\n/).map(s=>s.trim()).filter(Boolean).map(s=>`✔ ${s}`);
+    };
+    const items=[...toItems(contract.products),...toItems(contract.services)];
+    const workList=items.length>0?items.join("\n"):"✔ (서비스 내역을 등록해주세요)";
+    return`안녕하세요 대표님 😊
+
+첫 달 함께해주셔서 진심으로 감사드리고, 이번 첫 달 작업이 모두 완료되어 결과 공유드리러 왔어요 !
+
+📋 이번 달 진행 작업
+${workList}
+
+첫 달은 플레이스 알고리즘이 매장을 인식하고 기반을 잡아가는 단계인데, 첫 달임에도 순위가 안정적으로 잡히고 있어요.
+결과 바로 남겨드릴게요 !!`;
   };
+
+  const copy=(text,setter)=>{
+    navigator.clipboard.writeText(text).then(()=>{setter(true);setTimeout(()=>setter(false),2000);}).catch(()=>{});
+  };
+
   return(
-    <div style={{background:"#f0f7ff",borderRadius:12,padding:"14px 16px",border:"1px solid #bfdbfe"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <div style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>광고주 공유 텍스트</div>
-        <button onClick={handleCopy} style={{display:"flex",alignItems:"center",gap:5,background:copied?"#10b981":"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
-          {copied?"✓ 복사됨!":"📋 텍스트 복사"}
-        </button>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {/* 회차 선택 */}
+      {sortedKeys.length>0&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <span style={{fontSize:11,fontWeight:700,color:"#6b7280",...fS}}>순위 기준 회차:</span>
+        <button onClick={()=>setSelUpTo("")} style={{border:`1.5px solid ${!selUpTo?"#0071CE":"#e5e7eb"}`,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",background:!selUpTo?"#f0f7ff":"#fff",color:!selUpTo?"#0071CE":"#6b7280",...fS}}>전체</button>
+        {sortedKeys.map((ek,i)=>{
+          const rd=rankHistory[ek];
+          const label=`${i+1}차 ${rd.date?.slice(5)||""}`;
+          const isSel=selUpTo===ek;
+          return(<button key={ek} onClick={()=>setSelUpTo(ek)} style={{border:`1.5px solid ${isSel?"#8468D3":"#e5e7eb"}`,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",background:isSel?"#f5f3ff":"#fff",color:isSel?"#8468D3":"#6b7280",...fS}}>{label}</button>);
+        })}
+      </div>}
+      {/* 버튼 1: 재연장 카톡 */}
+      <div style={{background:"#f5f3ff",borderRadius:12,padding:"14px 16px",border:"1px solid #e9d5ff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#8468D3",...fS}}>재연장 카톡 문자</div>
+          <button onClick={()=>copy(genRenewalText(),setCopiedA)} style={{background:copiedA?"#10b981":"#8468D3",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...fS}}>{copiedA?"✓ 복사됨!":"텍스트 복사"}</button>
+        </div>
+        <div style={{background:"#fff",borderRadius:8,padding:"12px 14px",fontSize:11,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap",border:"1px solid #e9d5ff",...fS}}>{genRenewalText()}</div>
+
       </div>
-      <div style={{background:"#fff",borderRadius:8,padding:"12px 14px",fontSize:11,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap",border:"1px solid #dbeafe",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
-        {generateShareText()}
+      {/* 버튼 2: 순위 결과 */}
+      <div style={{background:"#f0f7ff",borderRadius:12,padding:"14px 16px",border:"1px solid #bfdbfe"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#0071CE",...fS}}>순위 결과 텍스트</div>
+          <button onClick={()=>copy(genRankText(),setCopiedB)} style={{background:copiedB?"#10b981":"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...fS}}>{copiedB?"✓ 복사됨!":"텍스트 복사"}</button>
+        </div>
+        <div style={{background:"#fff",borderRadius:8,padding:"12px 14px",fontSize:11,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap",border:"1px solid #dbeafe",...fS}}>{genRankText()}</div>
       </div>
     </div>
   );
@@ -420,7 +457,11 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
       {/* 계약 시작 시점 초기 순위 */}
       {localKws.length>0&&(
         <div style={{background:"#f0fdf4",borderRadius:12,padding:"14px 16px",border:"1px solid #bbf7d0"}}>
-          <div style={{fontSize:12,fontWeight:700,color:"#166534",marginBottom:10}}>계약 시작 시점 순위 ({contract.startDate})</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#166534"}}>계약 시작 시점 순위</div>
+            <span style={{fontSize:11,color:"#6b7280"}}>{contract.startDate}</span>
+          </div>
+          <div style={{fontSize:11,color:"#adb5bd",marginBottom:8}}>재연장 업체는 첫 계약 당시 순위를 직접 입력해주세요.</div>
           <div style={{display:"flex",flexDirection:"column",gap:7}}>
             {localKws.map(kw=>{const saved=localInitRanks[kw]||"";const val=initEdits[kw]!==undefined?initEdits[kw]:saved;return(
               <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
