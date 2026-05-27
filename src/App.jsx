@@ -284,7 +284,7 @@ function RankInputModal({event,contract,onClose,onConfirm,onDelete,existingData,
 }
 
 // ========== 공유 텍스트 박스 ==========
-function ShareTextBox({contract,allKws,sortedKeys,rankHistory,localInitRanks,initDate}){
+function ShareTextBox({contract,allKws,sortedKeys,rankHistory,localInitRanks,initDate,renewalInitRanks}){
   const fS={fontFamily:"'Pretendard',-apple-system,sans-serif"};
   const[copiedMid,setCopiedMid]=useState(false);
   const[copiedA,setCopiedA]=useState(false);
@@ -294,23 +294,36 @@ function ShareTextBox({contract,allKws,sortedKeys,rankHistory,localInitRanks,ini
 
   const copy=(text,setter)=>{navigator.clipboard.writeText(text).then(()=>{setter(true);setTimeout(()=>setter(false),2000);}).catch(()=>{});};
 
-  // ── 중간점검 텍스트: 계약 시작 순위 기준, 회차 선택하면 최종날짜/순위만 변경 ──
+  // ── 중간점검 텍스트 ──
+  // 신규: 첫 계약 시작일 + initialRanks 기준
+  // 재연장: 재연장 시작일(contract.startDate) + renewalInitRanks 기준
   const genMidText=()=>{
     const targetKey=selEk||sortedKeys[sortedKeys.length-1];
     if(!targetKey)return"순위 체크 기록이 없습니다.";
-    const startDateFmt=(initDate||contract.startDate)?.slice(5).replace("-","/");
+    const isRenewal=contract.isRenewal;
+    // 기준 순위/날짜 결정
+    // linkedMemoId 있는 재연장: 이전 계약 initialRanks+initDate 자동 이어받음
+    // linkedMemoId 없는 수동 재연장: renewalInitRanks+contract.startDate 사용
+    // 신규: localInitRanks+initDate 사용
+    const isManualRenewal=isRenewal&&!contract.linkedMemoId;
+    const baseRanks=isManualRenewal&&renewalInitRanks&&Object.keys(renewalInitRanks).length>0
+      ?renewalInitRanks
+      :localInitRanks;
+    const baseDateFmt=isManualRenewal
+      ?contract.startDate?.slice(5).replace("-","/")
+      :(initDate||contract.startDate)?.slice(5).replace("-","/");
     const lines=["📊 키워드 순위 결과"];
     allKws.forEach(kw=>{
       const curVal=rankHistory[targetKey]?.keywords?.[kw];
-      if(!curVal&&!localInitRanks[kw])return;
-      const initRank=localInitRanks[kw];
+      if(!curVal&&!baseRanks[kw])return;
+      const baseRank=baseRanks[kw];
       const curRank=curVal?.rank;
       const curDate=rankHistory[targetKey]?.date?.slice(5).replace("-","/");
-      const diff=initRank&&curRank?initRank-curRank:null;
+      const diff=baseRank&&curRank?baseRank-curRank:null;
       const arrow=diff===null?"":(diff>0?`▲${diff}`:diff<0?`▼${Math.abs(diff)}`:"");
       lines.push(`키워드 : ${kw}`);
-      if(initRank&&curRank){
-        lines.push(`${startDateFmt} ${initRank}위 → ${curDate} ${curRank}위 ${arrow}`);
+      if(baseRank&&curRank){
+        lines.push(`${baseDateFmt} ${baseRank}위 → ${curDate} ${curRank}위 ${arrow}`);
       }else if(curRank){
         lines.push(`${curDate} ${curRank}위`);
       }
@@ -435,6 +448,9 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
   const[localKws,setLocalKws]=useState(contract.keywords||[]);
   const[localInitRanks,setLocalInitRanks]=useState(contract.initialRanks||{});
   const[initDate,setInitDate]=useState(contract.initRankDate||contract.startDate||"");
+  // 재연장 업체 전용: 이번 계약 시작 순위 (중간점검 기준)
+  const[renewalInitRanks,setRenewalInitRanks]=useState(contract.renewalInitRanks||{});
+  const[renewalInitEdits,setRenewalInitEdits]=useState({});
   const[rankHistory,setRankHistory]=useState({});const[rankLoading,setRankLoading]=useState(true);
   const[kwInput,setKwInput]=useState("");const[kwSaving,setKwSaving]=useState(false);
   const[initEdits,setInitEdits]=useState({});const[editingRank,setEditingRank]=useState(null);
@@ -461,7 +477,15 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
   const saveContractField=async(fields)=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===contract.id);if(idx<0)return;list[idx]={...list[idx],...fields};await st.set("contracts:all",list);if(onContractUpdate)onContractUpdate([...list]);};
   const handleAddKw=async()=>{const v=kwInput.trim();if(!v||localKws.includes(v))return alert("이미 있거나 빈 키워드입니다");setKwSaving(true);const updated=[...localKws,v];setLocalKws(updated);await saveContractField({keywords:updated});setKwInput("");setKwSaving(false);};
   const handleRemoveKw=async(kw)=>{if(!window.confirm(`키워드 "${kw}"를 삭제할까요?`))return;const updated=localKws.filter(k=>k!==kw);setLocalKws(updated);await saveContractField({keywords:updated});};
-  const handleSaveInitRanks=async()=>{const toSave={};localKws.forEach(kw=>{const v=initEdits[kw]!==undefined?initEdits[kw]:localInitRanks[kw]||"";if(v&&parseInt(v)>0)toSave[kw]=parseInt(v);});const merged={...localInitRanks,...toSave};setLocalInitRanks(merged);setInitEdits({});await saveContractField({initialRanks:merged,initRankDate:initDate||contract.startDate});alert("저장됐어요!");};
+  const handleSaveInitRanks=async()=>{
+    const toSave={};localKws.forEach(kw=>{const v=initEdits[kw]!==undefined?initEdits[kw]:localInitRanks[kw]||"";if(v&&parseInt(v)>0)toSave[kw]=parseInt(v);});
+    const merged={...localInitRanks,...toSave};setLocalInitRanks(merged);setInitEdits({});
+    // 재연장 시작순위도 함께 저장
+    const rToSave={};localKws.forEach(kw=>{const v=renewalInitEdits[kw]!==undefined?renewalInitEdits[kw]:renewalInitRanks[kw]||"";if(v&&parseInt(v)>0)rToSave[kw]=parseInt(v);});
+    const rMerged={...renewalInitRanks,...rToSave};setRenewalInitRanks(rMerged);setRenewalInitEdits({});
+    await saveContractField({initialRanks:merged,initRankDate:initDate||contract.startDate,renewalInitRanks:rMerged});
+    alert("저장됐어요!");
+  };
   const handleRankEdit=async(ek,kw,newVal)=>{if(!newVal||isNaN(parseInt(newVal)))return;const data=await st.get("ce:rankdata")||{};if(!data[ek])return;data[ek].keywords[kw].rank=parseInt(newVal);await st.set("ce:rankdata",data);setRankHistory(prev=>({...prev,[ek]:{...prev[ek],keywords:{...prev[ek].keywords,[kw]:{...prev[ek].keywords[kw],rank:parseInt(newVal)}}}}));setEditingRank(null);};
   const sortedKeys=useMemo(()=>{
     const allKeys=Object.keys(rankHistory).sort((a,b)=>{
@@ -503,23 +527,44 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
       {/* 계약 시작 시점 초기 순위 */}
       {localKws.length>0&&(
         <div style={{background:"#f0fdf4",borderRadius:12,padding:"14px 16px",border:"1px solid #bbf7d0"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#166534"}}>계약 시작 시점 순위</div>
+          {/* 섹션1: 전체 첫 계약 시작순위 (리포트용) */}
+          <div style={{marginBottom:contract.isRenewal?14:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#166534"}}>{contract.isRenewal?"① 전체 시작 순위 (리포트용)":"계약 시작 순위"}</div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <span style={{fontSize:11,color:"#6b7280",fontWeight:600,flexShrink:0}}>기준일:</span>
+              <input type="date" value={initDate} onChange={e=>setInitDate(e.target.value)} style={{border:"1px solid #bbf7d0",borderRadius:7,padding:"4px 8px",fontSize:12,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+              {contract.isRenewal&&<span style={{fontSize:10,color:"#adb5bd"}}>첫 계약일 (1~2월)</span>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {localKws.map(kw=>{const saved=localInitRanks[kw]||"";const val=initEdits[kw]!==undefined?initEdits[kw]:saved;return(
+                <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:12,fontWeight:500,flex:1,color:"#0f1117"}}>{kw}</span>
+                  <input type="number" min="1" value={val} onChange={e=>setInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                  <span style={{fontSize:11,color:"#6b7280"}}>위</span>
+                </div>
+              );})}
+            </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <span style={{fontSize:11,color:"#6b7280",fontWeight:600,flexShrink:0}}>순위 기준일:</span>
-            <input type="date" value={initDate} onChange={e=>setInitDate(e.target.value)} style={{border:"1px solid #bbf7d0",borderRadius:7,padding:"4px 8px",fontSize:12,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
-            <span style={{fontSize:10,color:"#adb5bd"}}>첫 계약일 직접 입력 가능</span>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:7}}>
-            {localKws.map(kw=>{const saved=localInitRanks[kw]||"";const val=initEdits[kw]!==undefined?initEdits[kw]:saved;return(
-              <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:12,fontWeight:500,flex:1,color:"#0f1117"}}>{kw}</span>
-                <input type="number" min="1" value={val} onChange={e=>setInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
-                <span style={{fontSize:11,color:"#6b7280"}}>위</span>
+          {/* 섹션2: 재연장 시작 순위 (중간점검용) — 재연장 업체만 표시 */}
+          {contract.isRenewal&&!contract.linkedMemoId&&(<>
+            <div style={{borderTop:"1px dashed #bbf7d0",paddingTop:12,marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#166534"}}>② 이번 계약 시작 순위 (중간점검용)</div>
               </div>
-            );})}
-          </div>
+              <div style={{fontSize:11,color:"#adb5bd",marginBottom:8}}>기준일: {contract.startDate} (재연장 시작일 자동)</div>
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                {localKws.map(kw=>{const saved=renewalInitRanks[kw]||"";const val=renewalInitEdits[kw]!==undefined?renewalInitEdits[kw]:saved;return(
+                  <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:12,fontWeight:500,flex:1,color:"#0f1117"}}>{kw}</span>
+                    <input type="number" min="1" value={val} onChange={e=>setRenewalInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="재연장시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                    <span style={{fontSize:11,color:"#6b7280"}}>위</span>
+                  </div>
+                );})}
+              </div>
+            </div>
+          </>)}
           <button onClick={handleSaveInitRanks} style={{marginTop:10,background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button>
         </div>
       )}
@@ -567,7 +612,7 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
           </div>
         )}
         {/* 공유 텍스트 복사 */}
-        {sortedKeys.length>0&&allKws.length>0&&<ShareTextBox contract={contract} allKws={allKws} sortedKeys={sortedKeys} rankHistory={rankHistory} localInitRanks={localInitRanks} initDate={initDate}/>}
+        {sortedKeys.length>0&&allKws.length>0&&<ShareTextBox contract={contract} allKws={allKws} sortedKeys={sortedKeys} rankHistory={rankHistory} localInitRanks={localInitRanks} initDate={initDate} renewalInitRanks={renewalInitRanks}/>}
         {/* 차수별 상세 기록 */}
         <div>
           <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:10}}>차수별 상세 기록</div>
