@@ -530,106 +530,109 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
 }
 
 // ========== 순위관리 탭 컴포넌트 ==========
-function WeeklyTab({contracts,webhookUrl,genEvents,st}){
-  const now=new Date();
-  const dayOfWeek=now.getDay();
-  const monday=new Date(now);monday.setDate(now.getDate()-(dayOfWeek===0?6:dayOfWeek-1));
-  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
+function WeeklyTab({contracts,webhookUrl,st}){
   const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  const weekStart=fmt(monday);const weekEnd=fmt(sunday);
-  const nextMonday=new Date(monday);nextMonday.setDate(monday.getDate()+7);
-  const nextSunday=new Date(nextMonday);nextSunday.setDate(nextMonday.getDate()+6);
-  const nextWeekStart=fmt(nextMonday);const nextWeekEnd=fmt(nextSunday);
-  const nm=new Date(now.getFullYear(),now.getMonth()+1,1);
-  const nmEnd=new Date(now.getFullYear(),now.getMonth()+2,0);
-  const nextMonthStart=fmt(nm);const nextMonthEnd=fmt(nmEnd);
-  const [weekMemos,setWeekMemos]=useState([]);
-  const [loadingWeek,setLoadingWeek]=useState(false);
-  const [weekLoaded,setWeekLoaded]=useState(false);
-  const expiringNext=contracts.filter(c=>!c.cancelled&&c.endDate&&c.endDate>=nextMonthStart&&c.endDate<=nextMonthEnd);
-  const nextCallContracts=contracts.filter(c=>{if(c.cancelled)return false;const evts=genEvents(c);return evts.some(e=>e.type==="관리전화"&&e.date>=nextWeekStart&&e.date<=nextWeekEnd);});
-  const loadWeekMemos=async()=>{
-    setLoadingWeek(true);
+  const todayFmt=fmt(new Date());
+  const [dateA,setDateA]=useState(todayFmt);
+  const [dateB,setDateB]=useState(todayFmt);
+  const [memos,setMemos]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [loaded,setLoaded]=useState(false);
+  const PRIORITY_ORDER={urgent:0,caution:1,normal:2};
+  // 시작일/종료일 정렬 (어떤 순서로 선택해도 작은날짜=시작, 큰날짜=종료)
+  const rangeStart=dateA<=dateB?dateA:dateB;
+  const rangeEnd=dateA<=dateB?dateB:dateA;
+  const isSameDay=rangeStart===rangeEnd;
+  const rangeLabel=isSameDay?rangeStart:`${rangeStart} ~ ${rangeEnd}`;
+  const loadMemos=async()=>{
+    setLoading(true);
     const results=[];
     for(const c of contracts){
       const mk=`contract:memos:${c.linkedMemoId||c.id}`;
       const ms=await st.get(mk)||[];
-      ms.forEach(m=>{if(m.date&&m.date>=weekStart&&(m.priority==="urgent"||m.priority==="caution")){results.push({...m,contractName:c.name,contractId:c.id});}});
+      ms.forEach(m=>{
+        if(!m.date)return;
+        const mDate=m.date.slice(0,10);// "YYYY-MM-DD" 부분만 비교
+        if(mDate>=rangeStart&&mDate<=rangeEnd){
+          results.push({...m,contractName:c.name,priority:m.priority||"normal"});
+        }
+      });
     }
-    results.sort((a,b)=>{if(a.priority==="urgent"&&b.priority!=="urgent")return -1;if(b.priority==="urgent"&&a.priority!=="urgent")return 1;return b.date.localeCompare(a.date);});
-    setWeekMemos(results);setLoadingWeek(false);setWeekLoaded(true);
+    results.sort((a,b)=>(PRIORITY_ORDER[a.priority]??2)-(PRIORITY_ORDER[b.priority]??2)||b.date.localeCompare(a.date));
+    setMemos(results);setLoading(false);setLoaded(true);
   };
-  const sendWeeklyDiscord=async()=>{
+  const sendDiscord=async()=>{
+    if(!loaded){alert("먼저 '메모 불러오기' 버튼을 눌러주세요!");return;}
     const wh=webhookUrl||await st.get("wt:webhook");
     if(!wh){alert("Discord 웹훅이 설정되지 않았습니다.\n관리자 설정 > 알림 설정에서 먼저 등록해주세요.");return;}
-    const urgentList=weekMemos.filter(m=>m.priority==="urgent");
-    const cautionList=weekMemos.filter(m=>m.priority==="caution");
-    let msg=`📋 **주간 계약 요약** (${weekStart} ~ ${weekEnd})\n\n`;
-    if(urgentList.length>0){msg+=`🚨 **긴급 (${urgentList.length}건)**\n`;urgentList.forEach(m=>{msg+=`• ${m.contractName} — ${m.text.slice(0,60)}${m.text.length>60?"...":""}\n`;});msg+="\n";}
-    if(cautionList.length>0){msg+=`⚠️ **주의 (${cautionList.length}건)**\n`;cautionList.forEach(m=>{msg+=`• ${m.contractName} — ${m.text.slice(0,60)}${m.text.length>60?"...":""}\n`;});msg+="\n";}
-    if(expiringNext.length>0){msg+=`🔄 **다음 달 종료 예정 (${expiringNext.length}건)**\n`;expiringNext.forEach(c=>{msg+=`• ${c.name} (종료: ${c.endDate})${c.manager?` 담당: ${c.manager}`:""}\n`;});msg+="\n";}
-    if(nextCallContracts.length>0){msg+=`📞 **다음 주 관리전화 예정 (${nextCallContracts.length}건)**\n`;nextCallContracts.forEach(c=>{msg+=`• ${c.name}${c.phone?` (${c.phone})`:""}${c.manager?` 담당: ${c.manager}`:""}\n`;});}
-    if(urgentList.length===0&&cautionList.length===0&&expiringNext.length===0&&nextCallContracts.length===0)msg+="이번 주 특이사항 없음\n";
+    const urgentList=memos.filter(m=>m.priority==="urgent");
+    const cautionList=memos.filter(m=>m.priority==="caution");
+    const normalList=memos.filter(m=>!m.priority||m.priority==="normal");
+    const label=isSameDay?`${rangeStart} 하루`:`${rangeStart} ~ ${rangeEnd}`;
+    let msg=`📋 **계약 메모 요약** (${label})\n\n`;
+    if(urgentList.length>0){msg+=`🚨 **긴급 (${urgentList.length}건)**\n`;urgentList.forEach(m=>{msg+=`• **${m.contractName}** — ${m.text}\n  ↳ ${m.author} · ${m.date}\n`;});msg+="\n";}
+    if(cautionList.length>0){msg+=`⚠️ **주의 (${cautionList.length}건)**\n`;cautionList.forEach(m=>{msg+=`• **${m.contractName}** — ${m.text}\n  ↳ ${m.author} · ${m.date}\n`;});msg+="\n";}
+    if(normalList.length>0){msg+=`📝 **일반 (${normalList.length}건)**\n`;normalList.forEach(m=>{msg+=`• **${m.contractName}** — ${m.text}\n  ↳ ${m.author} · ${m.date}\n`;});msg+="\n";}
+    if(memos.length===0)msg+="해당 기간 메모 없음\n";
+    if(msg.length>1900){msg=msg.slice(0,1900)+"\n...\n(내용이 길어 일부 생략됨)";}
     try{await fetch(wh,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:msg})});alert("Discord로 전송 완료!");}catch(e){alert("전송 실패: "+e.message);}
   };
   const bS={fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  const urgentList=memos.filter(m=>m.priority==="urgent");
+  const cautionList=memos.filter(m=>m.priority==="caution");
+  const normalList=memos.filter(m=>!m.priority||m.priority==="normal");
+  const MemoCard=({m,borderColor})=>(
+    <div style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:`1px solid ${borderColor}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,flexWrap:"wrap",gap:4}}>
+        <span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{m.contractName}</span>
+        <span style={{fontSize:10,color:"#adb5bd"}}>{m.date} · {m.author}</span>
+      </div>
+      <div style={{fontSize:12,color:"#374151",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>
+    </div>
+  );
   return(
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
-        <div><div style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>📋 주간 요약</div><div style={{fontSize:11,color:"#adb5bd",marginTop:2}}>{weekStart} ~ {weekEnd}</div></div>
-        <div style={{display:"flex",gap:6}}>
-          <button onClick={loadWeekMemos} disabled={loadingWeek} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...bS}}>{loadingWeek?"불러오는 중…":weekLoaded?"새로고침":"메모 불러오기"}</button>
-          <button onClick={sendWeeklyDiscord} style={{background:"#5865F2",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...bS}}>📨 Discord 전송</button>
+      {/* 헤더 */}
+      <div style={{fontWeight:700,fontSize:13,color:"#0f1117",marginBottom:12}}>📋 메모 조회 및 Discord 전송</div>
+      {/* 날짜 선택 영역 */}
+      <div style={{background:"#f7f8fa",borderRadius:12,padding:"14px 16px",marginBottom:14,border:"1px solid #f0f1f3"}}>
+        <div style={{fontSize:11,fontWeight:700,color:"#6b7280",marginBottom:10}}>📅 기간 선택</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:10}}>
+          <input type="date" value={dateA} onChange={e=>{setDateA(e.target.value);setLoaded(false);}} style={{border:"1.5px solid #f0f1f3",borderRadius:8,padding:"7px 10px",fontSize:12,outline:"none",background:"#fff",...bS}}/>
+          <span style={{fontSize:12,color:"#adb5bd",fontWeight:600}}>~</span>
+          <input type="date" value={dateB} onChange={e=>{setDateB(e.target.value);setLoaded(false);}} style={{border:"1.5px solid #f0f1f3",borderRadius:8,padding:"7px 10px",fontSize:12,outline:"none",background:"#fff",...bS}}/>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+          <div style={{fontSize:11,color:"#0071CE",fontWeight:700,background:"#f0f7ff",borderRadius:6,padding:"4px 10px",border:"1px solid #bfdbfe"}}>
+            {isSameDay?`📌 ${rangeStart} 하루`:`📌 ${rangeStart} ~ ${rangeEnd}`}
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={loadMemos} disabled={loading} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...bS}}>{loading?"불러오는 중…":"메모 불러오기"}</button>
+            <button onClick={sendDiscord} style={{background:"#5865F2",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...bS}}>📨 Discord 전송</button>
+          </div>
         </div>
       </div>
-      {/* 🚨 긴급 */}
-      {weekLoaded&&<div style={{background:"#fef2f2",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fecaca"}}>
-        <div style={{fontWeight:700,fontSize:12,color:"#ef4444",marginBottom:weekMemos.filter(m=>m.priority==="urgent").length?8:0}}>🚨 긴급 ({weekMemos.filter(m=>m.priority==="urgent").length}건)</div>
-        {weekMemos.filter(m=>m.priority==="urgent").length===0?<div style={{fontSize:12,color:"#adb5bd"}}>이번 주 긴급 메모 없음</div>
-        :weekMemos.filter(m=>m.priority==="urgent").map((m,i)=>(
-          <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #fecaca"}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{m.contractName}</span><span style={{fontSize:10,color:"#adb5bd"}}>{m.date} · {m.author}</span></div>
-            <div style={{fontSize:12,color:"#374151",lineHeight:1.5}}>{m.text}</div>
-          </div>
-        ))}
-      </div>}
-      {/* ⚠️ 주의 */}
-      {weekLoaded&&<div style={{background:"#fffbeb",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fde68a"}}>
-        <div style={{fontWeight:700,fontSize:12,color:"#d97706",marginBottom:weekMemos.filter(m=>m.priority==="caution").length?8:0}}>⚠️ 주의 ({weekMemos.filter(m=>m.priority==="caution").length}건)</div>
-        {weekMemos.filter(m=>m.priority==="caution").length===0?<div style={{fontSize:12,color:"#adb5bd"}}>이번 주 주의 메모 없음</div>
-        :weekMemos.filter(m=>m.priority==="caution").map((m,i)=>(
-          <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #fde68a"}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{m.contractName}</span><span style={{fontSize:10,color:"#adb5bd"}}>{m.date} · {m.author}</span></div>
-            <div style={{fontSize:12,color:"#374151",lineHeight:1.5}}>{m.text}</div>
-          </div>
-        ))}
-      </div>}
-      {/* 🔄 다음 달 종료 예정 */}
-      <div style={{background:"#f0f7ff",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #bfdbfe"}}>
-        <div style={{fontWeight:700,fontSize:12,color:"#0071CE",marginBottom:expiringNext.length?8:0}}>🔄 다음 달 종료 예정 — 재계약 논의 필요 ({expiringNext.length}건)</div>
-        {expiringNext.length===0?<div style={{fontSize:12,color:"#adb5bd"}}>해당 없음</div>
-        :expiringNext.sort((a,b)=>a.endDate.localeCompare(b.endDate)).map((c,i)=>(
-          <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #bfdbfe",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div><div style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{c.name}</div><div style={{fontSize:11,color:"#6b7280",marginTop:2}}>{c.manager&&`담당: ${c.manager} · `}종료: {c.endDate}</div></div>
-            <div style={{fontSize:12,color:"#0071CE",fontWeight:700}}>{c.total||""}</div>
-          </div>
-        ))}
-      </div>
-      {/* 📞 다음 주 관리전화 예정 */}
-      <div style={{background:"#f0fdf4",borderRadius:12,padding:"12px 14px",border:"1px solid #bbf7d0"}}>
-        <div style={{fontWeight:700,fontSize:12,color:"#16a34a",marginBottom:nextCallContracts.length?8:0}}>📞 다음 주 관리전화 예정 ({nextCallContracts.length}건)</div>
-        {nextCallContracts.length===0?<div style={{fontSize:12,color:"#adb5bd"}}>다음 주 관리전화 예정 없음</div>
-        :nextCallContracts.map((c,i)=>{
-          const evts=genEvents(c);
-          const callEvt=evts.filter(e=>e.type==="관리전화"&&e.date>=nextWeekStart&&e.date<=nextWeekEnd).sort((a,b)=>a.date.localeCompare(b.date))[0];
-          return(
-            <div key={i} style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:"1px solid #bbf7d0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{c.name}</div><div style={{fontSize:11,color:"#6b7280",marginTop:2}}>{c.manager&&`담당: ${c.manager} · `}{callEvt?.date}</div></div>
-              {c.phone&&<div style={{fontSize:11,color:"#16a34a",fontWeight:600}}>{c.phone}</div>}
-            </div>
-          );
-        })}
-      </div>
+      {/* 결과 */}
+      {!loaded&&<div style={{textAlign:"center",padding:"30px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:12,border:"1px solid #f0f1f3"}}>기간을 선택하고 메모 불러오기를 눌러주세요</div>}
+      {loaded&&memos.length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"#adb5bd",fontSize:12,background:"#f7f8fa",borderRadius:12,border:"1px solid #f0f1f3"}}>해당 기간에 등록된 메모가 없습니다</div>}
+      {loaded&&memos.length>0&&<>
+        <div style={{fontSize:11,color:"#6b7280",marginBottom:10,fontWeight:600}}>총 {memos.length}건 · 긴급 {urgentList.length} · 주의 {cautionList.length} · 일반 {normalList.length}</div>
+        {/* 🚨 긴급 */}
+        {urgentList.length>0&&<div style={{background:"#fef2f2",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fecaca"}}>
+          <div style={{fontWeight:700,fontSize:12,color:"#ef4444",marginBottom:8}}>🚨 긴급 ({urgentList.length}건)</div>
+          {urgentList.map((m,i)=><MemoCard key={i} m={m} borderColor="#fecaca"/>)}
+        </div>}
+        {/* ⚠️ 주의 */}
+        {cautionList.length>0&&<div style={{background:"#fffbeb",borderRadius:12,padding:"12px 14px",marginBottom:10,border:"1px solid #fde68a"}}>
+          <div style={{fontWeight:700,fontSize:12,color:"#d97706",marginBottom:8}}>⚠️ 주의 ({cautionList.length}건)</div>
+          {cautionList.map((m,i)=><MemoCard key={i} m={m} borderColor="#fde68a"/>)}
+        </div>}
+        {/* 📝 일반 */}
+        {normalList.length>0&&<div style={{background:"#f7f8fa",borderRadius:12,padding:"12px 14px",border:"1px solid #f0f1f3"}}>
+          <div style={{fontWeight:700,fontSize:12,color:"#374151",marginBottom:8}}>📝 일반 ({normalList.length}건)</div>
+          {normalList.map((m,i)=><MemoCard key={i} m={m} borderColor="#e5e7eb"/>)}
+        </div>}
+      </>}
     </div>
   );
 }
