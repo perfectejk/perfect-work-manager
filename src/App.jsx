@@ -284,49 +284,35 @@ function RankInputModal({event,contract,onClose,onConfirm,onDelete,existingData,
 }
 
 // ========== 공유 텍스트 박스 ==========
-function ShareTextBox({contract,allKws,sortedKeys,rankHistory,localInitRanks}){
+function ShareTextBox({contract,allKws,sortedKeys,rankHistory,localInitRanks,initDate}){
   const fS={fontFamily:"'Pretendard',-apple-system,sans-serif"};
   const[copiedMid,setCopiedMid]=useState(false);
   const[copiedA,setCopiedA]=useState(false);
   const[copiedB,setCopiedB]=useState(false);
   const[selEk,setSelEk]=useState(""); // 중간점검: 선택 회차 key
-  const[originDate,setOriginDate]=useState(contract.startDate);
-  useEffect(()=>{
-    const findOrigin=async()=>{
-      const list=await st.get("contracts:all")||[];
-      let date=contract.startDate;let prevId=contract.linkedMemoId;
-      const visited=new Set([contract.id]);
-      while(prevId&&!visited.has(prevId)){visited.add(prevId);const prev=list.find(c=>c.id===prevId);if(prev?.startDate)date=prev.startDate;prevId=prev?.linkedMemoId;}
-      setOriginDate(date);
-    };
-    if(contract.linkedMemoId)findOrigin();
-  },[contract.id]);
+  // initDate: 부모(RankHistoryPanel)에서 props로 받음 - 재연장 업체는 수기 입력한 날짜 사용
 
   const copy=(text,setter)=>{navigator.clipboard.writeText(text).then(()=>{setter(true);setTimeout(()=>setter(false),2000);}).catch(()=>{});};
 
-  // ── 중간점검 텍스트: 선택 회차의 직전회차→선택회차 변화 ──
+  // ── 중간점검 텍스트: 계약 시작 순위 기준, 회차 선택하면 최종날짜/순위만 변경 ──
   const genMidText=()=>{
-    const lines=["📊 키워드 순위 결과"];
     const targetKey=selEk||sortedKeys[sortedKeys.length-1];
     if(!targetKey)return"순위 체크 기록이 없습니다.";
-    const targetIdx=sortedKeys.indexOf(targetKey);
-    const prevKey=targetIdx>0?sortedKeys[targetIdx-1]:null;
+    const startDateFmt=(initDate||contract.startDate)?.slice(5).replace("-","/");
+    const lines=["📊 키워드 순위 결과"];
     allKws.forEach(kw=>{
       const curVal=rankHistory[targetKey]?.keywords?.[kw];
-      if(!curVal)return;
-      const curRank=curVal.rank;
+      if(!curVal&&!localInitRanks[kw])return;
+      const initRank=localInitRanks[kw];
+      const curRank=curVal?.rank;
       const curDate=rankHistory[targetKey]?.date?.slice(5).replace("-","/");
-      // 직전: 직전 회차 기록 우선, 없으면 initialRanks
-      const prevRankFromHistory=prevKey?rankHistory[prevKey]?.keywords?.[kw]?.rank:null;
-      const prevRank=prevRankFromHistory||(localInitRanks[kw])||null;
-      const prevDate=prevKey?rankHistory[prevKey]?.date?.slice(5).replace("-","/"):originDate?.slice(5).replace("-","/");
-      const diff=prevRank&&curRank?prevRank-curRank:null;
+      const diff=initRank&&curRank?initRank-curRank:null;
       const arrow=diff===null?"":(diff>0?`▲${diff}`:diff<0?`▼${Math.abs(diff)}`:"");
       lines.push(`키워드 : ${kw}`);
-      if(prevRank&&prevDate){
-        lines.push(`${prevDate} ${prevRank}위 → ${curDate} ${curRank}위 ${arrow}`);
-      }else{
-        lines.push(`${curDate} ${curRank}위 ${arrow}`);
+      if(initRank&&curRank){
+        lines.push(`${startDateFmt} ${initRank}위 → ${curDate} ${curRank}위 ${arrow}`);
+      }else if(curRank){
+        lines.push(`${curDate} ${curRank}위`);
       }
     });
     lines.push("——————————");
@@ -356,11 +342,11 @@ ${workList}
 
   // ── 리포트용 2: 순위 결과 (최종 기준, 상승폭 최대 키워드 자동) ──
   const genRankText=()=>{
-    const initDate=originDate?.slice(5).replace("-","/");
+    const initDateFmt=(initDate||contract.startDate)?.slice(5).replace("-","/");
     const lines=["📊 키워드 순위 결과"];
     const hasInit=allKws.some(kw=>localInitRanks[kw]);
     if(hasInit){
-      lines.push(` ━━ 초기 순위 (${initDate}) ━━ `);
+      lines.push(` ━━ 초기 순위 (${initDateFmt}) ━━ `);
       allKws.forEach(kw=>{if(localInitRanks[kw])lines.push(`${kw}   ${localInitRanks[kw]}위 `);});
       lines.push("");
     }
@@ -426,7 +412,7 @@ ${workList}
       {/* ── 리포트1: 재연장 카톡 ── */}
       <div style={{background:"#f5f3ff",borderRadius:12,padding:"14px 16px",border:"1px solid #e9d5ff"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div style={{fontSize:12,fontWeight:700,color:"#8468D3",...fS}}>① 재연장 카톡</div>
+          <div style={{fontSize:12,fontWeight:700,color:"#8468D3",...fS}}>① 리포트 카톡</div>
           <button onClick={()=>copy(genRenewalText(),setCopiedA)} style={{background:copiedA?"#10b981":"#8468D3",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",...fS}}>{copiedA?"✓ 복사됨!":"텍스트 복사"}</button>
         </div>
         <div style={{background:"#fff",borderRadius:8,padding:"12px 14px",fontSize:11,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap",border:"1px solid #e9d5ff",...fS}}>{genRenewalText()}</div>
@@ -448,6 +434,7 @@ ${workList}
 function RankHistoryPanel({contract,user,onContractUpdate}){
   const[localKws,setLocalKws]=useState(contract.keywords||[]);
   const[localInitRanks,setLocalInitRanks]=useState(contract.initialRanks||{});
+  const[initDate,setInitDate]=useState(contract.initRankDate||contract.startDate||"");
   const[rankHistory,setRankHistory]=useState({});const[rankLoading,setRankLoading]=useState(true);
   const[kwInput,setKwInput]=useState("");const[kwSaving,setKwSaving]=useState(false);
   const[initEdits,setInitEdits]=useState({});const[editingRank,setEditingRank]=useState(null);
@@ -474,7 +461,7 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
   const saveContractField=async(fields)=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===contract.id);if(idx<0)return;list[idx]={...list[idx],...fields};await st.set("contracts:all",list);if(onContractUpdate)onContractUpdate([...list]);};
   const handleAddKw=async()=>{const v=kwInput.trim();if(!v||localKws.includes(v))return alert("이미 있거나 빈 키워드입니다");setKwSaving(true);const updated=[...localKws,v];setLocalKws(updated);await saveContractField({keywords:updated});setKwInput("");setKwSaving(false);};
   const handleRemoveKw=async(kw)=>{if(!window.confirm(`키워드 "${kw}"를 삭제할까요?`))return;const updated=localKws.filter(k=>k!==kw);setLocalKws(updated);await saveContractField({keywords:updated});};
-  const handleSaveInitRanks=async()=>{const toSave={};localKws.forEach(kw=>{const v=initEdits[kw]!==undefined?initEdits[kw]:localInitRanks[kw]||"";if(v&&parseInt(v)>0)toSave[kw]=parseInt(v);});const merged={...localInitRanks,...toSave};setLocalInitRanks(merged);setInitEdits({});await saveContractField({initialRanks:merged});alert("저장됐어요!");};
+  const handleSaveInitRanks=async()=>{const toSave={};localKws.forEach(kw=>{const v=initEdits[kw]!==undefined?initEdits[kw]:localInitRanks[kw]||"";if(v&&parseInt(v)>0)toSave[kw]=parseInt(v);});const merged={...localInitRanks,...toSave};setLocalInitRanks(merged);setInitEdits({});await saveContractField({initialRanks:merged,initRankDate:initDate||contract.startDate});alert("저장됐어요!");};
   const handleRankEdit=async(ek,kw,newVal)=>{if(!newVal||isNaN(parseInt(newVal)))return;const data=await st.get("ce:rankdata")||{};if(!data[ek])return;data[ek].keywords[kw].rank=parseInt(newVal);await st.set("ce:rankdata",data);setRankHistory(prev=>({...prev,[ek]:{...prev[ek],keywords:{...prev[ek].keywords,[kw]:{...prev[ek].keywords[kw],rank:parseInt(newVal)}}}}));setEditingRank(null);};
   const sortedKeys=useMemo(()=>{
     const allKeys=Object.keys(rankHistory).sort((a,b)=>{
@@ -516,11 +503,14 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
       {/* 계약 시작 시점 초기 순위 */}
       {localKws.length>0&&(
         <div style={{background:"#f0fdf4",borderRadius:12,padding:"14px 16px",border:"1px solid #bbf7d0"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <div style={{fontSize:12,fontWeight:700,color:"#166534"}}>계약 시작 시점 순위</div>
-            <span style={{fontSize:11,color:"#6b7280"}}>{contract.startDate}</span>
           </div>
-          <div style={{fontSize:11,color:"#adb5bd",marginBottom:8}}>재연장 업체는 첫 계약 당시 순위를 직접 입력해주세요.</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <span style={{fontSize:11,color:"#6b7280",fontWeight:600,flexShrink:0}}>순위 기준일:</span>
+            <input type="date" value={initDate} onChange={e=>setInitDate(e.target.value)} style={{border:"1px solid #bbf7d0",borderRadius:7,padding:"4px 8px",fontSize:12,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+            <span style={{fontSize:10,color:"#adb5bd"}}>첫 계약일 직접 입력 가능</span>
+          </div>
           <div style={{display:"flex",flexDirection:"column",gap:7}}>
             {localKws.map(kw=>{const saved=localInitRanks[kw]||"";const val=initEdits[kw]!==undefined?initEdits[kw]:saved;return(
               <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
@@ -577,7 +567,7 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
           </div>
         )}
         {/* 공유 텍스트 복사 */}
-        {sortedKeys.length>0&&allKws.length>0&&<ShareTextBox contract={contract} allKws={allKws} sortedKeys={sortedKeys} rankHistory={rankHistory} localInitRanks={localInitRanks}/>}
+        {sortedKeys.length>0&&allKws.length>0&&<ShareTextBox contract={contract} allKws={allKws} sortedKeys={sortedKeys} rankHistory={rankHistory} localInitRanks={localInitRanks} initDate={initDate}/>}
         {/* 차수별 상세 기록 */}
         <div>
           <div style={{fontSize:12,fontWeight:700,color:"#0f1117",marginBottom:10}}>차수별 상세 기록</div>
