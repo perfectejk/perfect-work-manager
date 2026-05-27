@@ -745,7 +745,7 @@ function WeeklyTab({contracts,webhookUrl,rankWebhookUrl,genEvents,st}){
     </div>
   );
 }
-function RankManageTab({contracts,completions,rankDataMap,setMemoContract,setRankModalEvent,setRankModalContract,toggleCE}){
+function RankManageTab({contracts,completions,rankDataMap,setMemoContract,setRankModalEvent,setRankModalContract,toggleCE,handleRankDelete}){
   const[search,setSearch]=useState("");
   const[statusFilter,setStatusFilter]=useState("active");// active | ended | all
   const filtered=useMemo(()=>{let list=contracts;if(statusFilter==="active")list=list.filter(c=>c.endDate>=todayStr);else if(statusFilter==="ended")list=list.filter(c=>c.endDate<todayStr);if(search.trim())list=list.filter(c=>c.name?.toLowerCase().includes(search.trim().toLowerCase()));return list;},[contracts,statusFilter,search]);
@@ -797,9 +797,15 @@ function RankManageTab({contracts,completions,rankDataMap,setMemoContract,setRan
             const isToday=e.date===todayStr;const isFuture=e.date>todayStr;const isPast=e.date<todayStr;
             const dl=Math.ceil((new Date(e.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
             if(isDone){return(
-              <div key={ri} style={{display:"flex",alignItems:"center",gap:4,background:"#f0fdf4",borderRadius:99,padding:"4px 10px",border:"1.5px solid #6ee7b7"}}>
+              <div key={ri} style={{display:"flex",alignItems:"center",gap:4,background:"#f0fdf4",borderRadius:99,padding:"4px 10px",border:"1.5px solid #6ee7b7",cursor:"pointer"}} onClick={ev=>{
+                ev.stopPropagation();
+                const choice=window.confirm(`${e.rankIdx}차 ${e.date.slice(5)} 순위체크\n\n✏️ 수정 → 확인\n🗑️ 삭제 → 취소`);
+                if(choice){setRankModalEvent(e);setRankModalContract(c);}
+                else{if(window.confirm(`${e.rankIdx}차 ${e.date.slice(5)} 기록을 삭제할까요?`))handleRankDelete(e);}
+              }}>
                 <span style={{color:"#10b981",fontSize:10,fontWeight:800}}>✓</span>
                 <span style={{fontSize:11,fontWeight:700,color:"#10b981",whiteSpace:"nowrap"}}>{e.rankIdx}차 {e.date.slice(5)}</span>
+                <span style={{fontSize:9,color:"#a7f3d0"}}>✎</span>
               </div>
             );}
             return(
@@ -1416,6 +1422,18 @@ function MainApp({user,onLogout}){
       await fetch(wh,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:msg})});
     }catch(e){}
   };
+  const handleRankDelete=async(event)=>{
+    if(!window.confirm("이 순위체크 기록을 삭제할까요?"))return;
+    const k=ceKey(event);
+    const newRankData=await st.get("ce:rankdata")||{};
+    delete newRankData[k];
+    await st.set("ce:rankdata",newRankData);
+    setRankDataMap({...newRankData});
+    const cData=await st.get("ce:completions")||{};
+    delete cData[k];
+    await st.set("ce:completions",cData);
+    setCompletions({...cData});
+  };
   const addKeywordToContract=async(contractId,kw)=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(c=>c.id===contractId);if(idx<0)return;const existing=list[idx].keywords||[];if(existing.includes(kw))return;list[idx]={...list[idx],keywords:[...existing,kw]};await st.set("contracts:all",list);setContracts([...list]);};
   const toggleCE=async(e,forceTo)=>{const data=await st.get("ce:completions")||{};const k=ceKey(e);data[k]=forceTo!==undefined?forceTo:!data[k];await st.set("ce:completions",data);setCompletions({...data});};
   const loadProfiles=async()=>{const p=await st.get("profiles:all")||{};setProfiles(p);};
@@ -1652,7 +1670,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                 // 검색/필터 state는 외부에서 관리 불가하므로 즉시 처리
                 // 대신 useState 사용 불가 → useRef 없이 key로 처리
                 // → 실제로는 아래 JSX에서 직접 useState 컴포넌트로 분리
-                return <RankManageTab contracts={rankTargets} completions={completions} rankDataMap={rankDataMap} setMemoContract={setMemoContract} setRankModalEvent={setRankModalEvent} setRankModalContract={setRankModalContract} toggleCE={toggleCE}/>;
+                return <RankManageTab contracts={rankTargets} completions={completions} rankDataMap={rankDataMap} setMemoContract={setMemoContract} setRankModalEvent={setRankModalEvent} setRankModalContract={setRankModalContract} toggleCE={toggleCE} handleRankDelete={handleRankDelete}/>;
               })()}
             </div>
           )}
