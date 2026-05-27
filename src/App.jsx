@@ -222,7 +222,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
 }
 
 // ========== 순위 입력 모달 ==========
-function RankInputModal({event,contract,onClose,onConfirm,existingData,onAddKeyword}){
+function RankInputModal({event,contract,onClose,onConfirm,onDelete,existingData,onAddKeyword}){
   const keywords=contract.keywords&&contract.keywords.length>0?contract.keywords:[];
   const[ranks,setRanks]=useState(()=>{const init={};keywords.forEach(kw=>{init[kw]=existingData?.keywords?.[kw]?.rank||"";});return init;});
   const[newKw,setNewKw]=useState("");const[kwSaving,setKwSaving]=useState(false);
@@ -273,9 +273,10 @@ function RankInputModal({event,contract,onClose,onConfirm,existingData,onAddKeyw
           <button onClick={handleAddKw} disabled={kwSaving} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",whiteSpace:"nowrap"}}>{kwSaving?"저장중":"+ 추가"}</button>
         </div>
       </div>
-      <div style={{display:"flex",gap:8}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {existingData&&onDelete&&<button onClick={()=>{if(window.confirm("이 순위체크 기록을 삭제할까요?"))onDelete();}} style={{background:"#fff5f5",color:"#ef4444",border:"1px solid #fca5a5",borderRadius:9,padding:"11px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>🗑️ 삭제</button>}
         <button onClick={onClose} style={{flex:1,background:"#f3f4f6",border:"none",borderRadius:9,padding:"11px",fontSize:13,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button>
-        <button onClick={handleConfirm} disabled={keywords.length===0} style={{flex:2,background:keywords.length>0?"#0071CE":"#e5e7eb",color:keywords.length>0?"#fff":"#9ca3af",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:keywords.length>0?"pointer":"not-allowed",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button>
+        <button onClick={handleConfirm} disabled={keywords.length===0} style={{flex:2,background:keywords.length>0?"#0071CE":"#e5e7eb",color:keywords.length>0?"#fff":"#9ca3af",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:keywords.length>0?"pointer":"not-allowed",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{existingData?"수정하기":"저장"}</button>
       </div>
     </div>
   </div>);
@@ -797,12 +798,7 @@ function RankManageTab({contracts,completions,rankDataMap,setMemoContract,setRan
             const isToday=e.date===todayStr;const isFuture=e.date>todayStr;const isPast=e.date<todayStr;
             const dl=Math.ceil((new Date(e.date+"T00:00:00")-new Date(todayStr+"T00:00:00"))/(1000*60*60*24));
             if(isDone){return(
-              <div key={ri} style={{display:"flex",alignItems:"center",gap:4,background:"#f0fdf4",borderRadius:99,padding:"4px 10px",border:"1.5px solid #6ee7b7",cursor:"pointer"}} onClick={ev=>{
-                ev.stopPropagation();
-                const choice=window.confirm(`${e.rankIdx}차 ${e.date.slice(5)} 순위체크\n\n✏️ 수정 → 확인\n🗑️ 삭제 → 취소`);
-                if(choice){setRankModalEvent(e);setRankModalContract(c);}
-                else{if(window.confirm(`${e.rankIdx}차 ${e.date.slice(5)} 기록을 삭제할까요?`))handleRankDelete(e);}
-              }}>
+              <div key={ri} style={{display:"flex",alignItems:"center",gap:4,background:"#f0fdf4",borderRadius:99,padding:"4px 10px",border:"1.5px solid #6ee7b7",cursor:"pointer"}} onClick={ev=>{ev.stopPropagation();setRankModalEvent(e);setRankModalContract(c);}}>
                 <span style={{color:"#10b981",fontSize:10,fontWeight:800}}>✓</span>
                 <span style={{fontSize:11,fontWeight:700,color:"#10b981",whiteSpace:"nowrap"}}>{e.rankIdx}차 {e.date.slice(5)}</span>
                 <span style={{fontSize:9,color:"#a7f3d0"}}>✎</span>
@@ -1399,20 +1395,26 @@ function MainApp({user,onLogout}){
       let msg=`📊 **순위체크 완료** · ${event.date}\n${line}\n`;
       msg+=`🏢 **${contract.name}**${contract.manager?` · ${contract.manager}`:""}\n`;
       msg+=`📅 ${event.rankIdx}차 순위체크\n`;
-      // 이전 회차 날짜 찾기
+      // 이전 회차 데이터 찾기
       const genEvts=genEvents(contract);
       const rankEvts=genEvts.filter(e=>e.type==="순위체크").sort((a,b)=>a.date.localeCompare(b.date));
       const curIdx=rankEvts.findIndex(e=>e.date===event.date);
       const prevEvt=curIdx>0?rankEvts[curIdx-1]:null;
-      const prevDate=prevEvt?prevEvt.date:null;
+      // 이전 회차 실제 저장된 기록이 있는지 확인
+      const prevSavedData=prevEvt?newRankData[ceKey(prevEvt)]:null;
       const curDateFmt=event.date.slice(5).replace("-","/");
-      const prevDateFmt=prevDate?prevDate.slice(5).replace("-","/"):null;
       Object.entries(keywordsResult).forEach(([kw,val])=>{
         const cur=typeof val==="object"?val.rank:parseInt(val);
         const prev=typeof val==="object"&&val.prevRank?val.prevRank:null;
         const diff=prev&&cur?prev-cur:null;
         const arrow=diff===null?"":diff>0?`▲${diff}`:diff<0?`▼${Math.abs(diff)}`:"—";
-        if(prev&&prevDateFmt){
+        if(prev){
+          // 이전 순위 출처에 따라 날짜 결정
+          // prevSavedData에 이 키워드 기록이 있으면 → 직전 순위체크 날짜
+          // 없으면(initialRanks에서 온 경우) → 계약 시작일
+          const prevHasRecord=prevSavedData?.keywords?.[kw]?.rank;
+          const prevDateRaw=prevHasRecord?prevEvt.date:contract.startDate;
+          const prevDateFmt=prevDateRaw?prevDateRaw.slice(5).replace("-","/"):null;
           msg+=`• ${kw}\n  ${prevDateFmt} ${prev}위 → ${curDateFmt} ${cur}위 (${arrow})\n`;
         }else{
           msg+=`• ${kw}: ${curDateFmt} **${cur}위**\n`;
@@ -1485,7 +1487,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
     <div style={{display:"flex",minHeight:"100vh",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#f7f8fa"}}>
       {showProfile&&<ProfileModal user={user} profiles={profiles} onUpdateProfile={updateProfile} onClose={()=>setShowProfile(false)} contracts={contracts}/>}
       {memoContract&&<ContractMemoModal contract={memoContract} user={user} onClose={()=>setMemoContract(null)} allContracts={contracts} rankDataMap={rankDataMap} completions={completions} onContractUpdate={list=>setContracts([...list])}/>}
-      {rankModalEvent&&rankModalContract&&<RankInputModal event={rankModalEvent} contract={rankModalContract} existingData={rankDataMap[ceKey(rankModalEvent)]} onClose={()=>{setRankModalEvent(null);setRankModalContract(null);}} onConfirm={async kwResult=>{await handleRankConfirm(rankModalEvent,kwResult);setRankModalEvent(null);setRankModalContract(null);}} onAddKeyword={async kw=>addKeywordToContract(rankModalContract.id,kw)}/>}
+      {rankModalEvent&&rankModalContract&&<RankInputModal event={rankModalEvent} contract={rankModalContract} existingData={rankDataMap[ceKey(rankModalEvent)]} onClose={()=>{setRankModalEvent(null);setRankModalContract(null);}} onConfirm={async kwResult=>{await handleRankConfirm(rankModalEvent,kwResult);setRankModalEvent(null);setRankModalContract(null);}} onDelete={rankDataMap[ceKey(rankModalEvent)]?async()=>{await handleRankDelete(rankModalEvent);setRankModalEvent(null);setRankModalContract(null);}:undefined} onAddKeyword={async kw=>addKeywordToContract(rankModalContract.id,kw)}/>}
       {editingReport&&<AdminEditReportModal report={editingReport} dateStr={reportViewDate} onClose={()=>setEditingReport(null)} onSave={handleAdminSaveReport}/>}
       {dailyAlertItems&&dailyAlertItems!=='PENDING'&&Array.isArray(dailyAlertItems)&&<DailyAlertModal items={dailyAlertItems} onClose={()=>setDailyAlertItems(null)}/>}
       <Sidebar tab={tab} setTab={setTab} user={user} onLogout={onLogout} contracts={contracts} profiles={profiles} onOpenProfile={()=>setShowProfile(true)} navOrder={navOrder} setNavOrder={setNavOrder}/>
