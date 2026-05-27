@@ -570,9 +570,11 @@ function WeeklyTab({contracts,webhookUrl,st}){
     const normalList=memos.filter(m=>!m.priority||m.priority==="normal");
     const label=isSameDay?`${rangeStart} 하루`:`${rangeStart} ~ ${rangeEnd}`;
     let msg=`📋 **계약 메모 요약** (${label})\n\n`;
-    if(urgentList.length>0){msg+=`🚨 **긴급 (${urgentList.length}건)**\n`;urgentList.forEach(m=>{msg+=`• **${m.contractName}** — ${m.text}\n  ↳ ${m.author} · ${m.date}\n`;});msg+="\n";}
-    if(cautionList.length>0){msg+=`⚠️ **주의 (${cautionList.length}건)**\n`;cautionList.forEach(m=>{msg+=`• **${m.contractName}** — ${m.text}\n  ↳ ${m.author} · ${m.date}\n`;});msg+="\n";}
-    if(normalList.length>0){msg+=`📝 **일반 (${normalList.length}건)**\n`;normalList.forEach(m=>{msg+=`• **${m.contractName}** — ${m.text}\n  ↳ ${m.author} · ${m.date}\n`;});msg+="\n";}
+    const line="─────────────────────────";
+    const fmtMemo=(m)=>`${line}\n🏢 **${m.contractName}**\n📝 ${m.text}\n✍️ ${m.author} · ${m.date}\n`;
+    if(urgentList.length>0){msg+=`🚨 **긴급 (${urgentList.length}건)**\n`;urgentList.forEach(m=>{msg+=fmtMemo(m);});msg+=line+"\n\n";}
+    if(cautionList.length>0){msg+=`⚠️ **주의 (${cautionList.length}건)**\n`;cautionList.forEach(m=>{msg+=fmtMemo(m);});msg+=line+"\n\n";}
+    if(normalList.length>0){msg+=`📝 **일반 (${normalList.length}건)**\n`;normalList.forEach(m=>{msg+=fmtMemo(m);});msg+=line+"\n\n";}
     if(memos.length===0)msg+="해당 기간 메모 없음\n";
     if(msg.length>1900){msg=msg.slice(0,1900)+"\n...\n(내용이 길어 일부 생략됨)";}
     try{await fetch(wh,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:msg})});alert("Discord로 전송 완료!");}catch(e){alert("전송 실패: "+e.message);}
@@ -582,12 +584,15 @@ function WeeklyTab({contracts,webhookUrl,st}){
   const cautionList=memos.filter(m=>m.priority==="caution");
   const normalList=memos.filter(m=>!m.priority||m.priority==="normal");
   const MemoCard=({m,borderColor})=>(
-    <div style={{background:"#fff",borderRadius:9,padding:"9px 12px",marginBottom:6,border:`1px solid ${borderColor}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,flexWrap:"wrap",gap:4}}>
-        <span style={{fontSize:12,fontWeight:800,color:"#0f1117"}}>{m.contractName}</span>
-        <span style={{fontSize:10,color:"#adb5bd"}}>{m.date} · {m.author}</span>
-      </div>
-      <div style={{fontSize:12,color:"#374151",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>
+    <div style={{background:"#fff",borderRadius:10,padding:"12px 14px",marginBottom:8,border:`1px solid ${borderColor}`,borderLeft:`4px solid ${borderColor}`}}>
+      {/* 상호명 크게 */}
+      <div style={{fontSize:15,fontWeight:900,color:"#0f1117",marginBottom:4,letterSpacing:"-0.3px"}}>{m.contractName}</div>
+      {/* 작성자 · 날짜 */}
+      <div style={{fontSize:10,color:"#adb5bd",marginBottom:8}}>✍️ {m.author} · {m.date}</div>
+      {/* 구분선 */}
+      <div style={{borderTop:`1px solid ${borderColor}`,marginBottom:8}}/>
+      {/* 메모 내용 */}
+      <div style={{fontSize:12,color:"#374151",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{m.text}</div>
     </div>
   );
   return(
