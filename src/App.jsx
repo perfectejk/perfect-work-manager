@@ -1292,7 +1292,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                 {(contractMonth!=="all"||contractStatus!=="all"||contractSearch||contractManager!=="all")&&(<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#6b7280"}}>{filteredContracts.length}개 업체</span><button onClick={()=>{setContractMonth("all");setContractStatus("all");setContractSearch("");setContractManager("all");setContractPage(1);}} style={{fontSize:11,color:"#ef4444",background:"#fff7f7",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>필터 초기화</button></div>)}
                 <div style={{display:"flex",justifyContent:"flex-end"}}>
                   <button onClick={async()=>{
-                    const rows=[["상호명","담당자","상태","계약시작","계약종료","금액","전화번호","플레이스링크","상품내역","서비스내역","특이사항","키워드","플레이스링크2","메모내용"]];
+                    const rows=[["상호명","담당자","상태","계약시작","계약종료","금액","전화번호","키워드","상품내역","서비스내역","플레이스링크","특이사항","메모내용"]];
                     for(const c of filteredContracts){
                       const isCancelled=!!c.cancelled;
                       const isActive=!isCancelled&&c.endDate>=todayStr;
@@ -1303,14 +1303,15 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
                       rows.push([
                         c.name||"",c.manager||"",status,
                         c.startDate||"",c.endDate||"",c.total||"",
-                        c.phone||"",c.link||"",
-                        c.products||"",c.services||"",c.notes||"",
+                        c.phone||"",
                         (c.keywords||[]).join(", "),
-                        c.link||"",memoText
+                        c.products||"",c.services||"",
+                        c.link||"",
+                        c.notes||"",memoText
                       ]);
                     }
                     const ws=XLSX.utils.aoa_to_sheet(rows);
-                    ws["!cols"]=[{wch:20},{wch:8},{wch:6},{wch:12},{wch:12},{wch:10},{wch:14},{wch:30},{wch:30},{wch:30},{wch:20},{wch:30},{wch:30},{wch:50}];
+                    ws["!cols"]=[{wch:20},{wch:8},{wch:6},{wch:12},{wch:12},{wch:10},{wch:14},{wch:30},{wch:30},{wch:30},{wch:35},{wch:25},{wch:60}];
                     const wb=XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb,ws,"업체목록");
                     const label=contractSearch||contractStatus!=="all"||contractMonth!=="all"?`_필터적용`:"";;
