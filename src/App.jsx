@@ -805,9 +805,16 @@ function WeeklyTab({contracts,webhookUrl,rankWebhookUrl,st}){
   );
 }
 // ===== 주간 계획판 =====
-const PLAN_TYPES=[{k:"traffic",label:"트래픽",pk:"rewardTraffic",unit:"타",color:"#0071CE"},{k:"blog",label:"블플",pk:"blogPlus",unit:"건",color:"#8468D3"},{k:"receipt",label:"영수증",pk:"receipt",unit:"건",color:"#0891b2"}];
+const PLAN_TYPES=[
+  {k:"traffic",label:"트래픽",pk:"rewardTraffic",unit:"타",color:"#0071CE"},
+  {k:"route",label:"길찾기 트래픽",pk:"rewardTraffic",unit:"타",color:"#0891b2"},
+  {k:"savetraffic",label:"저장+트래픽",pk:"rewardTraffic",unit:"타",color:"#8468D3"},
+  {k:"save",label:"저장",pk:null,unit:"건",color:"#f59e0b"},
+  {k:"alarm",label:"알림받기",pk:null,unit:"건",color:"#10b981"},
+];
 const planAddDays=(ds,n)=>{const d=new Date(ds+"T00:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
 const planQty=r=>(parseInt(r.daily)||0)*(parseInt(r.days)||0);
+const planType=k=>PLAN_TYPES.find(x=>x.k===k)||PLAN_TYPES[0];
 function WeeklyPlanTab({contracts,st}){
   const[search,setSearch]=useState("");
   const[statusFilter,setStatusFilter]=useState("active");
@@ -833,25 +840,38 @@ function WeeklyPlanTab({contracts,st}){
     return()=>{alive=false;};
   },[selId]);
 
-  const kwOptions=useMemo(()=>{if(!sel)return[];const mk=(sel.mainKeywords||[]).filter(Boolean);return mk.length>0?mk:(sel.keywords||[]);},[sel]);
-  const summary=useMemo(()=>PLAN_TYPES.map(t=>{
-    const total=parseInt(sel?.provide?.[t.pk])||0;
-    const used=rows.filter(r=>r.type===t.k).reduce((s,r)=>s+planQty(r),0);
-    return{...t,total,used,remain:total-used,over:used>total};
-  }),[rows,sel]);
-  const shown=summary.filter(s=>s.total>0||s.used>0);
-  const overList=summary.filter(s=>s.over);
+  const kwOptions=useMemo(()=>{if(!sel)return[];const mk=(sel.mainKeywords||[]).filter(Boolean);const all=[...new Set([...mk,...(sel.keywords||[])])];return all;},[sel]);
+
+  // 리워드트래픽 총량 대조 (트래픽 계열 3종 합산) + 저장/알림받기는 배분량만 집계
+  const summary=useMemo(()=>{
+    const total=parseInt(sel?.provide?.rewardTraffic)||0;
+    const byType=PLAN_TYPES.map(t=>({...t,used:rows.filter(r=>r.type===t.k).reduce((s,r)=>s+planQty(r),0)}));
+    const trafficUsed=byType.filter(t=>t.pk==="rewardTraffic").reduce((s,t)=>s+t.used,0);
+    return{total,trafficUsed,remain:total-trafficUsed,over:trafficUsed>total,byType};
+  },[rows,sel]);
 
   const selectContract=id=>{if(dirty&&!window.confirm("저장하지 않은 변경사항이 있습니다. 이동할까요?"))return;setSelId(id);};
   const addRow=()=>{
     const last=rows[rows.length-1];
+    const maxWeek=rows.reduce((m,r)=>Math.max(m,parseInt(r.week)||0),0);
     const start=last?.end?planAddDays(last.end,1):(sel?.startDate||todayStr);
-    setRows(rs=>[...rs,{id:uid(),week:(last?.week||0)+1,start,end:planAddDays(start,6),keyword:kwOptions[0]||"",type:"traffic",daily:"",days:"",setupDone:false}]);
+    setRows(rs=>[...rs,{id:uid(),week:maxWeek+1,start,end:planAddDays(start,7),keyword:kwOptions[0]||"",type:"traffic",daily:"",days:"",note:"",extra:false,setupDone:false}]);
+    setDirty(true);
+  };
+  // 주차 도중 추가 투입(순위 하락 대응·키워드 추가 등) — 같은 주차 아래에 한 줄 더
+  const addExtra=row=>{
+    const start=(todayStr>=row.start&&todayStr<=row.end)?todayStr:row.start;
+    const nr={id:uid(),week:row.week,start,end:row.end,keyword:row.keyword||"",type:row.type||"traffic",daily:"",days:"",note:"",extra:true,setupDone:false};
+    setRows(rs=>{
+      let last=-1;
+      rs.forEach((r,i)=>{if(r.week===row.week)last=i;});
+      const out=[...rs];out.splice(last+1,0,nr);return out;
+    });
     setDirty(true);
   };
   const upd=(id,patch)=>{setRows(rs=>rs.map(r=>r.id===id?{...r,...patch}:r));setDirty(true);};
-  const setStart=(id,v)=>upd(id,v?{start:v,end:planAddDays(v,6)}:{start:"",end:""});
-  const delRow=id=>{setRows(rs=>rs.filter(r=>r.id!==id).map((r,i)=>({...r,week:i+1})));setDirty(true);};
+  const setStart=(id,v)=>upd(id,v?{start:v,end:planAddDays(v,7)}:{start:"",end:""});
+  const delRow=id=>{setRows(rs=>rs.filter(r=>r.id!==id));setDirty(true);};
   const save=async()=>{
     if(!selId)return;setSaving(true);
     const ok=await st.set("traffic:plan:"+selId,rows);
@@ -901,65 +921,78 @@ function WeeklyPlanTab({contracts,st}){
         </div>
 
         {/* 총량 연동 */}
-        {shown.length===0?(
-          <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"12px 16px",marginBottom:12,fontSize:12,color:"#92400e"}}>이 계약에 제공내역 총량이 등록되어 있지 않습니다. 계약관리 &gt; 계약 수정에서 먼저 입력해주세요.</div>
-        ):(
-          <div style={{display:"grid",gridTemplateColumns:"repeat("+shown.length+",minmax(0,1fr))",gap:8,marginBottom:12}}>
-            {shown.map(s=>{
-              const pct=s.total>0?Math.min(100,Math.round(s.used/s.total*100)):0;
-              return(<div key={s.k} style={{background:"#fff",borderRadius:12,border:"1px solid "+(s.over?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
-                <div style={{fontSize:11,fontWeight:700,color:s.color,marginBottom:5}}>{s.label}</div>
-                <div style={{fontSize:12,color:"#374151",fontWeight:600}}>총 {s.total.toLocaleString()}{s.unit} 중 <b style={{color:s.color}}>{s.used.toLocaleString()}{s.unit}</b> 배분</div>
-                <div style={{fontSize:12,marginTop:2,fontWeight:700,color:s.over?"#ef4444":"#10b981"}}>{s.over?"초과 "+Math.abs(s.remain).toLocaleString()+s.unit:"잔여 "+s.remain.toLocaleString()+s.unit}</div>
-                <div style={{height:6,background:"#f0f1f3",borderRadius:99,marginTop:8,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:s.over?"#ef4444":s.color,borderRadius:99}}/></div>
-              </div>);
-            })}
+        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+          <div style={{flex:"1 1 300px",background:"#fff",borderRadius:12,border:"1px solid "+(summary.over?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#0071CE",marginBottom:5}}>리워드트래픽 (트래픽 계열 합산)</div>
+            {summary.total===0?(
+              <div style={{fontSize:12,color:"#92400e",fontWeight:600}}>제공내역 총량 미설정 · 배분 {summary.trafficUsed.toLocaleString()}타</div>
+            ):(<>
+              <div style={{fontSize:12,color:"#374151",fontWeight:600}}>총 {summary.total.toLocaleString()}타 중 <b style={{color:"#0071CE"}}>{summary.trafficUsed.toLocaleString()}타</b> 배분</div>
+              <div style={{fontSize:12,marginTop:2,fontWeight:700,color:summary.over?"#ef4444":"#10b981"}}>{summary.over?"초과 "+Math.abs(summary.remain).toLocaleString()+"타":"잔여 "+summary.remain.toLocaleString()+"타"}</div>
+              <div style={{height:6,background:"#f0f1f3",borderRadius:99,marginTop:8,overflow:"hidden"}}><div style={{height:"100%",width:Math.min(100,Math.round(summary.trafficUsed/summary.total*100))+"%",background:summary.over?"#ef4444":"#0071CE",borderRadius:99}}/></div>
+            </>)}
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px solid #f7f8fa"}}>
+              {summary.byType.filter(t=>t.pk==="rewardTraffic").map(t=>(
+                <span key={t.k} style={{fontSize:11,color:t.color,fontWeight:700}}>{t.label} {t.used.toLocaleString()}타</span>
+              ))}
+            </div>
           </div>
-        )}
-        {overList.length>0&&(
+          {summary.byType.filter(t=>!t.pk).map(t=>(
+            <div key={t.k} style={{flex:"0 1 150px",background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:t.color,marginBottom:5}}>{t.label}</div>
+              <div style={{fontSize:16,fontWeight:800,color:"#0f1117"}}>{t.used.toLocaleString()}{t.unit}</div>
+              <div style={{fontSize:10,color:"#adb5bd",marginTop:3}}>배분량 (총량 대조 없음)</div>
+            </div>
+          ))}
+        </div>
+        {summary.over&&(
           <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"11px 16px",marginBottom:12,fontSize:12,color:"#b91c1c",fontWeight:600}}>
-            총량 초과 — {overList.map(s=>s.label+" "+Math.abs(s.remain).toLocaleString()+s.unit).join(" · ")} 만큼 계약 제공내역보다 많이 배분되었습니다.
+            총량 초과 — 리워드트래픽 {Math.abs(summary.remain).toLocaleString()}타 만큼 계약 제공내역보다 많이 배분되었습니다.
           </div>
         )}
 
         {/* 주차 표 */}
         <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:14}}>
           {loading?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"20px 0"}}>불러오는 중…</p>:(<>
+            <datalist id={"kwlist-"+selId}>{kwOptions.map(k=><option key={k} value={k}/>)}</datalist>
             <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",minWidth:760}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:900}}>
                 <thead><tr style={{background:"#f7f8fa"}}>
-                  <th style={{...th,width:46}}>주차</th><th style={{...th,width:120}}>시작일</th><th style={{...th,width:120}}>종료일</th>
-                  <th style={{...th,minWidth:110}}>키워드</th><th style={{...th,width:90}}>유형</th>
-                  <th style={{...th,width:78}}>일일량</th><th style={{...th,width:70}}>작업일수</th><th style={{...th,width:84}}>계획량</th>
-                  <th style={{...th,width:64}}>세팅완료</th><th style={{...th,width:34}}></th>
+                  <th style={{...th,width:62}}>주차</th><th style={{...th,width:120}}>시작일</th><th style={{...th,width:120}}>종료일</th>
+                  <th style={{...th,minWidth:104}}>키워드</th><th style={{...th,width:108}}>유형</th>
+                  <th style={{...th,width:74}}>일일량</th><th style={{...th,width:66}}>작업일수</th><th style={{...th,width:80}}>계획량</th>
+                  <th style={{...th,minWidth:96}}>사유/메모</th>
+                  <th style={{...th,width:56}}>세팅완료</th><th style={{...th,width:52}}></th>
                 </tr></thead>
                 <tbody>
-                  {rows.length===0?(<tr><td colSpan={10} style={{padding:"26px 0",textAlign:"center",fontSize:12,color:"#adb5bd"}}>등록된 주차가 없습니다. 아래 버튼으로 추가하세요.</td></tr>):rows.map(r=>{
-                    const t=PLAN_TYPES.find(x=>x.k===r.type)||PLAN_TYPES[0];
-                    return(<tr key={r.id}>
-                      <td style={{...td,fontWeight:800,color:"#0f1117",fontSize:12}}>{r.week}주</td>
+                  {rows.length===0?(<tr><td colSpan={11} style={{padding:"26px 0",textAlign:"center",fontSize:12,color:"#adb5bd"}}>등록된 주차가 없습니다. 아래 버튼으로 추가하세요.</td></tr>):rows.map(r=>{
+                    const t=planType(r.type);
+                    return(<tr key={r.id} style={r.extra?{background:"#fffdf7"}:undefined}>
+                      <td style={{...td,fontWeight:800,color:"#0f1117",fontSize:12,whiteSpace:"nowrap"}}>{r.week}주{r.extra&&<span style={{display:"block",fontSize:9,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:5,padding:"0 4px",marginTop:2}}>추가</span>}</td>
                       <td style={td}><input type="date" value={r.start||""} onChange={e=>setStart(r.id,e.target.value)} style={cS}/></td>
                       <td style={td}><input type="date" value={r.end||""} onChange={e=>upd(r.id,{end:e.target.value})} style={cS}/></td>
-                      <td style={td}>{kwOptions.length>0?(
-                        <select value={r.keyword||""} onChange={e=>upd(r.id,{keyword:e.target.value})} style={cS}><option value="">(미지정)</option>{kwOptions.map(k=><option key={k} value={k}>{k}</option>)}</select>
-                      ):(<input value={r.keyword||""} onChange={e=>upd(r.id,{keyword:e.target.value})} placeholder="키워드" style={cS}/>)}</td>
+                      <td style={td}><input list={"kwlist-"+selId} value={r.keyword||""} onChange={e=>upd(r.id,{keyword:e.target.value})} placeholder="키워드" style={cS}/></td>
                       <td style={td}><select value={r.type||"traffic"} onChange={e=>upd(r.id,{type:e.target.value})} style={{...cS,color:t.color,fontWeight:700}}>{PLAN_TYPES.map(p=><option key={p.k} value={p.k}>{p.label}</option>)}</select></td>
                       <td style={td}><input type="number" min="0" value={r.daily??""} onChange={e=>upd(r.id,{daily:e.target.value})} style={{...cS,textAlign:"right"}}/></td>
                       <td style={td}><input type="number" min="0" max="31" value={r.days??""} onChange={e=>upd(r.id,{days:e.target.value})} style={{...cS,textAlign:"right"}}/></td>
                       <td style={{...td,fontWeight:800,color:t.color,fontSize:12}}>{planQty(r).toLocaleString()}{t.unit}</td>
+                      <td style={td}><input value={r.note||""} onChange={e=>upd(r.id,{note:e.target.value})} placeholder={r.extra?"예: 순위하락 대응":""} style={cS}/></td>
                       <td style={td}><input type="checkbox" checked={!!r.setupDone} onChange={e=>upd(r.id,{setupDone:e.target.checked})} style={{width:16,height:16,cursor:"pointer",accentColor:"#10b981"}}/></td>
-                      <td style={td}><button onClick={()=>delRow(r.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:13}}>✕</button></td>
+                      <td style={{...td,whiteSpace:"nowrap"}}>
+                        <button onClick={()=>addExtra(r)} title="이 주차에 추가 투입 한 줄 넣기" style={{background:"none",border:"none",color:"#0071CE",cursor:"pointer",fontSize:14,fontWeight:800,padding:"0 2px"}}>＋</button>
+                        <button onClick={()=>delRow(r.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:13,padding:"0 2px"}}>✕</button>
+                      </td>
                     </tr>);
                   })}
                   {rows.length>0&&(<tr style={{background:"#f7f8fa"}}>
                     <td colSpan={7} style={{...td,textAlign:"right",fontWeight:700,color:"#6b7280",fontSize:11,paddingRight:10}}>유형별 배분 합계</td>
-                    <td colSpan={3} style={{...td,textAlign:"left",fontSize:11,fontWeight:700}}>{shown.length===0?"—":shown.map(s=><span key={s.k} style={{color:s.color,marginRight:8}}>{s.label} {s.used.toLocaleString()}{s.unit}</span>)}</td>
+                    <td colSpan={4} style={{...td,textAlign:"left",fontSize:11,fontWeight:700}}>{summary.byType.filter(t=>t.used>0).length===0?"—":summary.byType.filter(t=>t.used>0).map(t=><span key={t.k} style={{color:t.color,marginRight:8}}>{t.label} {t.used.toLocaleString()}{t.unit}</span>)}</td>
                   </tr>)}
                 </tbody>
               </table>
             </div>
             <button onClick={addRow} style={{width:"100%",marginTop:10,background:"#f0f7ff",color:"#0071CE",border:"1px dashed #bfd7f5",borderRadius:9,padding:"9px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 주차 추가 (시작일·종료일 자동 연결)</button>
-            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0"}}>시작일을 넣으면 종료일(+6일)이 자동으로 잡히고, 다음 주차는 직전 종료일 다음 날부터 이어집니다. 계획량은 일일량 × 작업일수로 자동 계산됩니다.</p>
+            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일(+7일)이 자동으로 잡히고, 다음 주차는 직전 종료일 다음 날부터 이어집니다. 계획량은 일일량 × 작업일수로 자동 계산됩니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 계획량은 총량에 자동 합산됩니다.</p>
           </>)}
         </div>
       </>)}
