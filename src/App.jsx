@@ -804,6 +804,168 @@ function WeeklyTab({contracts,webhookUrl,rankWebhookUrl,st}){
     </div>
   );
 }
+// ===== 주간 계획판 =====
+const PLAN_TYPES=[{k:"traffic",label:"트래픽",pk:"rewardTraffic",unit:"타",color:"#0071CE"},{k:"blog",label:"블플",pk:"blogPlus",unit:"건",color:"#8468D3"},{k:"receipt",label:"영수증",pk:"receipt",unit:"건",color:"#0891b2"}];
+const planAddDays=(ds,n)=>{const d=new Date(ds+"T00:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
+const planQty=r=>(parseInt(r.daily)||0)*(parseInt(r.days)||0);
+function WeeklyPlanTab({contracts,st}){
+  const[search,setSearch]=useState("");
+  const[statusFilter,setStatusFilter]=useState("active");
+  const[selId,setSelId]=useState("");
+  const[rows,setRows]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[saving,setSaving]=useState(false);
+  const[dirty,setDirty]=useState(false);
+
+  const list=useMemo(()=>{
+    let l=contracts.filter(c=>!c.cancelled);
+    if(statusFilter==="active")l=l.filter(c=>c.endDate>=todayStr);
+    else if(statusFilter==="ended")l=l.filter(c=>c.endDate<todayStr);
+    if(search.trim())l=l.filter(c=>c.name?.toLowerCase().includes(search.trim().toLowerCase()));
+    return[...l].sort((a,b)=>(a.endDate||"").localeCompare(b.endDate||""));
+  },[contracts,search,statusFilter]);
+  const sel=useMemo(()=>contracts.find(c=>c.id===selId)||null,[contracts,selId]);
+
+  useEffect(()=>{
+    if(!selId){setRows([]);setDirty(false);return;}
+    let alive=true;setLoading(true);
+    (async()=>{const d=await st.get("traffic:plan:"+selId);if(!alive)return;setRows(Array.isArray(d)?d:[]);setDirty(false);setLoading(false);})();
+    return()=>{alive=false;};
+  },[selId]);
+
+  const kwOptions=useMemo(()=>{if(!sel)return[];const mk=(sel.mainKeywords||[]).filter(Boolean);return mk.length>0?mk:(sel.keywords||[]);},[sel]);
+  const summary=useMemo(()=>PLAN_TYPES.map(t=>{
+    const total=parseInt(sel?.provide?.[t.pk])||0;
+    const used=rows.filter(r=>r.type===t.k).reduce((s,r)=>s+planQty(r),0);
+    return{...t,total,used,remain:total-used,over:used>total};
+  }),[rows,sel]);
+  const shown=summary.filter(s=>s.total>0||s.used>0);
+  const overList=summary.filter(s=>s.over);
+
+  const selectContract=id=>{if(dirty&&!window.confirm("저장하지 않은 변경사항이 있습니다. 이동할까요?"))return;setSelId(id);};
+  const addRow=()=>{
+    const last=rows[rows.length-1];
+    const start=last?.end?planAddDays(last.end,1):(sel?.startDate||todayStr);
+    setRows(rs=>[...rs,{id:uid(),week:(last?.week||0)+1,start,end:planAddDays(start,6),keyword:kwOptions[0]||"",type:"traffic",daily:"",days:"",setupDone:false}]);
+    setDirty(true);
+  };
+  const upd=(id,patch)=>{setRows(rs=>rs.map(r=>r.id===id?{...r,...patch}:r));setDirty(true);};
+  const setStart=(id,v)=>upd(id,v?{start:v,end:planAddDays(v,6)}:{start:"",end:""});
+  const delRow=id=>{setRows(rs=>rs.filter(r=>r.id!==id).map((r,i)=>({...r,week:i+1})));setDirty(true);};
+  const save=async()=>{
+    if(!selId)return;setSaving(true);
+    const ok=await st.set("traffic:plan:"+selId,rows);
+    setSaving(false);
+    if(ok)setDirty(false);else alert("저장에 실패했습니다. 다시 시도해주세요.");
+  };
+
+  const iS={border:"1px solid #f0f1f3",borderRadius:8,padding:"7px 10px",fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  const cS={border:"1px solid #f0f1f3",borderRadius:7,padding:"5px 7px",fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  const th={padding:"7px 6px",textAlign:"center",color:"#6b7280",fontWeight:600,fontSize:11,borderBottom:"2px solid #f0f1f3",whiteSpace:"nowrap"};
+  const td={padding:"5px 6px",textAlign:"center",borderBottom:"1px solid #f7f8fa"};
+
+  return(<div style={{display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap"}}>
+    {/* ===== 계약 선택 ===== */}
+    <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:14,width:250,flexShrink:0,boxSizing:"border-box"}}>
+      <div style={{fontSize:13,fontWeight:700,color:"#0f1117",marginBottom:10}}>계약 선택</div>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="상호명 검색" style={{...iS,marginBottom:8}}/>
+      <div style={{display:"flex",gap:4,marginBottom:10}}>
+        {[{v:"active",l:"진행중"},{v:"ended",l:"종료"},{v:"all",l:"전체"}].map(f=>(
+          <button key={f.v} onClick={()=>setStatusFilter(f.v)} style={{flex:1,border:"none",borderRadius:7,padding:"5px 0",fontSize:11,fontWeight:700,cursor:"pointer",background:statusFilter===f.v?"#0071CE":"#f7f8fa",color:statusFilter===f.v?"#fff":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{f.l}</button>
+        ))}
+      </div>
+      <div style={{maxHeight:440,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
+        {list.length===0?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"14px 0"}}>계약이 없습니다</p>:list.map(c=>{
+          const dday=c.endDate?Math.ceil((new Date(c.endDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/86400000):null;
+          return(<button key={c.id} onClick={()=>selectContract(c.id)} style={{textAlign:"left",border:selId===c.id?"2px solid #0071CE":"1px solid #f0f1f3",borderRadius:9,padding:"8px 10px",background:selId===c.id?"#f0f7ff":"#fff",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>{c.name}</div>
+            <div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>{c.startDate} ~ {c.endDate}{dday!==null&&dday>=0&&<span style={{color:dday<=7?"#ef4444":"#adb5bd",fontWeight:dday<=7?700:400}}> · D-{dday}</span>}</div>
+          </button>);
+        })}
+      </div>
+    </div>
+
+    {/* ===== 주차 계획 ===== */}
+    <div style={{flex:1,minWidth:320}}>
+      {!sel?(
+        <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:"60px 20px",textAlign:"center",fontSize:13,color:"#adb5bd"}}>왼쪽에서 계약을 선택하세요</div>
+      ):(<>
+        {/* 헤더 */}
+        <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:"14px 18px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:160}}>
+            <div style={{fontSize:15,fontWeight:800,color:"#0f1117"}}>{sel.name}</div>
+            <div style={{fontSize:11,color:"#adb5bd",marginTop:3}}>{sel.startDate} ~ {sel.endDate}{sel.manager?" · 담당 "+sel.manager:""}{sel.source?" · "+sel.source:""}</div>
+          </div>
+          {dirty&&<span style={{fontSize:11,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,padding:"4px 9px"}}>저장 안 됨</span>}
+          <button onClick={save} disabled={saving||loading} style={{background:dirty?"#10b981":"#f3f4f6",color:dirty?"#fff":"#9ca3af",border:"none",borderRadius:9,padding:"9px 20px",fontSize:13,fontWeight:700,cursor:saving||loading?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{saving?"저장 중…":"저장"}</button>
+        </div>
+
+        {/* 총량 연동 */}
+        {shown.length===0?(
+          <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"12px 16px",marginBottom:12,fontSize:12,color:"#92400e"}}>이 계약에 제공내역 총량이 등록되어 있지 않습니다. 계약관리 &gt; 계약 수정에서 먼저 입력해주세요.</div>
+        ):(
+          <div style={{display:"grid",gridTemplateColumns:"repeat("+shown.length+",minmax(0,1fr))",gap:8,marginBottom:12}}>
+            {shown.map(s=>{
+              const pct=s.total>0?Math.min(100,Math.round(s.used/s.total*100)):0;
+              return(<div key={s.k} style={{background:"#fff",borderRadius:12,border:"1px solid "+(s.over?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
+                <div style={{fontSize:11,fontWeight:700,color:s.color,marginBottom:5}}>{s.label}</div>
+                <div style={{fontSize:12,color:"#374151",fontWeight:600}}>총 {s.total.toLocaleString()}{s.unit} 중 <b style={{color:s.color}}>{s.used.toLocaleString()}{s.unit}</b> 배분</div>
+                <div style={{fontSize:12,marginTop:2,fontWeight:700,color:s.over?"#ef4444":"#10b981"}}>{s.over?"초과 "+Math.abs(s.remain).toLocaleString()+s.unit:"잔여 "+s.remain.toLocaleString()+s.unit}</div>
+                <div style={{height:6,background:"#f0f1f3",borderRadius:99,marginTop:8,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:s.over?"#ef4444":s.color,borderRadius:99}}/></div>
+              </div>);
+            })}
+          </div>
+        )}
+        {overList.length>0&&(
+          <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"11px 16px",marginBottom:12,fontSize:12,color:"#b91c1c",fontWeight:600}}>
+            총량 초과 — {overList.map(s=>s.label+" "+Math.abs(s.remain).toLocaleString()+s.unit).join(" · ")} 만큼 계약 제공내역보다 많이 배분되었습니다.
+          </div>
+        )}
+
+        {/* 주차 표 */}
+        <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:14}}>
+          {loading?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"20px 0"}}>불러오는 중…</p>:(<>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:760}}>
+                <thead><tr style={{background:"#f7f8fa"}}>
+                  <th style={{...th,width:46}}>주차</th><th style={{...th,width:120}}>시작일</th><th style={{...th,width:120}}>종료일</th>
+                  <th style={{...th,minWidth:110}}>키워드</th><th style={{...th,width:90}}>유형</th>
+                  <th style={{...th,width:78}}>일일량</th><th style={{...th,width:70}}>작업일수</th><th style={{...th,width:84}}>계획량</th>
+                  <th style={{...th,width:64}}>세팅완료</th><th style={{...th,width:34}}></th>
+                </tr></thead>
+                <tbody>
+                  {rows.length===0?(<tr><td colSpan={10} style={{padding:"26px 0",textAlign:"center",fontSize:12,color:"#adb5bd"}}>등록된 주차가 없습니다. 아래 버튼으로 추가하세요.</td></tr>):rows.map(r=>{
+                    const t=PLAN_TYPES.find(x=>x.k===r.type)||PLAN_TYPES[0];
+                    return(<tr key={r.id}>
+                      <td style={{...td,fontWeight:800,color:"#0f1117",fontSize:12}}>{r.week}주</td>
+                      <td style={td}><input type="date" value={r.start||""} onChange={e=>setStart(r.id,e.target.value)} style={cS}/></td>
+                      <td style={td}><input type="date" value={r.end||""} onChange={e=>upd(r.id,{end:e.target.value})} style={cS}/></td>
+                      <td style={td}>{kwOptions.length>0?(
+                        <select value={r.keyword||""} onChange={e=>upd(r.id,{keyword:e.target.value})} style={cS}><option value="">(미지정)</option>{kwOptions.map(k=><option key={k} value={k}>{k}</option>)}</select>
+                      ):(<input value={r.keyword||""} onChange={e=>upd(r.id,{keyword:e.target.value})} placeholder="키워드" style={cS}/>)}</td>
+                      <td style={td}><select value={r.type||"traffic"} onChange={e=>upd(r.id,{type:e.target.value})} style={{...cS,color:t.color,fontWeight:700}}>{PLAN_TYPES.map(p=><option key={p.k} value={p.k}>{p.label}</option>)}</select></td>
+                      <td style={td}><input type="number" min="0" value={r.daily??""} onChange={e=>upd(r.id,{daily:e.target.value})} style={{...cS,textAlign:"right"}}/></td>
+                      <td style={td}><input type="number" min="0" max="31" value={r.days??""} onChange={e=>upd(r.id,{days:e.target.value})} style={{...cS,textAlign:"right"}}/></td>
+                      <td style={{...td,fontWeight:800,color:t.color,fontSize:12}}>{planQty(r).toLocaleString()}{t.unit}</td>
+                      <td style={td}><input type="checkbox" checked={!!r.setupDone} onChange={e=>upd(r.id,{setupDone:e.target.checked})} style={{width:16,height:16,cursor:"pointer",accentColor:"#10b981"}}/></td>
+                      <td style={td}><button onClick={()=>delRow(r.id)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:13}}>✕</button></td>
+                    </tr>);
+                  })}
+                  {rows.length>0&&(<tr style={{background:"#f7f8fa"}}>
+                    <td colSpan={7} style={{...td,textAlign:"right",fontWeight:700,color:"#6b7280",fontSize:11,paddingRight:10}}>유형별 배분 합계</td>
+                    <td colSpan={3} style={{...td,textAlign:"left",fontSize:11,fontWeight:700}}>{shown.length===0?"—":shown.map(s=><span key={s.k} style={{color:s.color,marginRight:8}}>{s.label} {s.used.toLocaleString()}{s.unit}</span>)}</td>
+                  </tr>)}
+                </tbody>
+              </table>
+            </div>
+            <button onClick={addRow} style={{width:"100%",marginTop:10,background:"#f0f7ff",color:"#0071CE",border:"1px dashed #bfd7f5",borderRadius:9,padding:"9px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 주차 추가 (시작일·종료일 자동 연결)</button>
+            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0"}}>시작일을 넣으면 종료일(+6일)이 자동으로 잡히고, 다음 주차는 직전 종료일 다음 날부터 이어집니다. 계획량은 일일량 × 작업일수로 자동 계산됩니다.</p>
+          </>)}
+        </div>
+      </>)}
+    </div>
+  </div>);
+}
 function RankManageTab({contracts,completions,rankDataMap,setMemoContract,setRankModalEvent,setRankModalContract,toggleCE,handleRankDelete}){
   const[search,setSearch]=useState("");
   const[statusFilter,setStatusFilter]=useState("active");// active | ended | all
@@ -1013,6 +1175,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
     {id:"calendar",label:"캘린더",icon:"ti-calendar"},
     {id:"revenue",label:"매출현황",icon:"ti-chart-line"},
     {id:"contracts",label:"계약관리",icon:"ti-users",badge:myCount>0?myCount:null},
+    {id:"work",label:"작업관리",icon:"ti-checklist"},
     {id:"report",label:"업무보고",icon:"ti-clipboard-text"},
     {id:"ranking",label:"매출 랭킹",icon:"ti-trophy"},
     {id:"keyword",label:"키워드분석",icon:"ti-search"},
@@ -1478,17 +1641,17 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
       </div>
     ))}
   </div>}
-</div>)}{section==="projects"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:14,color:"#0f1117"}}>프로젝트 카테고리</div><div style={{display:"flex",gap:8,marginBottom:10}}><input value={newProjInput} onChange={e=>setNewProjInput(e.target.value)} placeholder="새 프로젝트명" onKeyDown={e=>e.key==="Enter"&&addProject()} style={{...iS,flex:1}}/><button onClick={addProject} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 추가</button></div>{projectCategories.length===0?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center"}}>등록된 프로젝트가 없습니다</p>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{projectCategories.map(p=>(<div key={p} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f7f8fa",borderRadius:9,padding:"9px 12px"}}><span style={{fontWeight:600,fontSize:12,color:"#0f1117"}}>{p}</span><button onClick={()=>removeProject(p)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:12}}>✕</button></div>))}</div>}</div>)}{section==="targets"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:14,color:"#0f1117"}}>업무보고 목표 설정</div>{[{key:"calls",label:"목표 콜수",unit:"콜"},{key:"materials",label:"목표 자료수",unit:"개"},{key:"retarget",label:"목표 재통픽스",unit:"개"}].map(({key,label,unit})=>(<div key={key} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><label style={{fontSize:12,fontWeight:600,color:"#374151",minWidth:110}}>{label}</label><input type="number" min="0" value={editTargets[key]} onChange={e=>setEditTargets(t=>({...t,[key]:parseInt(e.target.value)||0}))} style={{...iS,width:80}}/><span style={{fontSize:11,color:"#adb5bd"}}>{unit}</span></div>))}<button onClick={saveTargets} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button></div>)}{section==="webhook"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#0f1117"}}>Discord 알림 설정</div><div style={{marginBottom:14}}><p style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:5}}>📢 기본 알림 채널 (실적보고 · 긴급메모 · 메모요약)</p><div style={{display:"flex",gap:8}}><input value={webhookUrl} onChange={e=>setWebhookUrl(e.target.value)} placeholder="https://discord.com/api/webhooks/..." style={{...iS,flex:1,fontSize:11}}/></div></div><div style={{marginBottom:14}}><p style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:5}}>📊 순위 알림 채널 (순위 하락 알림 전용)</p><div style={{display:"flex",gap:8}}><input value={rankWebhookUrl} onChange={e=>setRankWebhookUrl(e.target.value)} placeholder="https://discord.com/api/webhooks/..." style={{...iS,flex:1,fontSize:11}}/></div></div><button onClick={saveWebhook} style={{background:"#5865F2",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button></div>)}{section==="monthly"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:14,color:"#0f1117"}}>월별 사원별 매출 현황</div>{monthlyStats.length===0?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"20px 0"}}>계약 데이터가 없습니다</p>:monthlyStats.map(ms=>(<div key={ms.key} style={{marginBottom:18}}><div style={{fontWeight:700,fontSize:12,color:"#0f1117",padding:"7px 10px",background:"#f0f7ff",borderRadius:7,marginBottom:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>{ms.label}</span><div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:5,padding:"1px 7px"}}>N {ms.newCount}건 {fmtAmount(ms.newAmount)}</span><span style={{fontSize:11,color:"#8468D3",fontWeight:600,background:"#f5f3ff",borderRadius:5,padding:"1px 7px"}}>R {ms.renCount}건 {fmtAmount(ms.renAmount)}</span></div></div>{Object.entries(ms.managers).sort((a,b)=>b[1].amount-a[1].amount).map(([name,stat],ri)=>(<div key={name} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:ri===0?"#f0f7ff":"#f7f8fa",borderRadius:9,marginBottom:5,border:ri===0?"1px solid #bfd7f5":"1px solid #f0f1f3"}}><span style={{fontSize:14}}>{ri===0?"🥇":ri===1?"🥈":ri===2?"🥉":`${ri+1}위`}</span><span style={{fontWeight:600,fontSize:12,flex:1,color:"#0f1117"}}>{name}</span><span style={{fontSize:11,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:5,padding:"1px 6px"}}>N {stat.newCount}</span><span style={{fontSize:11,color:"#8468D3",fontWeight:600,background:"#f5f3ff",borderRadius:5,padding:"1px 6px"}}>R {stat.renCount}</span><span style={{fontSize:12,color:"#374151",fontWeight:700}}>{fmtAmount(stat.amount)}</span></div>))}<div style={{display:"flex",justifyContent:"flex-end",gap:14,padding:"7px 10px",borderTop:"1px solid #f0f1f3",fontSize:11,color:"#6b7280"}}><span>합계: <b style={{color:"#0071CE"}}>{Object.values(ms.managers).reduce((s,m)=>s+m.count,0)}건</b></span><span><b style={{color:"#8468D3"}}>{fmtAmount(Object.values(ms.managers).reduce((s,m)=>s+m.amount,0))}</b></span></div></div>))}</div>)}{section==="history"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:14,color:"#0f1117"}}>업무보고 누적 데이터</div><div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}><button onClick={loadAllData} disabled={loadingAll} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{loadingAll?"불러오는 중…":"데이터 불러오기"}</button>{Object.keys(allData).length>0&&(<><button onClick={()=>{const wb=XLSX.utils.book_new();Object.entries(allData).sort().forEach(([date,tsByDate])=>{Object.entries(tsByDate).forEach(([ts,reps])=>{const headers=["이름","콜수","콜시간(분)","자료수","토스","재통픽스","긍정백톡","부정백톡"];const rows=reps.map(r=>[r.name,r.calls||0,r.callTime||0,r.materials||0,r.toss||0,r.retarget||0,r.positive||0,r.negative||0]);const tot=["합계",...METRICS.map(m=>reps.reduce((s,r)=>s+(r[m.key]||0),0))];const ws=XLSX.utils.aoa_to_sheet([headers,...rows,tot]);XLSX.utils.book_append_sheet(wb,ws,`${date} ${ts}`.slice(0,31));});});XLSX.writeFile(wb,"업무보고_전체.xlsx");}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체 엑셀</button><button onClick={()=>downloadWeeklyExcel(allData)} style={{background:"#8468D3",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>주차별 분석 엑셀</button></>)}</div>{Object.entries(allData).sort().reverse().map(([date,tsByDate])=>(<div key={date} style={{marginBottom:14}}><div style={{fontWeight:700,fontSize:12,padding:"6px 10px",background:"#f7f8fa",borderRadius:7,marginBottom:7,color:"#0f1117"}}>{date}</div>{Object.entries(tsByDate).map(([ts,reps])=>(<div key={ts} style={{marginBottom:8}}><div style={{fontWeight:600,fontSize:11,color:"#8468D3",marginBottom:4}}>{ts} ({reps.length}명)</div><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:480}}><thead><tr style={{background:"#f7f8fa"}}><th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #f0f1f3"}}>이름</th>{METRICS.map(m=><th key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #f0f1f3",whiteSpace:"nowrap"}}>{m.label}</th>)}{ts==="최종마감"&&FINAL_METRICS.map(m=><th key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#8468D3",fontWeight:600,borderBottom:"2px solid #f0f1f3",whiteSpace:"nowrap"}}>{m.label}</th>)}</tr></thead><tbody>{reps.map((r,i)=>(<tr key={i} style={{borderBottom:"1px solid #f7f8fa"}}><td style={{padding:"5px 8px",fontWeight:700,color:"#0f1117"}}>{r.name}</td>{METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center"}}>{r[m.key]||0}</td>)}{ts==="최종마감"&&FINAL_METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#8468D3",fontWeight:600}}>{m.key==="dailySales"?(Number(r[m.key])||0).toLocaleString()+"원":r[m.key]||0}</td>)}</tr>))}<tr style={{background:"#f0f7ff",fontWeight:700}}><td style={{padding:"5px 8px",color:"#0071CE"}}>합계</td>{METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#0071CE"}}>{reps.reduce((s,r)=>s+(r[m.key]||0),0)}</td>)}{ts==="최종마감"&&FINAL_METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#8468D3"}}>{m.key==="dailySales"?reps.reduce((s,r)=>s+(Number(r[m.key])||0),0).toLocaleString()+"원":reps.reduce((s,r)=>s+(r[m.key]||0),0)}</td>)}</tr></tbody></table></div></div>))}</div>))}{Object.keys(allData).length===0&&!loadingAll&&<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"14px 0"}}>버튼을 눌러 데이터를 불러오세요</p>}</div>)}{section==="navorder"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:6,color:"#0f1117"}}>메뉴 순서 설정</div><p style={{fontSize:11,color:"#adb5bd",marginBottom:12}}>▲▼ 버튼으로 순서를 바꾸세요</p>{(()=>{const NAV_LABELS={list:"목록",calendar:"캘린더",revenue:"매출현황 캘린더",contracts:"계약관리",report:"업무보고",ranking:"매출 랭킹"};const move=async(idx,dir)=>{const arr=[...navOrder];const swap=idx+dir;if(swap<0||swap>=arr.length)return;[arr[idx],arr[swap]]=[arr[swap],arr[idx]];await st.set("config:navOrder",arr);setNavOrder(arr);};return navOrder.map((id,i)=>(<div key={id} style={{display:"flex",alignItems:"center",gap:10,background:"#f7f8fa",borderRadius:9,padding:"9px 12px",marginBottom:5,border:"1px solid #f0f1f3"}}><span style={{fontSize:12,fontWeight:600,flex:1,color:"#374151"}}>{NAV_LABELS[id]||id}</span><button onClick={()=>move(i,-1)} disabled={i===0} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:6,padding:"3px 7px",cursor:i===0?"not-allowed":"pointer",color:i===0?"#d1d5db":"#374151",fontSize:11}}>▲</button><button onClick={()=>move(i,1)} disabled={i===navOrder.length-1} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:6,padding:"3px 7px",cursor:i===navOrder.length-1?"not-allowed":"pointer",color:i===navOrder.length-1?"#d1d5db":"#374151",fontSize:11}}>▼</button></div>));})()}</div>)}</div></div>);}
+</div>)}{section==="projects"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:14,color:"#0f1117"}}>프로젝트 카테고리</div><div style={{display:"flex",gap:8,marginBottom:10}}><input value={newProjInput} onChange={e=>setNewProjInput(e.target.value)} placeholder="새 프로젝트명" onKeyDown={e=>e.key==="Enter"&&addProject()} style={{...iS,flex:1}}/><button onClick={addProject} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 추가</button></div>{projectCategories.length===0?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center"}}>등록된 프로젝트가 없습니다</p>:<div style={{display:"flex",flexDirection:"column",gap:5}}>{projectCategories.map(p=>(<div key={p} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f7f8fa",borderRadius:9,padding:"9px 12px"}}><span style={{fontWeight:600,fontSize:12,color:"#0f1117"}}>{p}</span><button onClick={()=>removeProject(p)} style={{background:"none",border:"none",color:"#fca5a5",cursor:"pointer",fontSize:12}}>✕</button></div>))}</div>}</div>)}{section==="targets"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:14,color:"#0f1117"}}>업무보고 목표 설정</div>{[{key:"calls",label:"목표 콜수",unit:"콜"},{key:"materials",label:"목표 자료수",unit:"개"},{key:"retarget",label:"목표 재통픽스",unit:"개"}].map(({key,label,unit})=>(<div key={key} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><label style={{fontSize:12,fontWeight:600,color:"#374151",minWidth:110}}>{label}</label><input type="number" min="0" value={editTargets[key]} onChange={e=>setEditTargets(t=>({...t,[key]:parseInt(e.target.value)||0}))} style={{...iS,width:80}}/><span style={{fontSize:11,color:"#adb5bd"}}>{unit}</span></div>))}<button onClick={saveTargets} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button></div>)}{section==="webhook"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#0f1117"}}>Discord 알림 설정</div><div style={{marginBottom:14}}><p style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:5}}>📢 기본 알림 채널 (실적보고 · 긴급메모 · 메모요약)</p><div style={{display:"flex",gap:8}}><input value={webhookUrl} onChange={e=>setWebhookUrl(e.target.value)} placeholder="https://discord.com/api/webhooks/..." style={{...iS,flex:1,fontSize:11}}/></div></div><div style={{marginBottom:14}}><p style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:5}}>📊 순위 알림 채널 (순위 하락 알림 전용)</p><div style={{display:"flex",gap:8}}><input value={rankWebhookUrl} onChange={e=>setRankWebhookUrl(e.target.value)} placeholder="https://discord.com/api/webhooks/..." style={{...iS,flex:1,fontSize:11}}/></div></div><button onClick={saveWebhook} style={{background:"#5865F2",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button></div>)}{section==="monthly"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:14,color:"#0f1117"}}>월별 사원별 매출 현황</div>{monthlyStats.length===0?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"20px 0"}}>계약 데이터가 없습니다</p>:monthlyStats.map(ms=>(<div key={ms.key} style={{marginBottom:18}}><div style={{fontWeight:700,fontSize:12,color:"#0f1117",padding:"7px 10px",background:"#f0f7ff",borderRadius:7,marginBottom:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>{ms.label}</span><div style={{display:"flex",gap:8}}><span style={{fontSize:11,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:5,padding:"1px 7px"}}>N {ms.newCount}건 {fmtAmount(ms.newAmount)}</span><span style={{fontSize:11,color:"#8468D3",fontWeight:600,background:"#f5f3ff",borderRadius:5,padding:"1px 7px"}}>R {ms.renCount}건 {fmtAmount(ms.renAmount)}</span></div></div>{Object.entries(ms.managers).sort((a,b)=>b[1].amount-a[1].amount).map(([name,stat],ri)=>(<div key={name} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:ri===0?"#f0f7ff":"#f7f8fa",borderRadius:9,marginBottom:5,border:ri===0?"1px solid #bfd7f5":"1px solid #f0f1f3"}}><span style={{fontSize:14}}>{ri===0?"🥇":ri===1?"🥈":ri===2?"🥉":`${ri+1}위`}</span><span style={{fontWeight:600,fontSize:12,flex:1,color:"#0f1117"}}>{name}</span><span style={{fontSize:11,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:5,padding:"1px 6px"}}>N {stat.newCount}</span><span style={{fontSize:11,color:"#8468D3",fontWeight:600,background:"#f5f3ff",borderRadius:5,padding:"1px 6px"}}>R {stat.renCount}</span><span style={{fontSize:12,color:"#374151",fontWeight:700}}>{fmtAmount(stat.amount)}</span></div>))}<div style={{display:"flex",justifyContent:"flex-end",gap:14,padding:"7px 10px",borderTop:"1px solid #f0f1f3",fontSize:11,color:"#6b7280"}}><span>합계: <b style={{color:"#0071CE"}}>{Object.values(ms.managers).reduce((s,m)=>s+m.count,0)}건</b></span><span><b style={{color:"#8468D3"}}>{fmtAmount(Object.values(ms.managers).reduce((s,m)=>s+m.amount,0))}</b></span></div></div>))}</div>)}{section==="history"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:14,color:"#0f1117"}}>업무보고 누적 데이터</div><div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}><button onClick={loadAllData} disabled={loadingAll} style={{background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{loadingAll?"불러오는 중…":"데이터 불러오기"}</button>{Object.keys(allData).length>0&&(<><button onClick={()=>{const wb=XLSX.utils.book_new();Object.entries(allData).sort().forEach(([date,tsByDate])=>{Object.entries(tsByDate).forEach(([ts,reps])=>{const headers=["이름","콜수","콜시간(분)","자료수","토스","재통픽스","긍정백톡","부정백톡"];const rows=reps.map(r=>[r.name,r.calls||0,r.callTime||0,r.materials||0,r.toss||0,r.retarget||0,r.positive||0,r.negative||0]);const tot=["합계",...METRICS.map(m=>reps.reduce((s,r)=>s+(r[m.key]||0),0))];const ws=XLSX.utils.aoa_to_sheet([headers,...rows,tot]);XLSX.utils.book_append_sheet(wb,ws,`${date} ${ts}`.slice(0,31));});});XLSX.writeFile(wb,"업무보고_전체.xlsx");}} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>전체 엑셀</button><button onClick={()=>downloadWeeklyExcel(allData)} style={{background:"#8468D3",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>주차별 분석 엑셀</button></>)}</div>{Object.entries(allData).sort().reverse().map(([date,tsByDate])=>(<div key={date} style={{marginBottom:14}}><div style={{fontWeight:700,fontSize:12,padding:"6px 10px",background:"#f7f8fa",borderRadius:7,marginBottom:7,color:"#0f1117"}}>{date}</div>{Object.entries(tsByDate).map(([ts,reps])=>(<div key={ts} style={{marginBottom:8}}><div style={{fontWeight:600,fontSize:11,color:"#8468D3",marginBottom:4}}>{ts} ({reps.length}명)</div><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11,minWidth:480}}><thead><tr style={{background:"#f7f8fa"}}><th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #f0f1f3"}}>이름</th>{METRICS.map(m=><th key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#6b7280",fontWeight:600,borderBottom:"2px solid #f0f1f3",whiteSpace:"nowrap"}}>{m.label}</th>)}{ts==="최종마감"&&FINAL_METRICS.map(m=><th key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#8468D3",fontWeight:600,borderBottom:"2px solid #f0f1f3",whiteSpace:"nowrap"}}>{m.label}</th>)}</tr></thead><tbody>{reps.map((r,i)=>(<tr key={i} style={{borderBottom:"1px solid #f7f8fa"}}><td style={{padding:"5px 8px",fontWeight:700,color:"#0f1117"}}>{r.name}</td>{METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center"}}>{r[m.key]||0}</td>)}{ts==="최종마감"&&FINAL_METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#8468D3",fontWeight:600}}>{m.key==="dailySales"?(Number(r[m.key])||0).toLocaleString()+"원":r[m.key]||0}</td>)}</tr>))}<tr style={{background:"#f0f7ff",fontWeight:700}}><td style={{padding:"5px 8px",color:"#0071CE"}}>합계</td>{METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#0071CE"}}>{reps.reduce((s,r)=>s+(r[m.key]||0),0)}</td>)}{ts==="최종마감"&&FINAL_METRICS.map(m=><td key={m.key} style={{padding:"5px 5px",textAlign:"center",color:"#8468D3"}}>{m.key==="dailySales"?reps.reduce((s,r)=>s+(Number(r[m.key])||0),0).toLocaleString()+"원":reps.reduce((s,r)=>s+(r[m.key]||0),0)}</td>)}</tr></tbody></table></div></div>))}</div>))}{Object.keys(allData).length===0&&!loadingAll&&<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"14px 0"}}>버튼을 눌러 데이터를 불러오세요</p>}</div>)}{section==="navorder"&&(<div><div style={{fontWeight:700,fontSize:13,marginBottom:6,color:"#0f1117"}}>메뉴 순서 설정</div><p style={{fontSize:11,color:"#adb5bd",marginBottom:12}}>▲▼ 버튼으로 순서를 바꾸세요</p>{(()=>{const NAV_LABELS={list:"목록",calendar:"캘린더",revenue:"매출현황 캘린더",contracts:"계약관리",work:"작업관리",report:"업무보고",ranking:"매출 랭킹"};const move=async(idx,dir)=>{const arr=[...navOrder];const swap=idx+dir;if(swap<0||swap>=arr.length)return;[arr[idx],arr[swap]]=[arr[swap],arr[idx]];await st.set("config:navOrder",arr);setNavOrder(arr);};return navOrder.map((id,i)=>(<div key={id} style={{display:"flex",alignItems:"center",gap:10,background:"#f7f8fa",borderRadius:9,padding:"9px 12px",marginBottom:5,border:"1px solid #f0f1f3"}}><span style={{fontSize:12,fontWeight:600,flex:1,color:"#374151"}}>{NAV_LABELS[id]||id}</span><button onClick={()=>move(i,-1)} disabled={i===0} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:6,padding:"3px 7px",cursor:i===0?"not-allowed":"pointer",color:i===0?"#d1d5db":"#374151",fontSize:11}}>▲</button><button onClick={()=>move(i,1)} disabled={i===navOrder.length-1} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:6,padding:"3px 7px",cursor:i===navOrder.length-1?"not-allowed":"pointer",color:i===navOrder.length-1?"#d1d5db":"#374151",fontSize:11}}>▼</button></div>));})()}</div>)}</div></div>);}
 
 function MainApp({user,onLogout}){
   const[tasks,setTasks]=useState([]);const[loadingTasks,setLoadingTasks]=useState(true);
-  const[navOrder,setNavOrder]=useState(["list","calendar","revenue","contracts","report","ranking","keyword"]);
+  const[navOrder,setNavOrder]=useState(["list","calendar","revenue","contracts","work","report","ranking","keyword"]);
   const[editTaskData,setEditTaskData]=useState(null);const[form,setForm]=useState(EF(user.isAdmin));const[showForm,setShowForm]=useState(false);
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[contractMonth,setContractMonth]=useState("all");const[contractStatus,setContractStatus]=useState("all");
   const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");
-  const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
+  const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[workSubTab,setWorkSubTab]=useState("plan");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());
   const[calFilter,setCalFilter]=useState("all");const[selectedDay,setSelectedDay]=useState(null);
   const[fOwner,setFOwner]=useState("all");const[fStatus,setFStatus]=useState("all");const[fPriority,setFPriority]=useState("all");const[fProject,setFProject]=useState("all");
@@ -1613,6 +1776,7 @@ function MainApp({user,onLogout}){
   const loadProjectCategories=async()=>{const p=await st.get("config:projects")||[];setProjectCategories(p);};
   const loadAccounts=async()=>{const a=await st.get("accounts:all")||[];setAccounts(a);};
   const loadSettings=async()=>{const t=await st.get("wt:targets");if(t)setTargets(t);const w=await st.get("wt:webhook");if(w)setWebhookUrl(w);const rw=await st.get("wt:rankWebhook");if(rw)setRankWebhookUrl(rw);const no=await st.get("config:navOrder");if(no){if(!no.includes("keyword")){no.push("keyword");await st.set("config:navOrder",no);}
+if(!no.includes("work")){const wi=no.indexOf("contracts");if(wi>=0)no.splice(wi+1,0,"work");else no.push("work");await st.set("config:navOrder",no);}
 if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no];if(idx>=0)newArr.splice(idx+1,0,"revenue");else newArr.push("revenue");await st.set("config:navOrder",newArr);setNavOrder(newArr);}else setNavOrder(no);}const ts=await st.get("wt:ts:fixed")||[];setTimeslots(ts);if(ts.length>0){setSelTs(ts[ts.length-1]);setMyTs(ts[ts.length-1]);}};
   const addTimeslot=async()=>{const ts=newTs.trim();if(!ts)return;const list=await st.get("wt:ts:fixed")||[];if(!list.includes(ts)){list.push(ts);await st.set("wt:ts:fixed",list);setTimeslots(list);}setSelTs(ts);setMyTs(ts);setNewTs("");};
   const removeTimeslot=async ts=>{const list=(await st.get("wt:ts:fixed")||[]).filter(t=>t!==ts);await st.set("wt:ts:fixed",list);setTimeslots(list);if(selTs===ts)setSelTs(list[list.length-1]||"");if(myTs===ts)setMyTs(list[list.length-1]||"");};
@@ -1729,7 +1893,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
             <div>
               {/* 세부탭 */}
               <div style={{display:"flex",background:"#fff",borderRadius:12,padding:4,marginBottom:14,border:"1px solid #f0f1f3",gap:4}}>
-                {[{id:"list",label:"업체 목록"},{id:"rank",label:"순위 관리"},{id:"weekly",label:"주간요약"}].map(t=>(
+                {[{id:"list",label:"업체 목록"},{id:"weekly",label:"주간요약"}].map(t=>(
                   <button key={t.id} onClick={()=>setContractSubTab(t.id)} style={{flex:1,padding:"9px",borderRadius:9,border:"none",fontSize:13,fontWeight:contractSubTab===t.id?700:500,cursor:"pointer",background:contractSubTab===t.id?"#0071CE":"transparent",color:contractSubTab===t.id?"#fff":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{t.label}</button>
                 ))}
               </div>
@@ -1835,13 +1999,24 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               {/* ===== 주간요약 탭 ===== */}
               {contractSubTab==="weekly"&&<WeeklyTab contracts={contracts} webhookUrl={webhookUrl} rankWebhookUrl={rankWebhookUrl} st={st}/>}
 
-                            {/* ===== 순위관리 탭 ===== */}
-              {contractSubTab==="rank"&&(()=>{
+            </div>
+          )}
+          {tab==="work"&&(
+            <div>
+              {/* 세부탭 */}
+              <div style={{display:"flex",background:"#fff",borderRadius:12,padding:4,marginBottom:14,border:"1px solid #f0f1f3",gap:4}}>
+                {[{id:"plan",label:"주간계획"},{id:"rank",label:"순위체크"}].map(t=>(
+                  <button key={t.id} onClick={()=>setWorkSubTab(t.id)} style={{flex:1,padding:"9px",borderRadius:9,border:"none",fontSize:13,fontWeight:workSubTab===t.id?700:500,cursor:"pointer",background:workSubTab===t.id?"#0071CE":"transparent",color:workSubTab===t.id?"#fff":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{t.label}</button>
+                ))}
+              </div>
+
+              {/* ===== 주간계획 탭 ===== */}
+              {workSubTab==="plan"&&<WeeklyPlanTab contracts={visibleContracts} st={st}/>}
+
+              {/* ===== 순위체크 탭 ===== */}
+              {workSubTab==="rank"&&(()=>{
                 // 진행중 + 종료 모두 포함 (해지 제외)
                 const rankTargets=visibleContracts.filter(c=>!c.cancelled);
-                // 검색/필터 state는 외부에서 관리 불가하므로 즉시 처리
-                // 대신 useState 사용 불가 → useRef 없이 key로 처리
-                // → 실제로는 아래 JSX에서 직접 useState 컴포넌트로 분리
                 return <RankManageTab contracts={rankTargets} completions={completions} rankDataMap={rankDataMap} setMemoContract={setMemoContract} setRankModalEvent={setRankModalEvent} setRankModalContract={setRankModalContract} toggleCE={toggleCE} handleRankDelete={handleRankDelete}/>;
               })()}
             </div>
