@@ -90,6 +90,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
   const lastAmount=parseAmount(history[history.length-1]?.total);
   const growthPct=history.length>1&&firstAmount>0?Math.round((lastAmount-firstAmount)/firstAmount*100):null;
   const tS={fontSize:11,fontWeight:700,fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  const wonFmt=v=>{const n=parseAmount(String(v??""));return n>0?n.toLocaleString()+"원":"";};
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif",padding:"20px"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.15)"}}>
@@ -106,7 +107,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
               <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
                 {contract.manager&&<span style={{fontSize:11,color:"#8468D3",fontWeight:600}}>{contract.manager}</span>}
                 {contract.phone&&<span style={{fontSize:11,color:"#6b7280"}}>{contract.phone}</span>}
-                {contract.total&&<span style={{fontSize:11,color:"#0071CE",fontWeight:600}}>{contract.total}</span>}
+                {wonFmt(contract.total||contract.amount)&&<span style={{fontSize:11,color:"#0071CE",fontWeight:600}}>{wonFmt(contract.total||contract.amount)}</span>}
                 <span style={{fontSize:11,color:"#adb5bd"}}>{contract.startDate} ~ {contract.endDate}</span>
               </div>
             </div>
@@ -114,7 +115,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
           </div>
           {/* 탭 */}
           <div style={{display:"flex",borderBottom:"1px solid #f0f1f3",marginTop:4}}>
-            {[{id:"memo",label:"메모"},{id:"rank",label:"순위 히스토리"},{id:"history",label:`계약 히스토리 (${history.length}회)`},{id:"detail",label:"상세정보"}].map(t=>(
+            {[{id:"memo",label:"메모"},{id:"rank",label:"순위 히스토리"},{id:"history",label:`계약 히스토리 (${history.length}회)`},{id:"provide",label:"제공내역"}].map(t=>(
               <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,padding:"9px 4px",fontSize:12,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?"#0071CE":"#adb5bd",background:"none",border:"none",borderBottom:`2px solid ${activeTab===t.id?"#0071CE":"transparent"}`,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:-1}}>{t.label}</button>
             ))}
           </div>
@@ -123,6 +124,13 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
         {/* 메모 탭 */}
         {activeTab==="memo"&&<>
           <div style={{flex:1,overflowY:"auto",padding:"14px 20px",display:"flex",flexDirection:"column",gap:10}}>
+            {(contract.phone||contract.link||contract.notes)&&(
+              <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",border:"1px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6}}>
+                {contract.phone&&<div style={{display:"flex",gap:8}}><span style={{fontSize:11,fontWeight:700,color:"#6b7280",width:60,flexShrink:0}}>전화번호</span><span style={{fontSize:12,color:"#374151"}}>{contract.phone}</span></div>}
+                {contract.link&&<div style={{display:"flex",gap:8}}><span style={{fontSize:11,fontWeight:700,color:"#6b7280",width:60,flexShrink:0}}>플레이스</span><a href={contract.link} target="_blank" rel="noreferrer" style={{fontSize:12,color:"#0071CE",wordBreak:"break-all"}}>{contract.link}</a></div>}
+                {contract.notes&&<div style={{display:"flex",gap:8}}><span style={{fontSize:11,fontWeight:700,color:"#6b7280",width:60,flexShrink:0}}>특이사항</span><span style={{fontSize:12,color:"#374151",whiteSpace:"pre-line",lineHeight:1.5}}>{contract.notes}</span></div>}
+              </div>
+            )}
             {loading?<div style={{textAlign:"center",padding:"20px",color:"#adb5bd",fontSize:12}}>불러오는 중…</div>
             :memos.length===0?<div style={{textAlign:"center",padding:"30px 0",color:"#adb5bd",fontSize:12}}>아직 메모가 없습니다. 첫 번째 메모를 남겨보세요!</div>
             :memos.map(m=>(
@@ -157,7 +165,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
             {/* 요약 */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
               <div style={{background:"#f0f7ff",borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:"#0071CE"}}>{history.length}회</div><div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>총 계약</div></div>
-              <div style={{background:"#f5f3ff",borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:"#8468D3"}}>{fmtAmount(totalAmount)}</div><div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>누적 매출</div></div>
+              <div style={{background:"#f5f3ff",borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:15,fontWeight:800,color:"#8468D3"}}>{totalAmount.toLocaleString()}원</div><div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>누적 매출</div></div>
               <div style={{background:growthPct!==null&&growthPct>0?"#f0fdf4":"#f7f8fa",borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:growthPct!==null&&growthPct>0?"#10b981":"#6b7280"}}>{growthPct!==null?`${growthPct>0?"+":""}${growthPct}%`:"—"}</div><div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>금액 성장</div></div>
             </div>
             {/* 타임라인 */}
@@ -184,7 +192,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:5}}>
                             {pct!==null&&<span style={{fontSize:11,fontWeight:700,color:pct>=0?"#10b981":"#ef4444"}}>{pct>=0?"+":""}{pct}%</span>}
-                            <span style={{fontSize:13,fontWeight:800,color:"#0071CE"}}>{c.total||"—"}</span>
+                            <span style={{fontSize:13,fontWeight:800,color:"#0071CE"}}>{wonFmt(c.total||c.amount)||"—"}</span>
                           </div>
                         </div>
                         <div style={{fontSize:11,color:"#adb5bd"}}>{c.startDate} ~ {c.endDate}</div>
@@ -214,6 +222,24 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
               </div>
             ):null)}
             {!contract.phone&&!contract.link&&!contract.products&&!contract.services&&!contract.notes&&<div style={{textAlign:"center",padding:"30px 0",color:"#adb5bd",fontSize:12}}>등록된 상세정보가 없습니다</div>}
+          </div>
+        )}
+
+        {/* 제공내역 탭 */}
+        {activeTab==="provide"&&(
+          <div style={{flex:1,overflowY:"auto",padding:"14px 20px 20px"}}>
+            {(()=>{const pv=contract.provide||{};const num=n=>parseInt(n)||0;const rows=[{label:"리워드트래픽",n:num(pv.rewardTraffic),unit:"타"},{label:"블플",n:num(pv.blogPlus),unit:"건"},{label:"영수증리뷰",n:num(pv.receipt),unit:"건"}];const etc=(pv.etc&&String(pv.etc).trim())?String(pv.etc).trim():"";return(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {rows.map(r=>(<div key={r.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f7f8fa",borderRadius:10,padding:"12px 14px",border:"1px solid #f0f1f3"}}>
+                  <span style={{fontSize:12,fontWeight:600,color:"#374151"}}>{r.label}</span>
+                  <span style={{fontSize:14,fontWeight:800,color:r.n>0?"#0071CE":"#c1c7d0"}}>{r.n>0?r.n.toLocaleString()+r.unit:"x"}</span>
+                </div>))}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f7f8fa",borderRadius:10,padding:"12px 14px",border:"1px solid #f0f1f3"}}>
+                  <span style={{fontSize:12,fontWeight:600,color:"#374151"}}>기타/서비스</span>
+                  <span style={{fontSize:14,fontWeight:800,color:etc?"#0071CE":"#c1c7d0"}}>{etc||"x"}</span>
+                </div>
+              </div>
+            );})()}
           </div>
         )}
       </div>
@@ -1187,7 +1213,7 @@ function TaskForm({form,setForm,onSubmit,onCancel,isEdit,isAdminUser,projectCate
     </div>
   </div>);
 }
-function ContractForm({initial,onSubmit,onCancel,allContracts}){
+function ContractForm({initial,onSubmit,onCancel,allContracts,user}){
   const blank={name:"",phone:"",link:"",products:"",services:"",total:"",amount:"",manager:"",notes:"",isRenewal:false,renewalCount:0,keywords:[],initialRanks:{},source:"",mainKeywords:[],provide:{rewardTraffic:"",receipt:"",blogPlus:"",etc:""}};
   const[memo,setMemo]=useState("");
   const[parsed,setParsed]=useState(initial?{name:initial.name,phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,amount:initial.amount??(initial.total?parseAmount(initial.total):""),manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,renewalCount:initial.renewalCount||0,keywords:initial.keywords||[],initialRanks:initial.initialRanks||{},source:initial.source||"",mainKeywords:initial.mainKeywords||[],provide:initial.provide||{rewardTraffic:"",receipt:"",blogPlus:"",etc:""}}:blank);
@@ -1296,12 +1322,84 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
         const amt=parseInt(String(parsed.amount||"").replace(/[^\d]/g,""))||0;
         const provide={rewardTraffic:parseInt(parsed.provide?.rewardTraffic)||0,receipt:parseInt(parsed.provide?.receipt)||0,blogPlus:parseInt(parsed.provide?.blogPlus)||0,etc:(parsed.provide?.etc||"").trim()};
         const mainKeywords=(parsed.mainKeywords||[]).filter(k=>(parsed.keywords||[]).includes(k));
-        onSubmit({...parsed,source:parsed.source||"",provide,mainKeywords,amount:amt,total:amt?String(amt):"",startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitRanks});
+        onSubmit({...parsed,source:parsed.source||"",manager:parsed.manager||user?.name||"",provide,mainKeywords,amount:amt,total:amt?String(amt):"",startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitRanks});
       }} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button>
       <button type="button" onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button>
     </div>
   </div>);
 }
+function DailyAlertModal({items,onClose}){
+  const contractItems=items.filter(i=>i.type==="contract");const taskItems=items.filter(i=>i.type==="task");
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+    <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:500,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.2)"}}>
+      <div style={{padding:"20px 22px 14px",background:"linear-gradient(135deg,#8468D3,#0071CE)",borderRadius:"16px 16px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>오늘의 일정 알림</div><div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:2}}>{todayStr} · 총 {items.length}개</div></div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"14px 18px",display:"flex",flexDirection:"column",gap:14}}>
+        {contractItems.length>0&&(<div><div style={{fontSize:12,fontWeight:800,color:"#0071CE",marginBottom:8}}><span style={{background:"#eff6ff",borderRadius:6,padding:"2px 8px"}}>계약 관리 ({contractItems.length})</span></div><div style={{display:"flex",flexDirection:"column",gap:6}}>{contractItems.map((item,i)=>(<div key={i} style={{background:"#eff6ff",borderRadius:10,padding:"10px 14px",border:"1px solid #bfdbfe",borderLeft:"4px solid #0071CE"}}><div style={{fontSize:12,fontWeight:700,color:"#1e40af",marginBottom:2}}>[{item.ceType}] {item.title}</div><div style={{fontSize:11,color:"#6b7280"}}>{item.sub}</div></div>))}</div></div>)}
+        {taskItems.length>0&&(<div><div style={{fontSize:12,fontWeight:800,color:"#8468D3",marginBottom:8}}><span style={{background:"#f5f3ff",borderRadius:6,padding:"2px 8px"}}>일반 일정 ({taskItems.length})</span></div><div style={{display:"flex",flexDirection:"column",gap:6}}>{taskItems.map((item,i)=>(<div key={i} style={{background:item.urgent?"#fef2f2":"#f5f3ff",borderRadius:10,padding:"10px 14px",border:`1px solid ${item.urgent?"#fecaca":"#e9d5ff"}`,borderLeft:`4px solid ${item.urgent?"#ef4444":"#8468D3"}`}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:item.urgent?"#991b1b":"#5b21b6",marginBottom:2}}>{item.title}</div><div style={{fontSize:11,color:"#6b7280"}}>{item.sub}</div></div>{item.dday&&<span style={{fontSize:11,fontWeight:800,color:item.urgent?"#ef4444":"#8468D3",background:item.urgent?"#fef2f2":"#f5f3ff",borderRadius:6,padding:"2px 8px",border:`1px solid ${item.urgent?"#fecaca":"#e9d5ff"}`,flexShrink:0,marginLeft:8}}>{item.dday}</span>}</div></div>))}</div></div>)}
+        {items.length===0&&<div style={{textAlign:"center",padding:"20px",color:"#9ca3af",fontSize:13}}>오늘 일정이 없습니다</div>}
+      </div>
+      <div style={{padding:"12px 18px 18px",borderTop:"1px solid #f0f1f3"}}><button onClick={onClose} style={{width:"100%",background:"#0071CE",color:"#fff",border:"none",borderRadius:10,padding:"13px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>확인했습니다</button></div>
+    </div>
+  </div>);}
+function ReportCard({report,targets,timeslot,isAdmin,onEdit}){
+  const[open,setOpen]=useState(false);
+  const tms=[{key:"calls",label:"콜수",unit:"콜"},{key:"materials",label:"자료수",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"}];
+  const others=METRICS.filter(m=>!tms.find(t=>t.key===m.key));
+  const avg=Math.round(tms.reduce((s,m)=>{const t=targets[m.key];return t?s+Math.min(100,(report[m.key]||0)/t*100):s;},0)/tms.length);
+  const cc=avg>=100?"#10b981":avg>=70?"#f59e0b":"#0071CE";
+  const isFinal=timeslot==="최종마감";
+  return(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden",marginBottom:7}}>
+    <div onClick={()=>setOpen(v=>!v)} style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+      <div style={{width:40,height:40,borderRadius:"50%",background:cc+"18",border:`2px solid ${cc}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontWeight:800,fontSize:12,color:cc}}>{avg}%</span></div>
+      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>{report.name}</div><div style={{fontSize:11,color:"#adb5bd"}}>{timeslot}</div></div>
+      <div style={{display:"flex",gap:10}}>{tms.map(m=>{const v=report[m.key]||0,t=targets[m.key];const pp=t?Math.min(100,Math.round(v/t*100)):0;return(<div key={m.key} style={{textAlign:"center"}}><div style={{fontSize:10,color:"#adb5bd"}}>{m.label}</div><div style={{fontSize:12,fontWeight:800,color:pp>=100?"#10b981":pp>=70?"#f59e0b":"#0071CE"}}>{pp}%</div></div>);})}</div>
+      <span style={{fontSize:11,color:"#c1c7d0"}}>{open?"▲":"▼"}</span>
+    </div>
+    {open&&<div style={{borderTop:"1px solid #f7f8fa",padding:"12px 14px"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>{tms.map(m=>{const v=report[m.key]||0,t=targets[m.key];const pp=t?Math.min(100,Math.round(v/t*100)):0;return(<div key={m.key}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:11,fontWeight:600}}>{m.label}</span><span style={{fontSize:11,fontWeight:700,color:pp>=100?"#10b981":pp>=70?"#f59e0b":"#0071CE"}}>{v}/{t}{m.unit} ({pp}%)</span></div><div style={{background:"#f0f1f3",borderRadius:99,height:6}}><div style={{width:`${pp}%`,background:pp>=100?"#10b981":pp>=70?"#f59e0b":"#0071CE",borderRadius:99,height:"100%"}}/></div></div>);})}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:isFinal?10:0}}>{others.map(m=>(<div key={m.key} style={{background:"#f7f8fa",borderRadius:7,padding:"6px",textAlign:"center"}}><div style={{fontSize:10,color:"#adb5bd"}}>{m.label}</div><div style={{fontSize:16,fontWeight:800,color:"#0f1117"}}>{report[m.key]||0}</div></div>))}</div>
+      {isFinal&&(<div style={{background:"#f5f3ff",borderRadius:10,padding:"10px 12px",border:"1px solid #e9d5ff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#8468D3"}}>최종마감 추가 항목</div>
+          {isAdmin&&onEdit&&<button onClick={onEdit} style={{background:"#8468D3",color:"#fff",border:"none",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>수정</button>}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+          <div style={{background:"#fff",borderRadius:8,padding:"8px",textAlign:"center",border:"1px solid #e9d5ff"}}><div style={{fontSize:10,color:"#adb5bd",marginBottom:2}}>일매출</div><div style={{fontSize:14,fontWeight:800,color:"#8468D3"}}>{report.dailySales?Number(report.dailySales).toLocaleString()+"원":"0원"}</div></div>
+          <div style={{background:"#fff",borderRadius:8,padding:"8px",textAlign:"center",border:"1px solid #e9d5ff"}}><div style={{fontSize:10,color:"#adb5bd",marginBottom:2}}>도입률-연결</div><div style={{fontSize:14,fontWeight:800,color:"#0071CE"}}>{report.connRate||0}</div></div>
+          <div style={{background:"#fff",borderRadius:8,padding:"8px",textAlign:"center",border:"1px solid #e9d5ff"}}><div style={{fontSize:10,color:"#adb5bd",marginBottom:2}}>도입률-30초↑</div><div style={{fontSize:14,fontWeight:800,color:"#10b981"}}>{report.rate30s||0}</div></div>
+        </div>
+      </div>)}
+    </div>}
+  </div>);}
+function AdminEditReportModal({report,dateStr,onClose,onSave}){
+  const[form,setForm]=useState({calls:report.calls||0,callTime:report.callTime||0,materials:report.materials||0,toss:report.toss||0,retarget:report.retarget||0,positive:report.positive||0,negative:report.negative||0,dailySales:report.dailySales||"",connRate:report.connRate||0,rate30s:report.rate30s||0});
+  const[saving,setSaving]=useState(false);
+  const iS={border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  const handleSave=async()=>{setSaving(true);await onSave({...report,...form,dailySales:parseInt((form.dailySales||"").toString().replace(/[^0-9]/g,""))||0});setSaving(false);onClose();};
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 64px rgba(0,0,0,0.15)"}}>
+      <div style={{padding:"18px 20px",borderBottom:"1px solid #f0f1f3",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div><div style={{fontWeight:800,fontSize:14,color:"#0f1117"}}>실적 수정 (관리자)</div><div style={{fontSize:11,color:"#adb5bd",marginTop:2}}>{report.name} · {dateStr} · 최종마감</div></div>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#adb5bd"}}>✕</button>
+      </div>
+      <div style={{padding:"16px 20px"}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#374151",marginBottom:10}}>기본 업무량</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:16}}>{METRICS.map(m=>(<div key={m.key}><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>{m.label} ({m.unit})</label><input type="number" min="0" value={form[m.key]} onChange={e=>setForm(f=>({...f,[m.key]:e.target.value}))} style={{...iS}}/></div>))}</div>
+        <div style={{background:"#f5f3ff",borderRadius:10,padding:"12px",border:"1px solid #e9d5ff",marginBottom:16}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#8468D3",marginBottom:10}}>최종마감 추가 항목</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>일매출 (원)</label><input type="text" inputMode="numeric" value={form.dailySales?(parseInt(form.dailySales.toString().replace(/[^0-9]/g,""))||0).toLocaleString()+"원":""} onChange={e=>{const raw=e.target.value.replace(/[^0-9]/g,"");setForm(f=>({...f,dailySales:raw}));}} placeholder="예: 500000" style={{...iS,background:"#fff",border:"1px solid #e9d5ff"}}/></div>
+            <div><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>도입률-연결</label><input type="number" min="0" value={form.connRate} onChange={e=>setForm(f=>({...f,connRate:e.target.value}))} style={{...iS,background:"#fff",border:"1px solid #e9d5ff"}}/></div>
+            <div><label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:2}}>도입률-30초이상</label><input type="number" min="0" value={form.rate30s} onChange={e=>setForm(f=>({...f,rate30s:e.target.value}))} style={{...iS,background:"#fff",border:"1px solid #e9d5ff"}}/></div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}><button onClick={handleSave} disabled={saving} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{saving?"저장 중…":"저장"}</button><button onClick={onClose} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:8,padding:"10px 16px",fontSize:13,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button></div>
+      </div>
+    </div>
+  </div>);}
+
 // ========== 매출현황 캘린더 탭 (그라데이션 헤더) ==========
 function RevenueCalendarTab({contracts,user,profiles}){
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());const[selectedDay,setSelectedDay]=useState(null);const[selectedManager,setSelectedManager]=useState("all");
@@ -1639,7 +1737,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               {/* ===== 업체목록 탭 ===== */}
               {contractSubTab==="list"&&(<div>
               {window.innerWidth<=768&&(user.isAdmin||user.role==="manager")&&<button onClick={()=>{setEditContract(null);setShowCF(v=>!v);}} style={{width:"100%",background:"#8468D3",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif",marginBottom:12}}>+ 계약 등록</button>}
-              {showCF&&(user.isAdmin||user.role==="manager")&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}} allContracts={contracts}/>}
+              {showCF&&(user.isAdmin||user.role==="manager")&&<ContractForm initial={editContract} onSubmit={saveContract} onCancel={()=>{setShowCF(false);setEditContract(null);}} allContracts={contracts} user={user}/>}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
                 <div style={{background:"linear-gradient(135deg,#f0f7ff,#dbeafe)",borderRadius:12,padding:"12px 16px",border:"1px solid #bfdbfe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#1e40af",fontWeight:700,marginBottom:2}}>신규 계약</div><div style={{fontSize:22,fontWeight:900,color:"#0071CE"}}>{renewalStats.new.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#3b82f6",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#0071CE"}}>{fmtAmount(renewalStats.new.amount)}</div></div></div></div>
                 <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:12,padding:"12px 16px",border:"1px solid #ddd6fe"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:11,color:"#5b21b6",fontWeight:700,marginBottom:2}}>재연장</div><div style={{fontSize:22,fontWeight:900,color:"#8468D3"}}>{renewalStats.renewal.count}<span style={{fontSize:12,fontWeight:600,marginLeft:2}}>건</span></div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#8468D3",fontWeight:600}}>총 매출</div><div style={{fontSize:14,fontWeight:800,color:"#8468D3"}}>{fmtAmount(renewalStats.renewal.amount)}</div></div></div></div>
