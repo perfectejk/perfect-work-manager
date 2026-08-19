@@ -1188,8 +1188,8 @@ function TaskForm({form,setForm,onSubmit,onCancel,isEdit,isAdminUser,projectCate
   </div>);
 }
 function ContractForm({initial,onSubmit,onCancel,allContracts}){
-  const blank={name:"",phone:"",link:"",products:"",services:"",total:"",manager:"",notes:"",isRenewal:false,renewalCount:0,keywords:[],initialRanks:{}};
-  const[memo,setMemo]=useState("");const[parsed,setParsed]=useState(initial?{name:initial.name,phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,renewalCount:initial.renewalCount||0,keywords:initial.keywords||[],initialRanks:initial.initialRanks||{}}:blank);
+  const blank={name:"",phone:"",link:"",products:"",services:"",total:"",manager:"",notes:"",isRenewal:false,renewalCount:0,keywords:[],initialRanks:{},source:"",mainKeywords:[],provide:{rewardTraffic:"",blogPlus:"",receipt:"",etc:""}};
+  const[memo,setMemo]=useState("");const[parsed,setParsed]=useState(initial?{name:initial.name,phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,renewalCount:initial.renewalCount||0,keywords:initial.keywords||[],initialRanks:initial.initialRanks||{},source:initial.source||"",mainKeywords:initial.mainKeywords||[],provide:initial.provide||{rewardTraffic:"",blogPlus:"",receipt:"",etc:""}}:blank);
   const[kwInput,setKwInput]=useState("");
   const addKeyword=()=>{const v=kwInput.trim();if(!v||parsed.keywords.includes(v))return;setParsed(p=>({...p,keywords:[...p.keywords,v]}));setKwInput("");};
   const removeKeyword=kw=>setParsed(p=>({...p,keywords:p.keywords.filter(k=>k!==kw),initialRanks:Object.fromEntries(Object.entries(p.initialRanks||{}).filter(([k])=>k!==kw))}));
@@ -1229,8 +1229,48 @@ function ContractForm({initial,onSubmit,onCancel,allContracts}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 시작일 *</label><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} style={{...iS}}/></div><div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>계약 종료일 *</label><input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={{...iS}}/></div></div>
     <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#0891b2",fontWeight:600,display:"block",marginBottom:5}}>순위 체크 키워드 (2~5개 권장)</label><div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:7}}>{(parsed.keywords||[]).map((kw,i)=>(<span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:99,padding:"3px 10px",fontSize:12,color:"#0891b2",fontWeight:600}}>{kw}<button onClick={()=>removeKeyword(kw)} style={{background:"none",border:"none",color:"#0891b2",cursor:"pointer",padding:0,fontSize:12,lineHeight:1}}>✕</button></span>))}</div><div style={{display:"flex",gap:6}}><input value={kwInput} onChange={e=>setKwInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),addKeyword())} placeholder="키워드 입력 후 Enter 또는 + 버튼" style={{...iS,flex:1}}/><button onClick={addKeyword} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+</button></div></div>
     {(parsed.keywords||[]).length>0&&(<div style={{marginBottom:12,background:"#f0fdf4",borderRadius:10,padding:"12px 14px",border:"1px solid #bbf7d0"}}><label style={{fontSize:12,color:"#166534",fontWeight:600,display:"block",marginBottom:8}}>키워드별 시작 순위 (선택)</label><div style={{display:"flex",flexDirection:"column",gap:6}}>{(parsed.keywords||[]).map(kw=>(<div key={kw} style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:"#0f1117",fontWeight:500,flex:1}}>{kw}</span><input type="number" min="1" value={(parsed.initialRanks||{})[kw]||""} onChange={e=>setParsed(p=>({...p,initialRanks:{...(p.initialRanks||{}),[kw]:e.target.value}}))} placeholder="순위" style={{width:64,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/><span style={{fontSize:11,color:"#6b7280"}}>위</span></div>))}</div><div style={{fontSize:10,color:"#6b7280",marginTop:6}}>입력 시 이후 순위체크에서 상승/하락 자동 표시</div></div>)}
+    {/* ===== 트래픽 계약 정보 ===== */}
+    <div style={{marginBottom:12,background:"#f8fafc",borderRadius:10,padding:14,border:"1px solid #e5e7eb"}}>
+      <label style={{fontSize:12,color:"#0f1117",fontWeight:700,display:"block",marginBottom:10}}>트래픽 계약 정보</label>
+
+      {/* 유형 */}
+      <div style={{marginBottom:10}}>
+        <label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:5}}>유형</label>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {["과거DB","협력사","인입","기타"].map(s=>(
+            <button key={s} type="button" onClick={()=>setParsed(p=>({...p,source:s}))}
+              style={{border:`2px solid ${parsed.source===s?"#0071CE":"#f0f1f3"}`,borderRadius:8,padding:"5px 14px",fontSize:12,fontWeight:700,cursor:"pointer",background:parsed.source===s?"#eff6ff":"#fff",color:parsed.source===s?"#0071CE":"#9ca3af",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{s}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* 메인 키워드 선택 */}
+      {(parsed.keywords||[]).length>0&&(
+      <div style={{marginBottom:10}}>
+        <label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:5}}>메인 키워드 (선택 안 한 건 서브)</label>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {(parsed.keywords||[]).map(kw=>{const on=(parsed.mainKeywords||[]).includes(kw);return(
+            <button key={kw} type="button" onClick={()=>setParsed(p=>{const cur=p.mainKeywords||[];return{...p,mainKeywords:on?cur.filter(k=>k!==kw):[...cur,kw]};})}
+              style={{border:`1px solid ${on?"#f59e0b":"#e5e7eb"}`,borderRadius:99,padding:"3px 11px",fontSize:12,fontWeight:600,cursor:"pointer",background:on?"#fffbeb":"#fff",color:on?"#b45309":"#9ca3af",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{on?"★ ":""}{kw}</button>
+          );})}
+        </div>
+      </div>)}
+
+      {/* 제공내역 총량 */}
+      <label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:5}}>제공내역 (전체 계약기간 총량)</label>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div><span style={{fontSize:11,color:"#9ca3af"}}>리워드트래픽(타)</span>
+          <input type="number" min="0" value={parsed.provide?.rewardTraffic??""} onChange={e=>setParsed(p=>({...p,provide:{...(p.provide||{}),rewardTraffic:e.target.value}}))} style={{...iS}}/></div>
+        <div><span style={{fontSize:11,color:"#9ca3af"}}>블플(건)</span>
+          <input type="number" min="0" value={parsed.provide?.blogPlus??""} onChange={e=>setParsed(p=>({...p,provide:{...(p.provide||{}),blogPlus:e.target.value}}))} style={{...iS}}/></div>
+        <div><span style={{fontSize:11,color:"#9ca3af"}}>영수증(건)</span>
+          <input type="number" min="0" value={parsed.provide?.receipt??""} onChange={e=>setParsed(p=>({...p,provide:{...(p.provide||{}),receipt:e.target.value}}))} style={{...iS}}/></div>
+        <div><span style={{fontSize:11,color:"#9ca3af"}}>기타/서비스</span>
+          <input value={parsed.provide?.etc??""} onChange={e=>setParsed(p=>({...p,provide:{...(p.provide||{}),etc:e.target.value}}))} placeholder="예: 저장하기, 알림받기" style={{...iS}}/></div>
+      </div>
+    </div>
     <div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 14px",marginBottom:12,fontSize:12,color:"#166534"}}>[순위체크] 7일 단위 자동 생성 · [리포트] 종료 3영업일 전</div>
-    <div style={{display:"flex",gap:8}}><button onClick={()=>{if(!parsed.name.trim()||!startDate||!endDate)return alert("상호명과 계약 기간은 필수입니다.");if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");const finalInitRanks={};(parsed.keywords||[]).forEach(kw=>{if(parsed.initialRanks?.[kw])finalInitRanks[kw]=parseInt(parsed.initialRanks[kw]);});onSubmit({...parsed,startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitRanks});}} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button></div>
+    <div style={{display:"flex",gap:8}}><button onClick={()=>{if(!parsed.name.trim()||!startDate||!endDate)return alert("상호명과 계약 기간은 필수입니다.");if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");const finalInitRanks={};(parsed.keywords||[]).forEach(kw=>{if(parsed.initialRanks?.[kw])finalInitRanks[kw]=parseInt(parsed.initialRanks[kw]);});const provide={rewardTraffic:parseInt(parsed.provide?.rewardTraffic)||0,blogPlus:parseInt(parsed.provide?.blogPlus)||0,receipt:parseInt(parsed.provide?.receipt)||0,etc:(parsed.provide?.etc||"").trim()};const mainKeywords=(parsed.mainKeywords||[]).filter(k=>(parsed.keywords||[]).includes(k));onSubmit({...parsed,provide,mainKeywords,source:parsed.source||"",startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitRanks});}} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button><button onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button></div>
   </div>);
 }
 function DailyAlertModal({items,onClose}){
