@@ -518,7 +518,7 @@ ${workList}
 }
 
 // ========== 순위 히스토리 패널 ==========
-function RankHistoryPanel({contract,user,onContractUpdate}){
+function RankHistoryPanel({contract,user,onContractUpdate,readOnly=true}){
   const[localKws,setLocalKws]=useState(contract.keywords||[]);
   const[localInitRanks,setLocalInitRanks]=useState(contract.initialRanks||{});
   const[initDate,setInitDate]=useState(contract.initRankDate||contract.startDate||"");
@@ -528,6 +528,8 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
   const[rankHistory,setRankHistory]=useState({});const[rankLoading,setRankLoading]=useState(true);
   const[kwInput,setKwInput]=useState("");const[kwSaving,setKwSaving]=useState(false);
   const[initEdits,setInitEdits]=useState({});const[editingRank,setEditingRank]=useState(null);
+  // 재연장 체인을 거슬러 올라간 맨 처음 계약의 시작순위 (재연장해도 계속 보여준다)
+  const[rootInit,setRootInit]=useState(null);
   useEffect(()=>{loadHistory();},[]);
   const loadHistory=async()=>{
     setRankLoading(true);
@@ -538,12 +540,15 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
     const allContracts=await st.get("contracts:all")||[];
     let prevId=contract.linkedMemoId;
     const visited=new Set([contract.id]);
+    let rootC=null;
     while(prevId&&!visited.has(prevId)){
       visited.add(prevId);
       Object.assign(hist,await rankLoadOne(prevId));
       const prevContract=allContracts.find(c=>c.id===prevId);
+      if(prevContract&&Object.keys(prevContract.initialRanks||{}).length>0)rootC=prevContract;
       prevId=prevContract?.linkedMemoId;
     }
+    setRootInit(rootC?{ranks:rootC.initialRanks||{},date:rootC.initRankDate||rootC.startDate||"",name:rootC.name||""}:null);
     setRankHistory(hist);
     setRankLoading(false);
   };
@@ -591,15 +596,29 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
       <div style={{background:"#ecfeff",borderRadius:12,padding:"14px 16px",border:"1px solid #a5f3fc"}}>
         <div style={{fontSize:12,fontWeight:700,color:"#0891b2",marginBottom:10}}>순위 체크 키워드</div>
         {localKws.length===0?<div style={{fontSize:12,color:"#adb5bd",marginBottom:10}}>등록된 키워드가 없습니다. 추가해주세요.</div>
-        :<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{localKws.map((kw,i)=>(<span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#fff",border:"1px solid #a5f3fc",borderRadius:99,padding:"3px 10px",fontSize:12,color:"#0891b2",fontWeight:600}}>{kw}<button onClick={()=>handleRemoveKw(kw)} style={{background:"none",border:"none",color:"#0891b2",cursor:"pointer",padding:0,fontSize:11,opacity:0.6}}>✕</button></span>))}</div>}
-        <div style={{display:"flex",gap:6}}>
+        :<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{localKws.map((kw,i)=>(<span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#fff",border:"1px solid #a5f3fc",borderRadius:99,padding:"3px 10px",fontSize:12,color:"#0891b2",fontWeight:600}}>{kw}{!readOnly&&<button onClick={()=>handleRemoveKw(kw)} style={{background:"none",border:"none",color:"#0891b2",cursor:"pointer",padding:0,fontSize:11,opacity:0.6}}>✕</button>}</span>))}</div>}
+        {!readOnly&&<div style={{display:"flex",gap:6}}>
           <input value={kwInput} onChange={e=>setKwInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&(e.preventDefault(),handleAddKw())} placeholder="키워드 추가" style={{flex:1,border:"1px solid #a5f3fc",borderRadius:7,padding:"6px 10px",fontSize:12,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#fff"}}/>
           <button onClick={handleAddKw} disabled={kwSaving} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{kwSaving?"저장중":"+ 추가"}</button>
-        </div>
+        </div>}
       </div>
       {/* 계약 시작 시점 초기 순위 */}
       {localKws.length>0&&(
         <div style={{background:"#f0fdf4",borderRadius:12,padding:"14px 16px",border:"1px solid #bbf7d0"}}>
+          {/* 섹션0: 재연장 체인의 맨 처음 계약 시작순위 — 항상 읽기 전용으로 표시 */}
+          {rootInit&&Object.keys(rootInit.ranks).length>0&&(
+            <div style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:9,padding:"10px 12px",marginBottom:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:7}}>
+                <span style={{fontSize:12,fontWeight:700,color:"#166534"}}>⓪ 첫 계약 시작 순위</span>
+                <span style={{fontSize:10,color:"#adb5bd"}}>{rootInit.name}{rootInit.date?" · "+rootInit.date:""}</span>
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {Object.entries(rootInit.ranks).map(([kw,v])=>(
+                  <span key={kw} style={{fontSize:11,fontWeight:600,color:"#374151",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:7,padding:"3px 9px"}}>{kw} <b style={{color:"#166534"}}>{v}위</b></span>
+                ))}
+              </div>
+            </div>
+          )}
           {/* 섹션1: 전체 첫 계약 시작순위 (리포트용) */}
           <div style={{marginBottom:contract.isRenewal?14:0}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -614,7 +633,7 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
               {localKws.map(kw=>{const saved=localInitRanks[kw]||"";const val=initEdits[kw]!==undefined?initEdits[kw]:saved;return(
                 <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:12,fontWeight:500,flex:1,color:"#0f1117"}}>{kw}</span>
-                  <input type="number" min="1" value={val} onChange={e=>setInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                  {readOnly?<span style={{width:70,textAlign:"center",fontSize:13,fontWeight:800,color:"#166534"}}>{saved||"–"}</span>:<input type="number" min="1" value={val} onChange={e=>setInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>}
                   <span style={{fontSize:11,color:"#6b7280"}}>위</span>
                 </div>
               );})}
@@ -631,14 +650,16 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
                 {localKws.map(kw=>{const saved=renewalInitRanks[kw]||"";const val=renewalInitEdits[kw]!==undefined?renewalInitEdits[kw]:saved;return(
                   <div key={kw} style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:12,fontWeight:500,flex:1,color:"#0f1117"}}>{kw}</span>
-                    <input type="number" min="1" value={val} onChange={e=>setRenewalInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="재연장시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                    {readOnly?<span style={{width:70,textAlign:"center",fontSize:13,fontWeight:800,color:"#166534"}}>{saved||"–"}</span>:<input type="number" min="1" value={val} onChange={e=>setRenewalInitEdits(r=>({...r,[kw]:e.target.value}))} placeholder="재연장시작순위" style={{width:70,border:"1px solid #bbf7d0",borderRadius:7,padding:"5px 8px",fontSize:12,outline:"none",textAlign:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>}
                     <span style={{fontSize:11,color:"#6b7280"}}>위</span>
                   </div>
                 );})}
               </div>
             </div>
           </>)}
-          <button onClick={handleSaveInitRanks} style={{marginTop:10,background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button>
+          {readOnly
+            ?<div style={{marginTop:10,fontSize:11,color:"#6b7280",background:"#f7f8fa",border:"1px solid #f0f1f3",borderRadius:8,padding:"7px 11px"}}>읽기 전용입니다. 순위 등록·수정은 <b style={{color:"#0891b2"}}>작업관리 &gt; 순위체크</b>에서 하세요.</div>
+            :<button onClick={handleSaveInitRanks} style={{marginTop:10,background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>저장</button>}
         </div>
       )}
       {/* 순위 변화 테이블 (가로 스크롤) */}
@@ -721,7 +742,7 @@ function RankHistoryPanel({contract,user,onContractUpdate}){
                             <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
                               {diff!==null&&<span style={{fontSize:11,fontWeight:700,color:diff>0?"#10b981":diff<0?"#ef4444":"#6b7280"}}>{diff>0?"▲":diff<0?"▼":"—"}{Math.abs(diff)}</span>}
                               <span style={{fontSize:13,fontWeight:800,color:"#0f1117"}}>{v.rank}위</span>
-                              <button onClick={()=>setEditingRank({ek,kw})} style={{background:"none",border:"1px solid #e5e7eb",borderRadius:5,padding:"2px 5px",fontSize:10,color:"#adb5bd",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>수정</button>
+                              {!readOnly&&<button onClick={()=>setEditingRank({ek,kw})} style={{background:"none",border:"1px solid #e5e7eb",borderRadius:5,padding:"2px 5px",fontSize:10,color:"#adb5bd",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>수정</button>}
                             </div>
                           )}
                         </div>
@@ -859,8 +880,15 @@ const PLAN_TYPES=[
   {k:"save",label:"저장",pk:null,unit:"건",color:"#f59e0b"},
   {k:"alarm",label:"알림받기",pk:null,unit:"건",color:"#10b981"},
 ];
-const planAddDays=(ds,n)=>{const d=new Date(ds+"T00:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
-const planQty=r=>(parseInt(r.daily)||0)*(parseInt(r.days)||0);
+// 로컬 날짜 그대로 포맷한다. toISOString() 을 쓰면 UTC 로 밀려 한국에서 하루가 어긋난다.
+const ymdLocal=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const planAddDays=(ds,n)=>{const d=new Date(ds+"T00:00:00");d.setDate(d.getDate()+n);return ymdLocal(d);};
+// 작업일수 = 시작일과 종료일을 모두 포함한 일수. 날짜가 비면 저장된 값으로 대체.
+const planDays=r=>{
+  if(r&&r.start&&r.end&&r.end>=r.start)return Math.round((new Date(r.end+"T00:00:00")-new Date(r.start+"T00:00:00"))/86400000)+1;
+  return parseInt(r&&r.days)||0;
+};
+const planQty=r=>(parseInt(r.daily)||0)*planDays(r);
 const planType=k=>PLAN_TYPES.find(x=>x.k===k)||PLAN_TYPES[0];
 const rankNum=v=>{const n=parseInt(v);return isNaN(n)?null:n;};
 // 주차 목록 -> 키워드별 순위 성과 (시작순위 → 종료순위, 투입 트래픽, 1계단당 타수)
@@ -962,13 +990,14 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
     const last=rows[rows.length-1];
     const maxWeek=rows.reduce((m,r)=>Math.max(m,parseInt(r.week)||0),0);
     const start=last?.end?planAddDays(last.end,1):(sel?.startDate||todayStr);
-    setRows(rs=>[...rs,{id:uid(),week:maxWeek+1,start,end:planAddDays(start,7),keyword:kwOptions[0]||"",type:"traffic",daily:"",days:"",startRank:"",endRank:"",note:"",extra:false,setupDone:false}]);
+    const end=planAddDays(start,7);
+    setRows(rs=>[...rs,{id:uid(),week:maxWeek+1,start,end,keyword:kwOptions[0]||"",type:"traffic",daily:"",days:String(planDays({start,end})),startRank:"",endRank:"",note:"",extra:false,setupDone:false}]);
     setDirty(true);
   };
   // 주차 도중 추가 투입(순위 하락 대응·키워드 추가 등) — 같은 주차 아래에 한 줄 더
   const addExtra=row=>{
     const start=(todayStr>=row.start&&todayStr<=row.end)?todayStr:row.start;
-    const nr={id:uid(),week:row.week,start,end:row.end,keyword:row.keyword||"",type:row.type||"traffic",daily:"",days:"",startRank:row.endRank||"",endRank:"",note:"",extra:true,setupDone:false};
+    const nr={id:uid(),week:row.week,start,end:row.end,keyword:row.keyword||"",type:row.type||"traffic",daily:"",days:String(planDays({start,end:row.end})),startRank:row.endRank||"",endRank:"",note:"",extra:true,setupDone:false};
     setRows(rs=>{
       let last=-1;
       rs.forEach((r,i)=>{if(r.week===row.week)last=i;});
@@ -977,7 +1006,9 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
     setDirty(true);
   };
   const upd=(id,patch)=>{setRows(rs=>rs.map(r=>r.id===id?{...r,...patch}:r));setDirty(true);};
-  const setStart=(id,v)=>upd(id,v?{start:v,end:planAddDays(v,7)}:{start:"",end:""});
+  const withDays=p=>({...p,days:String(planDays(p)||"")});
+  const setStart=(id,v)=>{const cur=rows.find(r=>r.id===id)||{};upd(id,v?withDays({...cur,start:v,end:planAddDays(v,7)}):{start:"",end:"",days:""});};
+  const setEnd=(id,v)=>{const cur=rows.find(r=>r.id===id)||{};upd(id,withDays({...cur,end:v}));};
   const delRow=id=>{setRows(rs=>rs.filter(r=>r.id!==id));setDirty(true);};
   const save=async()=>{
     if(!selId)return;setSaving(true);
@@ -1133,7 +1164,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
                 <thead><tr style={{background:"#f7f8fa"}}>
                   <th style={{...th,width:62}}>주차</th><th style={{...th,width:120}}>시작일</th><th style={{...th,width:120}}>종료일</th>
                   <th style={{...th,minWidth:104}}>키워드</th><th style={{...th,width:108}}>유형</th>
-                  <th style={{...th,width:74}}>일일량</th><th style={{...th,width:66}}>작업일수</th><th style={{...th,width:80}}>계획량</th>
+                  <th style={{...th,width:74}}>일일량</th><th style={{...th,width:66}}>작업일수<div style={{fontSize:9,fontWeight:500,color:"#adb5bd"}}>자동</div></th><th style={{...th,width:80}}>계획량</th>
                   <th style={{...th,width:148}}>순위 (시작 → 종료)</th>
                   <th style={{...th,minWidth:96}}>사유/메모</th>
                   <th style={{...th,width:56}}>세팅완료</th><th style={{...th,width:52}}></th>
@@ -1146,11 +1177,11 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
                     return(<tr key={r.id} style={r.extra?{background:"#fffdf7"}:undefined}>
                       <td style={{...td,fontWeight:800,color:"#0f1117",fontSize:12,whiteSpace:"nowrap"}}>{r.week}주{r.extra&&<span style={{display:"block",fontSize:9,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:5,padding:"0 4px",marginTop:2}}>추가</span>}</td>
                       <td style={td}><input type="date" value={r.start||""} onChange={e=>setStart(r.id,e.target.value)} style={cS}/></td>
-                      <td style={td}><input type="date" value={r.end||""} onChange={e=>upd(r.id,{end:e.target.value})} style={cS}/></td>
+                      <td style={td}><input type="date" value={r.end||""} onChange={e=>setEnd(r.id,e.target.value)} style={cS}/></td>
                       <td style={td}><input list={"kwlist-"+selId} value={r.keyword||""} onChange={e=>upd(r.id,{keyword:e.target.value})} placeholder="키워드" style={cS}/></td>
                       <td style={td}><select value={r.type||"traffic"} onChange={e=>upd(r.id,{type:e.target.value})} style={{...cS,color:t.color,fontWeight:700}}>{PLAN_TYPES.map(p=><option key={p.k} value={p.k}>{p.label}</option>)}</select></td>
                       <td style={td}><input type="number" min="0" value={r.daily??""} onChange={e=>upd(r.id,{daily:e.target.value})} style={{...cS,textAlign:"right"}}/></td>
-                      <td style={td}><input type="number" min="0" max="31" value={r.days??""} onChange={e=>upd(r.id,{days:e.target.value})} style={{...cS,textAlign:"right"}}/></td>
+                      <td style={{...td,fontWeight:700,color:"#374151",fontSize:12}}>{planDays(r)||"–"}일</td>
                       <td style={{...td,fontWeight:800,color:t.color,fontSize:12}}>{planQty(r).toLocaleString()}{t.unit}</td>
                       <td style={td}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3}}>
@@ -1176,7 +1207,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
               </table>
             </div>
             <button onClick={addRow} style={{width:"100%",marginTop:10,background:"#f0f7ff",color:"#0071CE",border:"1px dashed #bfd7f5",borderRadius:9,padding:"9px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 주차 추가 (시작일·종료일 자동 연결)</button>
-            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일(+7일)이 자동으로 잡히고, 다음 주차는 직전 종료일 다음 날부터 이어집니다. 계획량은 일일량 × 작업일수로 자동 계산됩니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 직전 줄의 종료순위가 시작순위로 넘어옵니다.<br/>순위는 숫자만 넣으면 되고(12 → 5 이면 ▲7), 키워드별 누적 성과는 표 위에 자동 집계됩니다.</p>
+            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일이 자동으로 잡히고, 다음 주차는 직전 종료일 <b>다음 날</b>부터 이어집니다. 작업일수는 시작일·종료일을 <b>모두 포함</b>해 자동 계산되며, 계획량은 일일량 × 작업일수입니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 직전 줄의 종료순위가 시작순위로 넘어옵니다.<br/>순위는 숫자만 넣으면 되고(12 → 5 이면 ▲7), 키워드별 누적 성과는 표 위에 자동 집계됩니다.</p>
           </>)}
         </div>
       </>)}
@@ -1184,23 +1215,145 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   </div>);
 }
 // ===== 현황판 (매일 5분 점검용 뷰) =====
-// 계약별 최근 순위체크 요약 — 마지막 기록/직전 대비 하락/최악 순위
-const rankSummaryOf=(cid,rankDataMap)=>{
+// 계약별 순위 요약 — 계약 등록 시 기록한 최초순위를 0차 기준으로 삼는다.
+// 재연장 업체는 이번 계약 시작순위(renewalInitRanks)가 있으면 그쪽이 기준이 된다.
+const rankSummaryOf=(contract,rankDataMap)=>{
+  const cid=contract?.id||"";
   const keys=Object.keys(rankDataMap||{}).filter(k=>k.startsWith(cid+":순위체크:"))
     .sort((a,b)=>((rankDataMap[a]?.date)||a.split(":")[2]||"").localeCompare((rankDataMap[b]?.date)||b.split(":")[2]||""));
+  const rIn=contract?.renewalInitRanks||{},iIn=contract?.initialRanks||{};
+  const baseSrc=Object.keys(rIn).length>0?rIn:iIn;
+  const baseline={};Object.entries(baseSrc).forEach(([kw,v])=>{const n=parseInt(v);if(!isNaN(n))baseline[kw]=n;});
+  const hasBase=Object.keys(baseline).length>0;
+  const baseDate=contract?.initRankDate||contract?.startDate||"";
   const cur=keys.length?rankDataMap[keys[keys.length-1]]:null;
   const prev=keys.length>=2?rankDataMap[keys[keys.length-2]]:null;
-  const lastDate=cur?.date||(keys.length?keys[keys.length-1].split(":")[2]:"")||"";
-  const ranks=Object.entries(cur?.keywords||{}).map(([kw,v])=>({kw,rank:parseInt(v?.rank)})).filter(x=>!isNaN(x.rank));
+  const lastDate=cur?.date||(keys.length?keys[keys.length-1].split(":")[2]:"")||(hasBase?baseDate:"");
+  const ranks=cur
+    ?Object.entries(cur.keywords||{}).map(([kw,v])=>({kw,rank:parseInt(v?.rank)})).filter(x=>!isNaN(x.rank))
+    :Object.entries(baseline).map(([kw,rank])=>({kw,rank}));
+  // 비교 기준: 직전 회차가 있으면 그것, 없으면 최초순위
+  const prevOf=kw=>{const p=parseInt(prev?.keywords?.[kw]?.rank);if(!isNaN(p))return p;const b=baseline[kw];return b===undefined?null:b;};
+  // 현재값: 최근 회차가 없으면 최초순위
+  const curOf=kw=>{const c=parseInt(cur?.keywords?.[kw]?.rank);if(!isNaN(c))return c;const b=baseline[kw];return b===undefined?null:b;};
   const dropped=[];
-  if(prev)Object.keys(cur?.keywords||{}).forEach(kw=>{
-    const a=parseInt(prev.keywords?.[kw]?.rank),z=parseInt(cur.keywords?.[kw]?.rank);
-    if(!isNaN(a)&&!isNaN(z)&&z>a)dropped.push({kw,from:a,to:z});
+  if(cur)Object.keys(cur.keywords||{}).forEach(kw=>{
+    const a=prevOf(kw),z=parseInt(cur.keywords?.[kw]?.rank);
+    if(a!==null&&!isNaN(z)&&z>a)dropped.push({kw,from:a,to:z});
   });
   const worst=ranks.length?Math.max(...ranks.map(x=>x.rank)):null;
-  return{cur,prev,lastDate,ranks,dropped,worst};
+  return{cur,prev,lastDate,ranks,dropped,worst,baseline,baseDate,hasBase,fromInitial:!cur&&hasBase,prevOf,curOf};
 };
 const DANGER_RANK=5;// 이 순위 밖이면 위험군 — 매일이 아니라 이틀마다 체크
+
+// ===== 업체별 작업내역 · 순위 타임라인 =====
+// 주차 계획을 하루 단위로 펼치고, 같은 날짜의 순위 기록을 붙여 보여준다.
+function WorkLogModal({contract,rows,rankDataMap,onClose}){
+  const rs=useMemo(()=>rankSummaryOf(contract,rankDataMap),[contract,rankDataMap]);
+  const days=useMemo(()=>{
+    const map={};
+    const touch=d=>{if(!map[d])map[d]={date:d,works:[],ranks:null};return map[d];};
+    (rows||[]).forEach(r=>{
+      if(!r.start||!r.end||r.end<r.start)return;
+      const t=planType(r.type);
+      const daily=parseInt(r.daily)||0;
+      let d=r.start,guard=0;
+      while(d<=r.end&&guard++<400){
+        touch(d).works.push({week:r.week,extra:!!r.extra,keyword:r.keyword||"",label:t.label,color:t.color,unit:t.unit,daily,setupDone:!!r.setupDone,note:r.note||""});
+        const nx=planAddDays(d,1);
+        if(nx<=d)break;
+        d=nx;
+      }
+    });
+    Object.keys(rankDataMap||{}).filter(k=>k.startsWith(contract.id+":순위체크:")).forEach(k=>{
+      const rec=rankDataMap[k];const d=rec?.date||k.split(":")[2];if(!d)return;
+      touch(d).ranks=Object.entries(rec?.keywords||{}).map(([kw,v])=>({kw,rank:parseInt(v?.rank),prev:parseInt(v?.prevRank)})).filter(x=>!isNaN(x.rank));
+    });
+    if(rs.hasBase&&rs.baseDate){
+      const t=touch(rs.baseDate);
+      if(!t.ranks)t.ranks=Object.entries(rs.baseline).map(([kw,rank])=>({kw,rank,prev:NaN,initial:true}));
+    }
+    return Object.values(map).sort((a,b)=>a.date.localeCompare(b.date));
+  },[rows,rankDataMap,contract,rs]);
+
+  const totalByType=useMemo(()=>{
+    const m={};
+    days.forEach(d=>d.works.forEach(w=>{m[w.label]=(m[w.label]||0)+w.daily;}));
+    return m;
+  },[days]);
+  const DOW=["일","월","화","수","목","금","토"];
+  const diffTag=d=>isNaN(d)||d===null?null:d>0?{t:"▲"+d,c:"#10b981"}:d<0?{t:"▼"+Math.abs(d),c:"#ef4444"}:{t:"－",c:"#adb5bd"};
+
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:720,maxHeight:"86vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.2)"}}>
+      <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:160}}>
+          <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+            <span style={{fontSize:15,fontWeight:800,color:"#0f1117"}}>{contract.name}</span>
+            {(contract.industry||"").trim()&&<span style={{fontSize:9,fontWeight:700,color:"#0891b2",background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:5,padding:"1px 6px"}}>{contract.industry.trim()}</span>}
+          </div>
+          <div style={{fontSize:11,color:"#adb5bd",marginTop:3}}>{contract.startDate} ~ {contract.endDate} · 작업내역과 순위 기록</div>
+        </div>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#adb5bd"}}>✕</button>
+      </div>
+
+      {Object.keys(totalByType).length>0&&(
+        <div style={{padding:"10px 22px",background:"#f7f8fa",borderBottom:"1px solid #f0f1f3",display:"flex",gap:12,flexWrap:"wrap"}}>
+          {Object.entries(totalByType).map(([label,v])=>(
+            <span key={label} style={{fontSize:11,fontWeight:700,color:"#374151"}}>{label} <b style={{color:"#0071CE"}}>{v.toLocaleString()}</b></span>
+          ))}
+          <span style={{fontSize:11,color:"#adb5bd",marginLeft:"auto"}}>계획 기준 누적</span>
+        </div>
+      )}
+
+      <div style={{flex:1,overflowY:"auto",padding:"14px 22px 20px"}}>
+        {days.length===0?(
+          <p style={{fontSize:13,color:"#adb5bd",textAlign:"center",padding:"40px 0"}}>아직 주간계획도 순위 기록도 없습니다.</p>
+        ):(
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {days.map(d=>{
+              const dow=DOW[new Date(d.date+"T00:00:00").getDay()];
+              const isToday=d.date===todayStr;
+              return(<div key={d.date} style={{display:"flex",gap:10,alignItems:"flex-start",background:isToday?"#f0f7ff":d.ranks?"#fffdf7":"#f7f8fa",border:`1px solid ${isToday?"#bfd7f5":d.ranks?"#fde68a":"#f0f1f3"}`,borderRadius:9,padding:"8px 12px"}}>
+                <div style={{minWidth:74,flexShrink:0}}>
+                  <div style={{fontSize:12,fontWeight:700,color:isToday?"#0071CE":"#0f1117"}}>{d.date.slice(5)} {dow}</div>
+                  {isToday&&<div style={{fontSize:9,fontWeight:700,color:"#0071CE"}}>오늘</div>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  {d.works.length===0?<span style={{fontSize:11,color:"#d1d5db"}}>작업 없음</span>:(
+                    <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                      {d.works.map((w,i)=>(
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",fontSize:11}}>
+                          <span style={{fontWeight:700,color:w.color}}>{w.label} {w.daily.toLocaleString()}{w.unit}</span>
+                          {w.keyword&&<span style={{color:"#6b7280"}}>{w.keyword}</span>}
+                          <span style={{fontSize:9,color:"#adb5bd"}}>{w.week}주{w.extra?" 추가":""}</span>
+                          {!w.setupDone&&<span style={{fontSize:9,fontWeight:700,color:"#b45309",background:"#fffbeb",borderRadius:4,padding:"0 5px"}}>세팅 미완</span>}
+                          {w.note&&<span style={{fontSize:9,color:"#9ca3af"}}>· {w.note}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {d.ranks&&(
+                    <div style={{display:"flex",gap:9,flexWrap:"wrap",marginTop:5,paddingTop:5,borderTop:"1px dashed #e5e7eb"}}>
+                      {d.ranks.map((x,i)=>{const tag=diffTag(isNaN(x.prev)?null:x.prev-x.rank);return(
+                        <span key={i} style={{fontSize:11,fontWeight:700,color:"#0f1117"}}>
+                          {x.kw} <b style={{color:"#0891b2"}}>{x.rank}위</b>
+                          {x.initial&&<span style={{fontSize:9,color:"#16a34a",marginLeft:3}}>최초</span>}
+                          {tag&&<span style={{color:tag.c,marginLeft:3}}>{tag.t}</span>}
+                        </span>);})}
+                    </div>
+                  )}
+                </div>
+              </div>);
+            })}
+          </div>
+        )}
+        <p style={{fontSize:10,color:"#adb5bd",margin:"12px 0 0",lineHeight:1.6}}>작업량은 주간계획에 잡아둔 <b>계획</b>을 하루 단위로 펼친 값입니다. 실제 투입량과는 다를 수 있습니다.</p>
+      </div>
+    </div>
+  </div>);
+}
+
 function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpenPlan}){
   const[plans,setPlans]=useState(null);
   const[loading,setLoading]=useState(false);
@@ -1209,9 +1362,11 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
   const[inputs,setInputs]=useState({});
   const[mkExtra,setMkExtra]=useState(true);
   const[busy,setBusy]=useState(false);
+  const[logId,setLogId]=useState("");
   const tomorrow=planAddDays(todayStr,1);
 
   const active=useMemo(()=>contracts.filter(c=>!c.cancelled&&(c.endDate||"")>=todayStr),[contracts]);
+  const logContract=useMemo(()=>contracts.find(c=>c.id===logId)||null,[contracts,logId]);
 
   const load=async()=>{
     setLoading(true);
@@ -1226,7 +1381,7 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
     active.forEach(c=>{
       const rows=(plans||{})[c.id]||[];
       const dday=c.endDate?Math.ceil((new Date(c.endDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/86400000):null;
-      const rs=rankSummaryOf(c.id,rankDataMap);
+      const rs=rankSummaryOf(c,rankDataMap);
 
       // ⓪ 오늘 순위 체크 대상 — 상태별로 주기를 달리 적용
       const gap=rs.lastDate?Math.round((new Date(todayStr+"T00:00:00")-new Date(rs.lastDate+"T00:00:00"))/86400000):null;
@@ -1237,7 +1392,10 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
       else if(rs.worst!==null&&rs.worst>DANGER_RANK){why=`목표권 밖 (${DANGER_RANK}위 초과)`;every=2;}
       else{why="정기 점검";every=7;}
       if(gap===null||gap>=every){
-        b.check.push({c,rs,why,every,detail:rs.lastDate?`마지막 체크 ${rs.lastDate} (${gap}일 전) · ${rs.ranks.map(x=>x.kw+" "+x.rank+"위").join(" · ")||"기록 없음"}`:"순위체크 기록이 아직 없습니다",urgent:every<=1});
+        const detail=!rs.lastDate?"순위 기록도 최초순위도 없습니다"
+          :rs.fromInitial?`계약 등록 시 최초순위 ${rs.baseDate} (${gap}일 전) · ${rs.ranks.map(x=>x.kw+" "+x.rank+"위").join(" · ")}`
+          :`마지막 체크 ${rs.lastDate} (${gap}일 전) · ${rs.ranks.map(x=>x.kw+" "+x.rank+"위").join(" · ")||"기록 없음"}`;
+        b.check.push({c,rs,why,every,detail,urgent:every<=1});
       }
 
       // ① 오늘·내일 주차 종료 → 다음 주차 세팅 필요
@@ -1250,7 +1408,7 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
         }
       }
 
-      // ② 직전 순위체크 대비 하락
+      // ② 직전 기준 대비 하락 (직전 회차가 없으면 최초순위와 비교)
       if(rs.dropped.length>0)b.rankdown.push({c,rs,detail:rs.dropped.map(d=>`${d.kw} ${d.from}위→${d.to}위`).join(" · ")+` (${rs.lastDate})`,urgent:true});
 
       if(!plans)return;
@@ -1279,7 +1437,7 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
   const TABS=[
     {k:"check",label:"오늘 순위 체크",desc:`하락 추적·종료 임박은 매일, ${DANGER_RANK}위 밖은 이틀마다, 안정권은 주 1회`,color:"#0891b2",bg:"#ecfeff",bd:"#a5f3fc",live:true},
     {k:"setup",label:"세팅 필요",desc:"오늘·내일 주차가 끝나 다음 주차를 잡아야 하는 업체",color:"#0071CE",bg:"#f0f7ff",bd:"#bfd7f5"},
-    {k:"rankdown",label:"순위 하락",desc:"직전 순위체크보다 순위가 나빠진 업체",color:"#ef4444",bg:"#fef2f2",bd:"#fecaca",live:true},
+    {k:"rankdown",label:"순위 하락",desc:"직전 기록(없으면 최초순위)보다 순위가 나빠진 업체",color:"#ef4444",bg:"#fef2f2",bd:"#fecaca",live:true},
     {k:"nearend",label:"소진 임박",desc:"리워드트래픽 배분이 총량의 90%를 넘은 업체",color:"#f59e0b",bg:"#fffbeb",bd:"#fde68a"},
     {k:"noplan",label:"계획 없음",desc:"주간계획이 없거나, 마지막 주차가 끝난 뒤 이어지는 계획이 없는 업체",color:"#8468D3",bg:"#f5f3ff",bd:"#e9d5ff"},
     {k:"over",label:"총량 초과",desc:"계약 제공내역보다 많이 배분된 업체",color:"#b91c1c",bg:"#fef2f2",bd:"#fecaca"},
@@ -1288,7 +1446,7 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
   const items=buckets[filter]||[];
 
   const kwsOf=c=>{const mk=(c.mainKeywords||[]).filter(Boolean);return[...new Set([...mk,...(c.keywords||[])])];};
-  const toggleOpen=(c,rs)=>{
+  const toggleOpen=c=>{
     if(openId===c.id){setOpenId("");return;}
     const init={};kwsOf(c).forEach(kw=>{init[kw]="";});
     setInputs(m=>({...m,[c.id]:init}));setOpenId(c.id);
@@ -1298,14 +1456,14 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
     const result={};
     Object.keys(vals).forEach(kw=>{
       const n=parseInt(vals[kw]);
-      if(!isNaN(n)&&n>0)result[kw]={rank:n,prevRank:parseInt(rs.cur?.keywords?.[kw]?.rank)||null,date:todayStr};
+      if(!isNaN(n)&&n>0)result[kw]={rank:n,prevRank:rs.curOf(kw),date:todayStr};
     });
     if(Object.keys(result).length===0)return alert("최소 1개 키워드의 순위를 입력해주세요");
     setBusy(true);
     await onSaveRank(c.id,result);
-    // 직전 기록보다 나빠진 키워드가 있으면 주간계획에 추가 투입 줄 생성
+    // 기준값보다 나빠진 키워드가 있으면 주간계획에 추가 투입 줄 생성
     if(mkExtra){
-      const worse=Object.keys(result).filter(kw=>{const p=parseInt(rs.cur?.keywords?.[kw]?.rank);return !isNaN(p)&&result[kw].rank>p;})
+      const worse=Object.keys(result).filter(kw=>{const p=result[kw].prevRank;return p!==null&&result[kw].rank>p;})
         .sort((a,b)=>result[b].rank-result[a].rank);
       if(worse.length>0)await onAppendExtra(c.id,{keyword:worse[0],rank:result[worse[0]].rank});
     }
@@ -1314,6 +1472,8 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
   };
 
   return(<div>
+    {logContract&&<WorkLogModal contract={logContract} rows={(plans||{})[logContract.id]||[]} rankDataMap={rankDataMap} onClose={()=>setLogId("")}/>}
+
     {/* 상단 요약 */}
     <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:"14px 18px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <div style={{flex:1,minWidth:180}}>
@@ -1352,16 +1512,16 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
             const open=openId===c.id;const kws=kwsOf(c);
             return(<div key={c.id} style={{background:urgent?curTab.bg:"#f7f8fa",border:`1px solid ${urgent?curTab.bd:"#f0f1f3"}`,borderRadius:10,padding:"10px 13px"}}>
               <div style={{display:"flex",alignItems:"center",gap:11,flexWrap:"wrap"}}>
-                <div style={{minWidth:150,flex:"0 1 auto"}}>
+                <div onClick={()=>setLogId(c.id)} title="작업내역·순위 기록 보기" style={{minWidth:150,flex:"0 1 auto",cursor:"pointer"}}>
                   <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                    <span style={{fontSize:13,fontWeight:700,color:"#0f1117"}}>{c.name}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:"#0f1117",textDecoration:"underline",textDecorationColor:"#d1d5db",textUnderlineOffset:3}}>{c.name}</span>
                     {(c.industry||"").trim()&&<span style={{fontSize:9,fontWeight:700,color:"#0891b2",background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:5,padding:"1px 6px"}}>{c.industry.trim()}</span>}
                     {why&&<span style={{fontSize:9,fontWeight:700,color:urgent?"#b91c1c":"#6b7280",background:"#fff",border:"1px solid #f0f1f3",borderRadius:5,padding:"1px 6px"}}>{why}</span>}
                   </div>
                   <div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>{c.manager||"담당 미지정"}{dday!==null&&dday>=0?` · 계약 D-${dday}`:""}</div>
                 </div>
                 <div style={{flex:1,minWidth:180,fontSize:12,color:"#374151",fontWeight:600}}>{detail}</div>
-                <button onClick={()=>toggleOpen(c,rs)} style={{background:open?"#0891b2":"#fff",color:open?"#fff":"#0891b2",border:"1px solid #a5f3fc",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{open?"닫기":"순위 입력"}</button>
+                <button onClick={()=>toggleOpen(c)} style={{background:open?"#0891b2":"#fff",color:open?"#fff":"#0891b2",border:"1px solid #a5f3fc",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{open?"닫기":"순위 입력"}</button>
                 <button onClick={()=>onOpenPlan(c.id)} style={{background:"#fff",color:"#0071CE",border:"1px solid #bfd7f5",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>주간계획</button>
               </div>
 
@@ -1372,10 +1532,10 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
                 ):(<>
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:9}}>
                     {kws.map(kw=>{
-                      const before=parseInt(rs.cur?.keywords?.[kw]?.rank);
+                      const before=rs.curOf(kw);
                       return(<div key={kw} style={{background:"#fff",border:"1px solid #f0f1f3",borderRadius:9,padding:"7px 10px",display:"flex",alignItems:"center",gap:7}}>
                         <span style={{fontSize:11,fontWeight:700,color:"#374151"}}>{kw}</span>
-                        {!isNaN(before)&&<span style={{fontSize:10,color:"#adb5bd"}}>직전 {before}위 →</span>}
+                        {before!==null&&<span style={{fontSize:10,color:"#adb5bd"}}>{rs.fromInitial?"최초":"직전"} {before}위 →</span>}
                         <input type="number" min="1" value={(inputs[c.id]||{})[kw]??""} onChange={e=>setInputs(m=>({...m,[c.id]:{...(m[c.id]||{}),[kw]:e.target.value}}))} placeholder="순위" style={{width:56,border:"1px solid #f0f1f3",borderRadius:7,padding:"4px 6px",fontSize:12,textAlign:"center",outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
                       </div>);
                     })}
@@ -1393,7 +1553,7 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
           })}
         </div>
       )}
-      <p style={{fontSize:10,color:"#adb5bd",margin:"12px 0 0",lineHeight:1.6}}>순위는 오늘 날짜로 기록되며 계약 상세의 순위 히스토리에 그대로 쌓입니다. 소진율·초과는 <b>계획 배분량</b> 기준이라, 실제 투입 대비 미달 업체를 걸러내려면 일일현황(실적 입력)이 필요합니다.</p>
+      <p style={{fontSize:10,color:"#adb5bd",margin:"12px 0 0",lineHeight:1.6}}>업체명을 누르면 그동안의 작업내역과 순위 기록을 날짜별로 볼 수 있습니다. 계약 등록 시 넣은 최초순위가 0차 기준이 되고, 재연장 업체는 이번 계약 시작순위가 기준입니다.</p>
     </div>
   </div>);
 }
@@ -2173,7 +2333,8 @@ function MainApp({user,onLogout}){
     const arr=Array.isArray(raw)?[...raw]:[];
     const cur=arr.find(r=>(r.start||"")<=todayStr&&todayStr<=(r.end||""));
     const week=cur?cur.week:(arr.reduce((m,r)=>Math.max(m,parseInt(r.week)||0),0)+1);
-    const nr={id:uid(),week,start:todayStr,end:cur?cur.end:planAddDays(todayStr,7),keyword:keyword||"",type:cur?.type||"traffic",daily:"",days:"",startRank:String(rank||""),endRank:"",note:"순위하락 대응",extra:true,setupDone:false};
+    const nrEnd=cur?cur.end:planAddDays(todayStr,7);
+    const nr={id:uid(),week,start:todayStr,end:nrEnd,keyword:keyword||"",type:cur?.type||"traffic",daily:"",days:String(planDays({start:todayStr,end:nrEnd})),startRank:String(rank||""),endRank:"",note:"순위하락 대응",extra:true,setupDone:false};
     let idx=-1;arr.forEach((r,i)=>{if(r.week===week)idx=i;});
     arr.splice(idx+1,0,nr);
     await st.set("traffic:plan:"+cid,arr);
