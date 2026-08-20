@@ -2114,12 +2114,38 @@ function MainApp({user,onLogout}){
   const saveContract=async c=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0)list[idx]=c;else list.push(c);await st.set("contracts:all",list);setContracts([...list]);setShowCF(false);setEditContract(null);};
   const deleteContract=async id=>{const list=(await st.get("contracts:all")||[]).filter(c=>c.id!==id);await st.set("contracts:all",list);setContracts(list);};
   const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);};
-  // 현황판 인라인 순위 입력 — 오늘 날짜로 순위체크 기록 추가
+  // 현황판 인라인 순위 입력 — 오늘 날짜로 기록 + 예정된 순위체크 일정 완료 처리 + Discord 알림
+  // (순위체크 탭의 모달 입력과 동일한 부수효과를 갖도록 맞춤)
   const saveRankQuick=async(cid,result)=>{
     const nd=await st.get("ce:rankdata")||{};
     nd[`${cid}:순위체크:${todayStr}`]={keywords:result,date:todayStr};
     await st.set("ce:rankdata",nd);
     setRankDataMap({...nd});
+    const contract=contracts.find(c=>c.id===cid);
+    if(!contract)return;
+    // 오늘까지 예정된 순위체크 일정 중 가장 최근 미완료 건을 완료 처리
+    try{
+      const cData=await st.get("ce:completions")||{};
+      const evts=genEvents(contract).filter(e=>e.type==="순위체크"&&e.date<=todayStr).sort((a,b)=>a.date.localeCompare(b.date));
+      for(let i=evts.length-1;i>=0;i--){const k=ceKey(evts[i]);if(!cData[k]){cData[k]=true;await st.set("ce:completions",cData);setCompletions({...cData});break;}}
+    }catch(e){}
+    // Discord 알림
+    try{
+      const wh=await st.get("wt:rankWebhook")||await st.get("wt:webhook");
+      if(!wh)return;
+      const line="─────────────────────────";
+      let msg=`📊 **순위체크 완료** · ${todayStr}\n${line}\n`;
+      msg+=`🏢 **${contract.name}**${contract.manager?` · ${contract.manager}`:""}\n`;
+      msg+=`📍 현황판 순위 입력\n`;
+      Object.entries(result).forEach(([kw,v])=>{
+        const cur=v.rank,prev=v.prevRank;
+        const diff=(prev&&cur)?prev-cur:null;
+        const arrow=diff===null?"":diff>0?`▲${diff}`:diff<0?`▼${Math.abs(diff)}`:"—";
+        msg+=prev?`• ${kw}\n  ${prev}위 → **${cur}위** (${arrow})\n`:`• ${kw}: **${cur}위**\n`;
+      });
+      msg+=line;
+      await fetch(wh,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:msg})});
+    }catch(e){}
   };
   // 순위 하락 신고 -> 해당 계약 주간계획에 추가 투입 줄 생성
   const appendPlanExtra=async(cid,{keyword,rank})=>{
