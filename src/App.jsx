@@ -31,12 +31,12 @@ const addBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDat
 const subBizDays=(ds,n)=>{let d=new Date(ds+"T00:00:00"),c=0;while(c<n){d.setDate(d.getDate()-1);if(d.getDay()!==0&&d.getDay()!==6)c++;}return d.toISOString().slice(0,10);};
 const genEvents=c=>{if(!c.startDate||!c.endDate)return[];const rptDate=subBizDays(c.endDate,3);const evts=[{type:"온보딩",date:c.startDate,cid:c.id,name:c.name,manager:c.manager||""}];let cur=c.startDate;let rankIdx=1;while(true){const nd=new Date(cur+"T00:00:00");nd.setDate(nd.getDate()+7);const next=nd.toISOString().slice(0,10);if(next>=rptDate)break;evts.push({type:"순위체크",date:next,cid:c.id,name:c.name,manager:c.manager||"",rankIdx,initialRanks:c.initialRanks||{}});cur=next;rankIdx++;}if(rptDate>c.startDate)evts.push({type:"리포트",date:rptDate,cid:c.id,name:c.name,manager:c.manager||""});return evts;};
 const ceKey=e=>`${e.cid}:${e.type}:${e.date}`;
-const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[:\\s]\\s*([^\\n]+)'));return m?m[1].trim():'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};
+const parseMemo=text=>{const line=key=>{const re=new RegExp('^\\s*[\\-*▪·]?\\s*'+key+'\\s*[:：]?\\s*(.*)$');for(const l of text.split('\n')){const m=l.match(re);if(m)return m[1].trim();}return'';};const section=(start,ends)=>{const lines=text.split('\n');let cap=false,res=[];for(const l of lines){if(l.includes(start)&&!l.includes('▪')){cap=true;continue;}if(cap&&ends.some(e=>l.includes(e)&&!l.includes('▪')))break;if(cap&&l.trim())res.push(l.trim());}return res.join('\n');};
   // 키워드 파싱: "키워드" 줄 이후 빈줄/다음섹션 전까지 여러 줄 수집
   const parseKeywords=()=>{
     const lines=text.split('\n');
     let cap=false;const res=[];
-    const STOP_WORDS=['상품내역','서비스내역','결제정보','담당자','특이사항','디비유형','주소','번호','상호명','대표자','플레이스','총금액'];
+    const STOP_WORDS=['상품내역','서비스내역','결제정보','담당자','특이사항','디비유형','주소','번호','상호명','대표자','플레이스','총금액','업종','금액','카드사','카드번호','유효기간','할부'];
     for(const l of lines){
       const trimmed=l.trim();
       if(/^키워드\s*[:：]?\s*$/.test(trimmed)||/^키워드\s*[:：]/.test(trimmed)){
@@ -60,7 +60,32 @@ const parseMemo=text=>{const line=key=>{const m=text.match(new RegExp(key+'\\s*[
     return[...new Set(res)];// 중복 제거
   };
   const keywords=parseKeywords();
-  return{name:line('상호명'),phone:line('번호'),link:line('플레이스 링크'),products:section('상품내역',['서비스내역','결제정보','담당자']),services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액'),manager:line('담당자'),notes:line('특이사항'),keywords};};
+  // 업종
+  const industry=line('업종');
+  // 디비유형 -> DB 유형 버튼값 매핑
+  const dbRaw=line('디비유형')||line('DB유형')||line('디비 유형');
+  const dbType=/체험단/.test(dbRaw)?'체험단DB':/소개/.test(dbRaw)?'소개건':/재연장|재계약|연장/.test(dbRaw)?'재연장':/검색/.test(dbRaw)?'검색DB':'';
+  // 상품내역 -> 제공내역 총량
+  const prodSec=section('상품내역',['서비스내역','결제정보','담당자','특이사항','금액']);
+  const RE_T=/트래픽\s*[:：]?\s*([\d,]+)/,RE_B=/블(?:로그)?플(?:러스)?\s*[:：]?\s*([\d,]+)/,RE_R=/영수증(?:리뷰)?\s*[:：]?\s*([\d,]+)/;
+  const numOf=re=>{const m=prodSec.match(re);return m?String(parseInt(m[1].replace(/,/g,''))||''):'';};
+  const provide={rewardTraffic:numOf(RE_T),blogPlus:numOf(RE_B),receipt:numOf(RE_R),etc:prodSec.split('\n').map(l=>l.trim()).filter(l=>l&&!RE_T.test(l)&&!RE_B.test(l)&&!RE_R.test(l)).join(', ')};
+  // 특이사항: 같은 줄 값 + 다음 항목 전까지 여러 줄 수집
+  const notesMulti=()=>{
+    const STOP=['상품내역','서비스내역','결제정보','담당자','디비유형','주소','번호','상호명','대표자','플레이스','총금액','금액','키워드','업종','카드사','카드번호','유효기간','할부'];
+    const re=/^\s*[\-*▪·]?\s*특이사항\s*[:：]?\s*(.*)$/;
+    let cap=false;const res=[];
+    for(const l of text.split('\n')){
+      const t=l.trim();
+      if(!cap){const m=l.match(re);if(m){cap=true;if(m[1].trim())res.push(m[1].trim());}continue;}
+      if(t&&STOP.some(k=>t.startsWith(k)))break;
+      res.push(l.replace(/\s+$/,''));
+    }
+    while(res.length&&!res[0].trim())res.shift();
+    while(res.length&&!res[res.length-1].trim())res.pop();
+    return res.join('\n');
+  };
+  return{name:line('상호명'),industry,phone:line('번호'),link:line('플레이스 링크'),products:prodSec,services:section('서비스내역',['결제정보','담당자','특이사항']),total:line('총금액')||line('금액'),manager:line('담당자'),notes:notesMulti(),dbType,provide,keywords};};
 const sendNotif=async(url,name,ts,data,targets)=>{if(!url?.startsWith("http"))return;const lines=METRICS.map(m=>{const v=data[m.key]||0,t=targets[m.key];return`• ${m.label}: **${v}${m.unit}**${t?` / ${t}${m.unit} (${Math.round(v/t*100)}%)`:''}`;});try{await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:"업무보고 알림",content:`[${ts}] ${name} 실적 제출\n${lines.join('\n')}`})});}catch{}};
 const repeatLabel=t=>{if(!t.repeat||t.repeat==="none")return null;if(t.repeat==="weekly")return`매주 ${DAYS_KR[new Date(t.due+"T00:00:00").getDay()]}`;if(t.repeat==="monthly")return`매월 ${parseInt(t.due.slice(8))}일`;if(t.repeat==="weekdays")return"평일";if(t.repeat==="custom")return`${(t.repeatDays||[]).sort().map(d=>DAYS_KR[d]).join("·")}`;return null;};
 const isActiveOnDate=(t,ds)=>{if(!t.due||t.due>ds)return false;const dow=new Date(ds+"T00:00:00").getDay();if(!t.repeat||t.repeat==="none")return t.due===ds;if(t.repeat==="weekly")return new Date(t.due+"T00:00:00").getDay()===dow;if(t.repeat==="monthly")return parseInt(t.due.slice(8))===new Date(ds+"T00:00:00").getDate();if(t.repeat==="weekdays")return dow>=1&&dow<=5;if(t.repeat==="custom")return(t.repeatDays||[]).includes(dow);return false;};
@@ -815,6 +840,24 @@ const PLAN_TYPES=[
 const planAddDays=(ds,n)=>{const d=new Date(ds+"T00:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
 const planQty=r=>(parseInt(r.daily)||0)*(parseInt(r.days)||0);
 const planType=k=>PLAN_TYPES.find(x=>x.k===k)||PLAN_TYPES[0];
+const rankNum=v=>{const n=parseInt(v);return isNaN(n)?null:n;};
+// 주차 목록 -> 키워드별 순위 성과 (시작순위 → 종료순위, 투입 트래픽, 1계단당 타수)
+const planRankPerf=rows=>{
+  const map={};
+  (rows||[]).forEach(r=>{
+    const kw=(r.keyword||"").trim();if(!kw)return;
+    if(!map[kw])map[kw]={kw,first:null,firstDate:null,last:null,lastDate:null,qty:0};
+    const m=map[kw];
+    const sr=rankNum(r.startRank),er=rankNum(r.endRank);
+    if(sr!==null&&(m.firstDate===null||(r.start||"")<m.firstDate)){m.first=sr;m.firstDate=r.start||"";}
+    if(er!==null&&(m.lastDate===null||(r.end||"")>=m.lastDate)){m.last=er;m.lastDate=r.end||"";}
+    if(planType(r.type).pk==="rewardTraffic")m.qty+=planQty(r);
+  });
+  return Object.values(map).filter(m=>m.first!==null||m.last!==null).map(m=>{
+    const diff=(m.first!==null&&m.last!==null)?m.first-m.last:null;
+    return{...m,diff,perStep:(diff!==null&&diff>0&&m.qty>0)?Math.round(m.qty/diff):null};
+  });
+};
 function WeeklyPlanTab({contracts,st}){
   const[search,setSearch]=useState("");
   const[statusFilter,setStatusFilter]=useState("active");
@@ -823,24 +866,28 @@ function WeeklyPlanTab({contracts,st}){
   const[loading,setLoading]=useState(false);
   const[saving,setSaving]=useState(false);
   const[dirty,setDirty]=useState(false);
+  const[refData,setRefData]=useState(null);
+  const[refLoading,setRefLoading]=useState(false);
+  const[goalStep,setGoalStep]=useState("5");
 
   const list=useMemo(()=>{
     let l=contracts.filter(c=>!c.cancelled);
     if(statusFilter==="active")l=l.filter(c=>c.endDate>=todayStr);
     else if(statusFilter==="ended")l=l.filter(c=>c.endDate<todayStr);
-    if(search.trim())l=l.filter(c=>c.name?.toLowerCase().includes(search.trim().toLowerCase()));
+    if(search.trim()){const q=search.trim().toLowerCase();l=l.filter(c=>c.name?.toLowerCase().includes(q)||(c.industry||"").toLowerCase().includes(q));}
     return[...l].sort((a,b)=>(a.endDate||"").localeCompare(b.endDate||""));
   },[contracts,search,statusFilter]);
   const sel=useMemo(()=>contracts.find(c=>c.id===selId)||null,[contracts,selId]);
 
   useEffect(()=>{
+    setRefData(null);
     if(!selId){setRows([]);setDirty(false);return;}
     let alive=true;setLoading(true);
     (async()=>{const d=await st.get("traffic:plan:"+selId);if(!alive)return;setRows(Array.isArray(d)?d:[]);setDirty(false);setLoading(false);})();
     return()=>{alive=false;};
   },[selId]);
 
-  const kwOptions=useMemo(()=>{if(!sel)return[];const mk=(sel.mainKeywords||[]).filter(Boolean);const all=[...new Set([...mk,...(sel.keywords||[])])];return all;},[sel]);
+  const kwOptions=useMemo(()=>{if(!sel)return[];const mk=(sel.mainKeywords||[]).filter(Boolean);return[...new Set([...mk,...(sel.keywords||[])])];},[sel]);
 
   // 리워드트래픽 총량 대조 (트래픽 계열 3종 합산) + 저장/알림받기는 배분량만 집계
   const summary=useMemo(()=>{
@@ -850,18 +897,35 @@ function WeeklyPlanTab({contracts,st}){
     return{total,trafficUsed,remain:total-trafficUsed,over:trafficUsed>total,byType};
   },[rows,sel]);
 
+  const rankPerf=useMemo(()=>planRankPerf(rows),[rows]);
+  const industry=(sel?.industry||"").trim();
+  const peers=useMemo(()=>industry?contracts.filter(c=>c.id!==selId&&(c.industry||"").trim()===industry):[],[contracts,selId,industry]);
+
+  // 같은 업종의 다른 계약 주간계획을 불러와 성공/실패 사례로 집계
+  const loadRef=async()=>{
+    if(!industry||peers.length===0)return;
+    setRefLoading(true);
+    const plans=await Promise.all(peers.map(c=>st.get("traffic:plan:"+c.id).then(rs=>({c,rs})).catch(()=>({c,rs:null}))));
+    const cases=[];
+    plans.forEach(({c,rs})=>{planRankPerf(rs).forEach(m=>{if(m.perStep!==null)cases.push({name:c.name,...m});});});
+    cases.sort((a,b)=>a.perStep-b.perStep);
+    const avg=cases.length?Math.round(cases.reduce((s,x)=>s+x.perStep,0)/cases.length):null;
+    setRefData({cases,avg,scanned:peers.length});
+    setRefLoading(false);
+  };
+
   const selectContract=id=>{if(dirty&&!window.confirm("저장하지 않은 변경사항이 있습니다. 이동할까요?"))return;setSelId(id);};
   const addRow=()=>{
     const last=rows[rows.length-1];
     const maxWeek=rows.reduce((m,r)=>Math.max(m,parseInt(r.week)||0),0);
     const start=last?.end?planAddDays(last.end,1):(sel?.startDate||todayStr);
-    setRows(rs=>[...rs,{id:uid(),week:maxWeek+1,start,end:planAddDays(start,7),keyword:kwOptions[0]||"",type:"traffic",daily:"",days:"",note:"",extra:false,setupDone:false}]);
+    setRows(rs=>[...rs,{id:uid(),week:maxWeek+1,start,end:planAddDays(start,7),keyword:kwOptions[0]||"",type:"traffic",daily:"",days:"",startRank:"",endRank:"",note:"",extra:false,setupDone:false}]);
     setDirty(true);
   };
   // 주차 도중 추가 투입(순위 하락 대응·키워드 추가 등) — 같은 주차 아래에 한 줄 더
   const addExtra=row=>{
     const start=(todayStr>=row.start&&todayStr<=row.end)?todayStr:row.start;
-    const nr={id:uid(),week:row.week,start,end:row.end,keyword:row.keyword||"",type:row.type||"traffic",daily:"",days:"",note:"",extra:true,setupDone:false};
+    const nr={id:uid(),week:row.week,start,end:row.end,keyword:row.keyword||"",type:row.type||"traffic",daily:"",days:"",startRank:row.endRank||"",endRank:"",note:"",extra:true,setupDone:false};
     setRows(rs=>{
       let last=-1;
       rs.forEach((r,i)=>{if(r.week===row.week)last=i;});
@@ -881,14 +945,16 @@ function WeeklyPlanTab({contracts,st}){
 
   const iS={border:"1px solid #f0f1f3",borderRadius:8,padding:"7px 10px",fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Pretendard',-apple-system,sans-serif"};
   const cS={border:"1px solid #f0f1f3",borderRadius:7,padding:"5px 7px",fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",background:"#fff",fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  const rS={...cS,padding:"5px 4px",textAlign:"center",width:44};
   const th={padding:"7px 6px",textAlign:"center",color:"#6b7280",fontWeight:600,fontSize:11,borderBottom:"2px solid #f0f1f3",whiteSpace:"nowrap"};
   const td={padding:"5px 6px",textAlign:"center",borderBottom:"1px solid #f7f8fa"};
+  const diffTag=d=>d===null?null:d>0?{t:"▲"+d,c:"#10b981"}:d<0?{t:"▼"+Math.abs(d),c:"#ef4444"}:{t:"－",c:"#adb5bd"};
 
   return(<div style={{display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap"}}>
     {/* ===== 계약 선택 ===== */}
     <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:14,width:250,flexShrink:0,boxSizing:"border-box"}}>
       <div style={{fontSize:13,fontWeight:700,color:"#0f1117",marginBottom:10}}>계약 선택</div>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="상호명 검색" style={{...iS,marginBottom:8}}/>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="상호명 · 업종 검색" style={{...iS,marginBottom:8}}/>
       <div style={{display:"flex",gap:4,marginBottom:10}}>
         {[{v:"active",l:"진행중"},{v:"ended",l:"종료"},{v:"all",l:"전체"}].map(f=>(
           <button key={f.v} onClick={()=>setStatusFilter(f.v)} style={{flex:1,border:"none",borderRadius:7,padding:"5px 0",fontSize:11,fontWeight:700,cursor:"pointer",background:statusFilter===f.v?"#0071CE":"#f7f8fa",color:statusFilter===f.v?"#fff":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{f.l}</button>
@@ -900,6 +966,7 @@ function WeeklyPlanTab({contracts,st}){
           return(<button key={c.id} onClick={()=>selectContract(c.id)} style={{textAlign:"left",border:selId===c.id?"2px solid #0071CE":"1px solid #f0f1f3",borderRadius:9,padding:"8px 10px",background:selId===c.id?"#f0f7ff":"#fff",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
             <div style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>{c.name}</div>
             <div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>{c.startDate} ~ {c.endDate}{dday!==null&&dday>=0&&<span style={{color:dday<=7?"#ef4444":"#adb5bd",fontWeight:dday<=7?700:400}}> · D-{dday}</span>}</div>
+            {(c.industry||"").trim()&&<span style={{display:"inline-block",marginTop:4,fontSize:9,fontWeight:700,color:"#0891b2",background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:5,padding:"1px 6px"}}>{c.industry.trim()}</span>}
           </button>);
         })}
       </div>
@@ -913,7 +980,10 @@ function WeeklyPlanTab({contracts,st}){
         {/* 헤더 */}
         <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:"14px 18px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
           <div style={{flex:1,minWidth:160}}>
-            <div style={{fontSize:15,fontWeight:800,color:"#0f1117"}}>{sel.name}</div>
+            <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+              <span style={{fontSize:15,fontWeight:800,color:"#0f1117"}}>{sel.name}</span>
+              {industry&&<span style={{fontSize:10,fontWeight:700,color:"#0891b2",background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:6,padding:"2px 8px"}}>{industry}</span>}
+            </div>
             <div style={{fontSize:11,color:"#adb5bd",marginTop:3}}>{sel.startDate} ~ {sel.endDate}{sel.manager?" · 담당 "+sel.manager:""}{sel.source?" · "+sel.source:""}</div>
           </div>
           {dirty&&<span style={{fontSize:11,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,padding:"4px 9px"}}>저장 안 됨</span>}
@@ -951,22 +1021,81 @@ function WeeklyPlanTab({contracts,st}){
           </div>
         )}
 
+        {/* 키워드별 순위 성과 */}
+        {rankPerf.length>0&&(
+          <div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px",marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#0f1117",marginBottom:8}}>이 계약의 키워드별 순위 성과</div>
+            <div style={{display:"flex",flexDirection:"column",gap:5}}>
+              {rankPerf.map(m=>{
+                const tag=diffTag(m.diff);
+                return(<div key={m.kw} style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#f7f8fa",borderRadius:8,padding:"7px 11px"}}>
+                  <span style={{fontSize:12,fontWeight:700,color:"#0f1117",minWidth:90}}>{m.kw}</span>
+                  <span style={{fontSize:12,color:"#374151",fontWeight:600}}>{m.first!==null?m.first+"위":"?"} → {m.last!==null?m.last+"위":"?"}</span>
+                  {tag&&<span style={{fontSize:12,fontWeight:800,color:tag.c}}>{tag.t}</span>}
+                  <span style={{fontSize:11,color:"#adb5bd",marginLeft:"auto"}}>투입 {m.qty.toLocaleString()}타{m.perStep!==null?" · 1계단당 "+m.perStep.toLocaleString()+"타":""}</span>
+                </div>);
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 같은 업종 참고 사례 */}
+        <div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:refData?10:0}}>
+            <span style={{fontSize:11,fontWeight:700,color:"#0f1117"}}>같은 업종 참고 사례</span>
+            {industry?(
+              <><span style={{fontSize:11,color:"#adb5bd"}}>{industry} · 다른 계약 {peers.length}건</span>
+              <button onClick={loadRef} disabled={refLoading||peers.length===0} style={{marginLeft:"auto",background:peers.length===0?"#f3f4f6":"#f0f7ff",color:peers.length===0?"#adb5bd":"#0071CE",border:"1px solid "+(peers.length===0?"#f0f1f3":"#bfd7f5"),borderRadius:8,padding:"5px 13px",fontSize:11,fontWeight:700,cursor:peers.length===0?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{refLoading?"불러오는 중…":refData?"다시 불러오기":"불러오기"}</button></>
+            ):(
+              <span style={{fontSize:11,color:"#92400e"}}>이 계약에 업종이 입력되어 있지 않습니다. 계약 수정에서 업종을 넣으면 비교할 수 있습니다.</span>
+            )}
+          </div>
+          {refData&&(refData.cases.length===0?(
+            <p style={{fontSize:11,color:"#adb5bd",margin:0}}>같은 업종 계약 {refData.scanned}건을 확인했지만, 순위 시작·종료가 모두 기록된 사례가 아직 없습니다.</p>
+          ):(<>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#f0f7ff",border:"1px solid #bfd7f5",borderRadius:9,padding:"9px 12px",marginBottom:8}}>
+              <span style={{fontSize:12,fontWeight:700,color:"#0071CE"}}>{industry} 평균 1계단당 {refData.avg.toLocaleString()}타</span>
+              <span style={{fontSize:11,color:"#6b7280"}}>사례 {refData.cases.length}건</span>
+              <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:5}}>
+                <input type="number" min="1" value={goalStep} onChange={e=>setGoalStep(e.target.value)} style={{...cS,width:52,textAlign:"center"}}/>
+                <span style={{fontSize:11,color:"#6b7280"}}>계단 목표 →</span>
+                <b style={{fontSize:12,color:"#0071CE"}}>{((parseInt(goalStep)||0)*refData.avg).toLocaleString()}타</b>
+              </span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:190,overflowY:"auto"}}>
+              {refData.cases.slice(0,12).map((x,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap",background:"#f7f8fa",borderRadius:8,padding:"6px 10px"}}>
+                  <span style={{fontSize:10,fontWeight:800,color:x.perStep<=refData.avg?"#10b981":"#ef4444",background:x.perStep<=refData.avg?"#f0fdf4":"#fef2f2",borderRadius:5,padding:"1px 6px"}}>{x.perStep<=refData.avg?"효율 좋음":"효율 낮음"}</span>
+                  <span style={{fontSize:11,fontWeight:700,color:"#0f1117"}}>{x.name}</span>
+                  <span style={{fontSize:11,color:"#6b7280"}}>{x.kw}</span>
+                  <span style={{fontSize:11,color:"#374151",fontWeight:600}}>{x.first}위 → {x.last}위 (▲{x.diff})</span>
+                  <span style={{fontSize:11,color:"#adb5bd",marginLeft:"auto"}}>{x.qty.toLocaleString()}타 · 1계단당 {x.perStep.toLocaleString()}타</span>
+                </div>
+              ))}
+            </div>
+            <p style={{fontSize:10,color:"#adb5bd",margin:"8px 0 0"}}>순위를 올린 사례만 집계합니다(하락·유지는 제외). 계획량 기준이라 실제 투입과는 차이가 있을 수 있습니다.</p>
+          </>))}
+        </div>
+
         {/* 주차 표 */}
         <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:14}}>
           {loading?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"20px 0"}}>불러오는 중…</p>:(<>
             <datalist id={"kwlist-"+selId}>{kwOptions.map(k=><option key={k} value={k}/>)}</datalist>
             <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",minWidth:900}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:1020}}>
                 <thead><tr style={{background:"#f7f8fa"}}>
                   <th style={{...th,width:62}}>주차</th><th style={{...th,width:120}}>시작일</th><th style={{...th,width:120}}>종료일</th>
                   <th style={{...th,minWidth:104}}>키워드</th><th style={{...th,width:108}}>유형</th>
                   <th style={{...th,width:74}}>일일량</th><th style={{...th,width:66}}>작업일수</th><th style={{...th,width:80}}>계획량</th>
+                  <th style={{...th,width:148}}>순위 (시작 → 종료)</th>
                   <th style={{...th,minWidth:96}}>사유/메모</th>
                   <th style={{...th,width:56}}>세팅완료</th><th style={{...th,width:52}}></th>
                 </tr></thead>
                 <tbody>
-                  {rows.length===0?(<tr><td colSpan={11} style={{padding:"26px 0",textAlign:"center",fontSize:12,color:"#adb5bd"}}>등록된 주차가 없습니다. 아래 버튼으로 추가하세요.</td></tr>):rows.map(r=>{
+                  {rows.length===0?(<tr><td colSpan={12} style={{padding:"26px 0",textAlign:"center",fontSize:12,color:"#adb5bd"}}>등록된 주차가 없습니다. 아래 버튼으로 추가하세요.</td></tr>):rows.map(r=>{
                     const t=planType(r.type);
+                    const sr=rankNum(r.startRank),er=rankNum(r.endRank);
+                    const tag=(sr!==null&&er!==null)?diffTag(sr-er):null;
                     return(<tr key={r.id} style={r.extra?{background:"#fffdf7"}:undefined}>
                       <td style={{...td,fontWeight:800,color:"#0f1117",fontSize:12,whiteSpace:"nowrap"}}>{r.week}주{r.extra&&<span style={{display:"block",fontSize:9,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:5,padding:"0 4px",marginTop:2}}>추가</span>}</td>
                       <td style={td}><input type="date" value={r.start||""} onChange={e=>setStart(r.id,e.target.value)} style={cS}/></td>
@@ -976,6 +1105,14 @@ function WeeklyPlanTab({contracts,st}){
                       <td style={td}><input type="number" min="0" value={r.daily??""} onChange={e=>upd(r.id,{daily:e.target.value})} style={{...cS,textAlign:"right"}}/></td>
                       <td style={td}><input type="number" min="0" max="31" value={r.days??""} onChange={e=>upd(r.id,{days:e.target.value})} style={{...cS,textAlign:"right"}}/></td>
                       <td style={{...td,fontWeight:800,color:t.color,fontSize:12}}>{planQty(r).toLocaleString()}{t.unit}</td>
+                      <td style={td}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3}}>
+                          <input type="number" min="1" value={r.startRank??""} onChange={e=>upd(r.id,{startRank:e.target.value})} placeholder="시작" style={rS}/>
+                          <span style={{fontSize:11,color:"#adb5bd"}}>→</span>
+                          <input type="number" min="1" value={r.endRank??""} onChange={e=>upd(r.id,{endRank:e.target.value})} placeholder="종료" style={rS}/>
+                          <span style={{fontSize:11,fontWeight:800,color:tag?tag.c:"transparent",minWidth:26,textAlign:"left"}}>{tag?tag.t:""}</span>
+                        </div>
+                      </td>
                       <td style={td}><input value={r.note||""} onChange={e=>upd(r.id,{note:e.target.value})} placeholder={r.extra?"예: 순위하락 대응":""} style={cS}/></td>
                       <td style={td}><input type="checkbox" checked={!!r.setupDone} onChange={e=>upd(r.id,{setupDone:e.target.checked})} style={{width:16,height:16,cursor:"pointer",accentColor:"#10b981"}}/></td>
                       <td style={{...td,whiteSpace:"nowrap"}}>
@@ -986,13 +1123,13 @@ function WeeklyPlanTab({contracts,st}){
                   })}
                   {rows.length>0&&(<tr style={{background:"#f7f8fa"}}>
                     <td colSpan={7} style={{...td,textAlign:"right",fontWeight:700,color:"#6b7280",fontSize:11,paddingRight:10}}>유형별 배분 합계</td>
-                    <td colSpan={4} style={{...td,textAlign:"left",fontSize:11,fontWeight:700}}>{summary.byType.filter(t=>t.used>0).length===0?"—":summary.byType.filter(t=>t.used>0).map(t=><span key={t.k} style={{color:t.color,marginRight:8}}>{t.label} {t.used.toLocaleString()}{t.unit}</span>)}</td>
+                    <td colSpan={5} style={{...td,textAlign:"left",fontSize:11,fontWeight:700}}>{summary.byType.filter(t=>t.used>0).length===0?"—":summary.byType.filter(t=>t.used>0).map(t=><span key={t.k} style={{color:t.color,marginRight:8}}>{t.label} {t.used.toLocaleString()}{t.unit}</span>)}</td>
                   </tr>)}
                 </tbody>
               </table>
             </div>
             <button onClick={addRow} style={{width:"100%",marginTop:10,background:"#f0f7ff",color:"#0071CE",border:"1px dashed #bfd7f5",borderRadius:9,padding:"9px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 주차 추가 (시작일·종료일 자동 연결)</button>
-            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일(+7일)이 자동으로 잡히고, 다음 주차는 직전 종료일 다음 날부터 이어집니다. 계획량은 일일량 × 작업일수로 자동 계산됩니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 계획량은 총량에 자동 합산됩니다.</p>
+            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일(+7일)이 자동으로 잡히고, 다음 주차는 직전 종료일 다음 날부터 이어집니다. 계획량은 일일량 × 작업일수로 자동 계산됩니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 직전 줄의 종료순위가 시작순위로 넘어옵니다.<br/>순위는 숫자만 넣으면 되고(12 → 5 이면 ▲7), 키워드별 누적 성과는 표 위에 자동 집계됩니다.</p>
           </>)}
         </div>
       </>)}
@@ -1410,9 +1547,9 @@ function TaskForm({form,setForm,onSubmit,onCancel,isEdit,isAdminUser,projectCate
   </div>);
 }
 function ContractForm({initial,onSubmit,onCancel,allContracts,user}){
-  const blank={name:"",phone:"",link:"",products:"",services:"",total:"",amount:"",manager:"",notes:"",isRenewal:false,renewalCount:0,keywords:[],initialRanks:{},source:"",mainKeywords:[],provide:{rewardTraffic:"",receipt:"",blogPlus:"",etc:""}};
+  const blank={name:"",industry:"",phone:"",link:"",products:"",services:"",total:"",amount:"",manager:"",notes:"",isRenewal:false,renewalCount:0,keywords:[],initialRanks:{},source:"",mainKeywords:[],provide:{rewardTraffic:"",receipt:"",blogPlus:"",etc:""}};
   const[memo,setMemo]=useState("");
-  const[parsed,setParsed]=useState(initial?{name:initial.name,phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,amount:initial.amount??(initial.total?parseAmount(initial.total):""),manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,renewalCount:initial.renewalCount||0,keywords:initial.keywords||[],initialRanks:initial.initialRanks||{},source:initial.source||"",mainKeywords:initial.mainKeywords||[],provide:initial.provide||{rewardTraffic:"",receipt:"",blogPlus:"",etc:""}}:blank);
+  const[parsed,setParsed]=useState(initial?{name:initial.name,industry:initial.industry||"",phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,amount:initial.amount??(initial.total?parseAmount(initial.total):""),manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,renewalCount:initial.renewalCount||0,keywords:initial.keywords||[],initialRanks:initial.initialRanks||{},source:initial.source||"",mainKeywords:initial.mainKeywords||[],provide:initial.provide||{rewardTraffic:"",receipt:"",blogPlus:"",etc:""}}:blank);
   const[kwInput,setKwInput]=useState("");
   const addKeyword=()=>{const v=kwInput.trim();if(!v||parsed.keywords.includes(v))return;setParsed(p=>({...p,keywords:[...p.keywords,v]}));setKwInput("");};
   const removeKeyword=kw=>setParsed(p=>({...p,keywords:p.keywords.filter(k=>k!==kw),initialRanks:Object.fromEntries(Object.entries(p.initialRanks||{}).filter(([k])=>k!==kw)),mainKeywords:(p.mainKeywords||[]).filter(k=>k!==kw)}));
@@ -1423,7 +1560,7 @@ function ContractForm({initial,onSubmit,onCancel,allContracts,user}){
   const[showManualLink,setShowManualLink]=useState(false);
   const[autoMatched,setAutoMatched]=useState(null);
   const iS={border:"1px solid #f0f1f3",borderRadius:8,padding:"8px 12px",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Pretendard',-apple-system,sans-serif"};
-  const handleParse=()=>{const r=parseMemo(memo);setParsed(p=>{const mergedKws=[...new Set([...(p.keywords||[]),...(r.keywords||[])])];return{...p,...r,keywords:mergedKws,amount:r.total?String(parseAmount(r.total)):p.amount};});setParseMsg("파싱 완료!"+(r.keywords?.length>0?` (키워드 ${r.keywords.length}개 추출)`:""));if(r.name){const matched=allContracts.find(c=>c.name===r.name&&(!initial||c.id!==initial.id));if(matched){setAutoMatched(matched);setLinkedMemoId(matched.id);}else{setAutoMatched(null);}}};
+  const handleParse=()=>{const r=parseMemo(memo);setParsed(p=>{const mergedKws=[...new Set([...(p.keywords||[]),...(r.keywords||[])])];const next={...p};["name","industry","phone","link","products","services","notes"].forEach(k=>{if(r[k]&&String(r[k]).trim())next[k]=r[k];});if(r.dbType)next.source=r.dbType;if(r.provide){const pv={...(p.provide||{})};["rewardTraffic","blogPlus","receipt","etc"].forEach(k=>{if(r.provide[k]!==""&&r.provide[k]!=null)pv[k]=r.provide[k];});next.provide=pv;}next.keywords=mergedKws;if(r.total&&String(r.total).trim()){next.total=r.total;next.amount=String(parseAmount(r.total));}return next;});const bits=[];if(r.keywords?.length)bits.push(`키워드 ${r.keywords.length}개`);if(r.industry)bits.push("업종");if(r.dbType)bits.push("DB유형");if(r.provide?.rewardTraffic)bits.push("트래픽 총량");if(r.total)bits.push("금액");setParseMsg("파싱 완료!"+(bits.length?` (${bits.join(" · ")})`:""));if(r.name){const matched=allContracts.find(c=>c.name===r.name&&(!initial||c.id!==initial.id));if(matched){setAutoMatched(matched);setLinkedMemoId(matched.id);}else{setAutoMatched(null);}}};
   const DBTYPES=["재연장","소개건","검색DB","체험단DB"];
   const PROVIDE=[{k:"rewardTraffic",label:"리워드트래픽",unit:"타"},{k:"receipt",label:"영수증리뷰",unit:"건"},{k:"blogPlus",label:"블플",unit:"건"},{k:"etc",label:"기타/서비스",unit:"",text:true}];
   const amtDisplay=parsed.amount?Number(String(parsed.amount).replace(/[^\d]/g,"")).toLocaleString():"";
@@ -1464,6 +1601,11 @@ function ContractForm({initial,onSubmit,onCancel,allContracts,user}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
       <div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>상호명 *</label><input value={parsed.name} onChange={e=>setParsed(p=>({...p,name:e.target.value}))} style={{...iS}}/></div>
       <div><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>전화번호</label><input value={parsed.phone} onChange={e=>setParsed(p=>({...p,phone:e.target.value}))} style={{...iS}}/></div>
+    </div>
+    <div style={{marginBottom:8}}>
+      <label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>업종</label>
+      <input list="industry-options" value={parsed.industry||""} onChange={e=>setParsed(p=>({...p,industry:e.target.value}))} placeholder="예: 캐핑/글램핑, 헬스/PT, 병원, 학원" style={{...iS}}/>
+      <datalist id="industry-options">{[...new Set((allContracts||[]).map(c=>(c.industry||"").trim()).filter(Boolean))].sort().map(v=><option key={v} value={v}/>)}</datalist>
     </div>
     <div style={{marginBottom:8}}><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>플레이스 링크</label><input value={parsed.link} onChange={e=>setParsed(p=>({...p,link:e.target.value}))} placeholder="https://..." style={{...iS}}/></div>
     <div style={{marginBottom:8}}><label style={{fontSize:12,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>총금액</label>
@@ -1518,7 +1660,7 @@ function ContractForm({initial,onSubmit,onCancel,allContracts,user}){
         const amt=parseInt(String(parsed.amount||"").replace(/[^\d]/g,""))||0;
         const provide={rewardTraffic:parseInt(parsed.provide?.rewardTraffic)||0,receipt:parseInt(parsed.provide?.receipt)||0,blogPlus:parseInt(parsed.provide?.blogPlus)||0,etc:(parsed.provide?.etc||"").trim()};
         const mainKeywords=(parsed.mainKeywords||[]).filter(k=>(parsed.keywords||[]).includes(k));
-        onSubmit({...parsed,source:parsed.source||"",manager:parsed.manager||user?.name||"",provide,mainKeywords,amount:amt,total:amt?String(amt):"",startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitRanks});
+        onSubmit({...parsed,industry:(parsed.industry||"").trim(),source:parsed.source||"",manager:parsed.manager||user?.name||"",provide,mainKeywords,amount:amt,total:amt?String(amt):"",startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitRanks});
       }} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button>
       <button type="button" onClick={onCancel} style={{background:"#f3f4f6",color:"#6b7280",border:"none",borderRadius:9,padding:"11px 18px",fontSize:14,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>취소</button>
     </div>
