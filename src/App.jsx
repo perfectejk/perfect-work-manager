@@ -858,7 +858,7 @@ const planRankPerf=rows=>{
     return{...m,diff,perStep:(diff!==null&&diff>0&&m.qty>0)?Math.round(m.qty/diff):null};
   });
 };
-function WeeklyPlanTab({contracts,st}){
+function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   const[search,setSearch]=useState("");
   const[statusFilter,setStatusFilter]=useState("active");
   const[selId,setSelId]=useState("");
@@ -869,6 +869,7 @@ function WeeklyPlanTab({contracts,st}){
   const[refData,setRefData]=useState(null);
   const[refLoading,setRefLoading]=useState(false);
   const[goalStep,setGoalStep]=useState("5");
+  const[fillMsg,setFillMsg]=useState("");
 
   const list=useMemo(()=>{
     let l=contracts.filter(c=>!c.cancelled);
@@ -880,13 +881,15 @@ function WeeklyPlanTab({contracts,st}){
   const sel=useMemo(()=>contracts.find(c=>c.id===selId)||null,[contracts,selId]);
 
   useEffect(()=>{
-    setRefData(null);
+    setRefData(null);setFillMsg("");
     if(!selId){setRows([]);setDirty(false);return;}
     let alive=true;setLoading(true);
     (async()=>{const d=await st.get("traffic:plan:"+selId);if(!alive)return;setRows(Array.isArray(d)?d:[]);setDirty(false);setLoading(false);})();
     return()=>{alive=false;};
   },[selId]);
 
+  // 현황판에서 "주간계획 열기"로 넘어온 계약 선택
+  useEffect(()=>{if(!focusId)return;const id=String(focusId).split('#')[0];if(id)setSelId(id);},[focusId]);
   const kwOptions=useMemo(()=>{if(!sel)return[];const mk=(sel.mainKeywords||[]).filter(Boolean);return[...new Set([...mk,...(sel.keywords||[])])];},[sel]);
 
   // 리워드트래픽 총량 대조 (트래픽 계열 3종 합산) + 저장/알림받기는 배분량만 집계
@@ -914,6 +917,24 @@ function WeeklyPlanTab({contracts,st}){
     setRefLoading(false);
   };
 
+  // 주차 시작일/종료일에 가장 가까운 순위체크 기록으로 빈 순위칸을 채움 (±5일, 키워드 일치)
+  const fillFromRanks=()=>{
+    const recs=Object.keys(rankDataMap||{}).filter(k=>k.startsWith(selId+":순위체크:"))
+      .map(k=>({date:(rankDataMap[k]?.date)||k.split(":")[2]||"",kws:rankDataMap[k]?.keywords||{}})).filter(x=>x.date);
+    if(recs.length===0){setFillMsg("이 계약의 순위체크 기록이 없습니다.");return;}
+    const pick=(ds,kw)=>{if(!ds||!kw)return null;let best=null,bd=99;
+      recs.forEach(r=>{const v=parseInt(r.kws?.[kw]?.rank);if(isNaN(v))return;
+        const d=Math.abs((new Date(r.date+"T00:00:00")-new Date(ds+"T00:00:00"))/86400000);
+        if(d<=5&&d<bd){bd=d;best=v;}});
+      return best;};
+    let n=0;
+    const next=rows.map(r=>{const p={};
+      if(!String(r.startRank||"").trim()){const v=pick(r.start,r.keyword);if(v!==null){p.startRank=String(v);n++;}}
+      if(!String(r.endRank||"").trim()){const v=pick(r.end,r.keyword);if(v!==null){p.endRank=String(v);n++;}}
+      return Object.keys(p).length?{...r,...p}:r;});
+    if(n===0){setFillMsg("채울 수 있는 기록이 없습니다 (주차 날짜 ±5일 · 키워드 일치 기준).");return;}
+    setRows(next);setDirty(true);setFillMsg(`순위 ${n}칸을 순위체크 기록에서 채웠습니다. 저장을 눌러주세요.`);
+  };
   const selectContract=id=>{if(dirty&&!window.confirm("저장하지 않은 변경사항이 있습니다. 이동할까요?"))return;setSelId(id);};
   const addRow=()=>{
     const last=rows[rows.length-1];
@@ -1080,6 +1101,10 @@ function WeeklyPlanTab({contracts,st}){
         {/* 주차 표 */}
         <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:14}}>
           {loading?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"20px 0"}}>불러오는 중…</p>:(<>
+            <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap",marginBottom:10}}>
+              <button onClick={fillFromRanks} disabled={rows.length===0} style={{background:rows.length===0?"#f3f4f6":"#ecfeff",color:rows.length===0?"#adb5bd":"#0891b2",border:"1px solid "+(rows.length===0?"#f0f1f3":"#a5f3fc"),borderRadius:8,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:rows.length===0?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>순위체크 기록에서 순위 채우기</button>
+              {fillMsg&&<span style={{fontSize:11,color:"#0891b2",fontWeight:600}}>{fillMsg}</span>}
+            </div>
             <datalist id={"kwlist-"+selId}>{kwOptions.map(k=><option key={k} value={k}/>)}</datalist>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:1020}}>
@@ -1133,6 +1158,220 @@ function WeeklyPlanTab({contracts,st}){
           </>)}
         </div>
       </>)}
+    </div>
+  </div>);
+}
+// ===== 현황판 (매일 5분 점검용 뷰) =====
+// 계약별 최근 순위체크 요약 — 마지막 기록/직전 대비 하락/최악 순위
+const rankSummaryOf=(cid,rankDataMap)=>{
+  const keys=Object.keys(rankDataMap||{}).filter(k=>k.startsWith(cid+":순위체크:"))
+    .sort((a,b)=>((rankDataMap[a]?.date)||a.split(":")[2]||"").localeCompare((rankDataMap[b]?.date)||b.split(":")[2]||""));
+  const cur=keys.length?rankDataMap[keys[keys.length-1]]:null;
+  const prev=keys.length>=2?rankDataMap[keys[keys.length-2]]:null;
+  const lastDate=cur?.date||(keys.length?keys[keys.length-1].split(":")[2]:"")||"";
+  const ranks=Object.entries(cur?.keywords||{}).map(([kw,v])=>({kw,rank:parseInt(v?.rank)})).filter(x=>!isNaN(x.rank));
+  const dropped=[];
+  if(prev)Object.keys(cur?.keywords||{}).forEach(kw=>{
+    const a=parseInt(prev.keywords?.[kw]?.rank),z=parseInt(cur.keywords?.[kw]?.rank);
+    if(!isNaN(a)&&!isNaN(z)&&z>a)dropped.push({kw,from:a,to:z});
+  });
+  const worst=ranks.length?Math.max(...ranks.map(x=>x.rank)):null;
+  return{cur,prev,lastDate,ranks,dropped,worst};
+};
+const DANGER_RANK=5;// 이 순위 밖이면 위험군 — 매일이 아니라 이틀마다 체크
+function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpenPlan}){
+  const[plans,setPlans]=useState(null);
+  const[loading,setLoading]=useState(false);
+  const[filter,setFilter]=useState("check");
+  const[openId,setOpenId]=useState("");
+  const[inputs,setInputs]=useState({});
+  const[mkExtra,setMkExtra]=useState(true);
+  const[busy,setBusy]=useState(false);
+  const tomorrow=planAddDays(todayStr,1);
+
+  const active=useMemo(()=>contracts.filter(c=>!c.cancelled&&(c.endDate||"")>=todayStr),[contracts]);
+
+  const load=async()=>{
+    setLoading(true);
+    const res=await Promise.all(active.map(c=>st.get("traffic:plan:"+c.id).then(r=>[c.id,Array.isArray(r)?r:[]]).catch(()=>[c.id,[]])));
+    setPlans(Object.fromEntries(res));
+    setLoading(false);
+  };
+  useEffect(()=>{load();},[]);
+
+  const buckets=useMemo(()=>{
+    const b={check:[],setup:[],rankdown:[],nearend:[],noplan:[],over:[]};
+    active.forEach(c=>{
+      const rows=(plans||{})[c.id]||[];
+      const dday=c.endDate?Math.ceil((new Date(c.endDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/86400000):null;
+      const rs=rankSummaryOf(c.id,rankDataMap);
+
+      // ⓪ 오늘 순위 체크 대상 — 상태별로 주기를 달리 적용
+      const gap=rs.lastDate?Math.round((new Date(todayStr+"T00:00:00")-new Date(rs.lastDate+"T00:00:00"))/86400000):null;
+      let why=null,every=7;
+      if(!rs.lastDate){why="최초 체크";every=0;}
+      else if(rs.dropped.length>0){why="하락 추적 중";every=1;}
+      else if(dday!==null&&dday<=7){why="계약 종료 임박";every=1;}
+      else if(rs.worst!==null&&rs.worst>DANGER_RANK){why=`목표권 밖 (${DANGER_RANK}위 초과)`;every=2;}
+      else{why="정기 점검";every=7;}
+      if(gap===null||gap>=every){
+        b.check.push({c,rs,why,every,detail:rs.lastDate?`마지막 체크 ${rs.lastDate} (${gap}일 전) · ${rs.ranks.map(x=>x.kw+" "+x.rank+"위").join(" · ")||"기록 없음"}`:"순위체크 기록이 아직 없습니다",urgent:every<=1});
+      }
+
+      // ① 오늘·내일 주차 종료 → 다음 주차 세팅 필요
+      const soon=rows.filter(r=>r.end===todayStr||r.end===tomorrow);
+      if(soon.length>0){
+        const lastEnd=soon.reduce((m,r)=>(r.end||"")>m?(r.end||""):m,"");
+        const next=rows.filter(r=>(r.start||"")>lastEnd);
+        if(next.length===0||next.some(r=>!r.setupDone)){
+          b.setup.push({c,rs,detail:`${soon[0].week}주차 ${lastEnd} 종료 · ${next.length===0?"다음 주차 없음":"다음 주차 세팅 미완료"}`,urgent:lastEnd===todayStr});
+        }
+      }
+
+      // ② 직전 순위체크 대비 하락
+      if(rs.dropped.length>0)b.rankdown.push({c,rs,detail:rs.dropped.map(d=>`${d.kw} ${d.from}위→${d.to}위`).join(" · ")+` (${rs.lastDate})`,urgent:true});
+
+      if(!plans)return;
+      // ③④ 리워드트래픽 배분 소진율
+      const total=parseInt(c.provide?.rewardTraffic)||0;
+      const used=rows.filter(r=>planType(r.type).pk==="rewardTraffic").reduce((s,r)=>s+planQty(r),0);
+      if(total>0){
+        const pct=Math.round(used/total*100);
+        if(used>total)b.over.push({c,rs,detail:`총 ${total.toLocaleString()}타 · 배분 ${used.toLocaleString()}타 (초과 ${(used-total).toLocaleString()}타)`,pct});
+        else if(pct>=90)b.nearend.push({c,rs,detail:`총 ${total.toLocaleString()}타 중 ${used.toLocaleString()}타 배분 · 잔여 ${(total-used).toLocaleString()}타`,pct});
+      }
+
+      // ⑤ 계획이 비어 있음
+      if(rows.length===0)b.noplan.push({c,rs,detail:"주간계획 미작성"});
+      else{
+        const maxEnd=rows.reduce((m,r)=>(r.end||"")>m?(r.end||""):m,"");
+        if(maxEnd&&maxEnd<todayStr)b.noplan.push({c,rs,detail:`마지막 주차 ${maxEnd} 종료 · 이후 계획 없음`});
+      }
+    });
+    b.check.sort((x,y)=>(y.urgent?1:0)-(x.urgent?1:0)||x.every-y.every);
+    b.setup.sort((x,y)=>(y.urgent?1:0)-(x.urgent?1:0));
+    b.nearend.sort((x,y)=>y.pct-x.pct);
+    return b;
+  },[plans,active,rankDataMap,tomorrow]);
+
+  const TABS=[
+    {k:"check",label:"오늘 순위 체크",desc:`하락 추적·종료 임박은 매일, ${DANGER_RANK}위 밖은 이틀마다, 안정권은 주 1회`,color:"#0891b2",bg:"#ecfeff",bd:"#a5f3fc",live:true},
+    {k:"setup",label:"세팅 필요",desc:"오늘·내일 주차가 끝나 다음 주차를 잡아야 하는 업체",color:"#0071CE",bg:"#f0f7ff",bd:"#bfd7f5"},
+    {k:"rankdown",label:"순위 하락",desc:"직전 순위체크보다 순위가 나빠진 업체",color:"#ef4444",bg:"#fef2f2",bd:"#fecaca",live:true},
+    {k:"nearend",label:"소진 임박",desc:"리워드트래픽 배분이 총량의 90%를 넘은 업체",color:"#f59e0b",bg:"#fffbeb",bd:"#fde68a"},
+    {k:"noplan",label:"계획 없음",desc:"주간계획이 없거나, 마지막 주차가 끝난 뒤 이어지는 계획이 없는 업체",color:"#8468D3",bg:"#f5f3ff",bd:"#e9d5ff"},
+    {k:"over",label:"총량 초과",desc:"계약 제공내역보다 많이 배분된 업체",color:"#b91c1c",bg:"#fef2f2",bd:"#fecaca"},
+  ];
+  const curTab=TABS.find(t=>t.k===filter)||TABS[0];
+  const items=buckets[filter]||[];
+
+  const kwsOf=c=>{const mk=(c.mainKeywords||[]).filter(Boolean);return[...new Set([...mk,...(c.keywords||[])])];};
+  const toggleOpen=(c,rs)=>{
+    if(openId===c.id){setOpenId("");return;}
+    const init={};kwsOf(c).forEach(kw=>{init[kw]="";});
+    setInputs(m=>({...m,[c.id]:init}));setOpenId(c.id);
+  };
+  const submitRank=async(c,rs)=>{
+    const vals=inputs[c.id]||{};
+    const result={};
+    Object.keys(vals).forEach(kw=>{
+      const n=parseInt(vals[kw]);
+      if(!isNaN(n)&&n>0)result[kw]={rank:n,prevRank:parseInt(rs.cur?.keywords?.[kw]?.rank)||null,date:todayStr};
+    });
+    if(Object.keys(result).length===0)return alert("최소 1개 키워드의 순위를 입력해주세요");
+    setBusy(true);
+    await onSaveRank(c.id,result);
+    // 직전 기록보다 나빠진 키워드가 있으면 주간계획에 추가 투입 줄 생성
+    if(mkExtra){
+      const worse=Object.keys(result).filter(kw=>{const p=parseInt(rs.cur?.keywords?.[kw]?.rank);return !isNaN(p)&&result[kw].rank>p;})
+        .sort((a,b)=>result[b].rank-result[a].rank);
+      if(worse.length>0)await onAppendExtra(c.id,{keyword:worse[0],rank:result[worse[0]].rank});
+    }
+    setBusy(false);setOpenId("");
+    await load();
+  };
+
+  return(<div>
+    {/* 상단 요약 */}
+    <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:"14px 18px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:180}}>
+        <div style={{fontSize:15,fontWeight:800,color:"#0f1117"}}>오늘의 현황판</div>
+        <div style={{fontSize:11,color:"#adb5bd",marginTop:3}}>진행중 계약 {active.length}건 · {todayStr} 기준{plans?"":" · 주간계획 불러오는 중"}</div>
+      </div>
+      <button onClick={load} disabled={loading} style={{background:"#f0f7ff",color:"#0071CE",border:"1px solid #bfd7f5",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{loading?"새로고침 중…":"새로고침"}</button>
+    </div>
+
+    {/* 필터 카드 */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(132px,1fr))",gap:8,marginBottom:12}}>
+      {TABS.map(t=>{
+        const n=(buckets[t.k]||[]).length,on=filter===t.k;
+        const ready=t.live||!!plans;
+        return(<button key={t.k} onClick={()=>{setFilter(t.k);setOpenId("");}} style={{textAlign:"left",background:on?t.bg:"#fff",border:`2px solid ${on?t.color:"#f0f1f3"}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+          <div style={{fontSize:11,fontWeight:700,color:on?t.color:"#6b7280"}}>{t.label}</div>
+          <div style={{fontSize:24,fontWeight:900,color:n>0?t.color:"#d1d5db",marginTop:2}}>{ready?n:"–"}</div>
+        </button>);
+      })}
+    </div>
+
+    {/* 목록 */}
+    <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:16}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:9,flexWrap:"wrap",marginBottom:12,paddingBottom:10,borderBottom:"1px solid #f7f8fa"}}>
+        <span style={{fontSize:13,fontWeight:800,color:curTab.color}}>{curTab.label}</span>
+        <span style={{fontSize:11,color:"#adb5bd"}}>{curTab.desc}</span>
+      </div>
+      {!plans&&!curTab.live?(
+        <p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"30px 0"}}>계약별 주간계획을 불러오는 중입니다…</p>
+      ):items.length===0?(
+        <p style={{fontSize:13,color:"#10b981",fontWeight:600,textAlign:"center",padding:"30px 0"}}>해당하는 업체가 없습니다</p>
+      ):(
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {items.map(({c,rs,detail,urgent,why})=>{
+            const dday=c.endDate?Math.ceil((new Date(c.endDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/86400000):null;
+            const open=openId===c.id;const kws=kwsOf(c);
+            return(<div key={c.id} style={{background:urgent?curTab.bg:"#f7f8fa",border:`1px solid ${urgent?curTab.bd:"#f0f1f3"}`,borderRadius:10,padding:"10px 13px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:11,flexWrap:"wrap"}}>
+                <div style={{minWidth:150,flex:"0 1 auto"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                    <span style={{fontSize:13,fontWeight:700,color:"#0f1117"}}>{c.name}</span>
+                    {(c.industry||"").trim()&&<span style={{fontSize:9,fontWeight:700,color:"#0891b2",background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:5,padding:"1px 6px"}}>{c.industry.trim()}</span>}
+                    {why&&<span style={{fontSize:9,fontWeight:700,color:urgent?"#b91c1c":"#6b7280",background:"#fff",border:"1px solid #f0f1f3",borderRadius:5,padding:"1px 6px"}}>{why}</span>}
+                  </div>
+                  <div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>{c.manager||"담당 미지정"}{dday!==null&&dday>=0?` · 계약 D-${dday}`:""}</div>
+                </div>
+                <div style={{flex:1,minWidth:180,fontSize:12,color:"#374151",fontWeight:600}}>{detail}</div>
+                <button onClick={()=>toggleOpen(c,rs)} style={{background:open?"#0891b2":"#fff",color:open?"#fff":"#0891b2",border:"1px solid #a5f3fc",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{open?"닫기":"순위 입력"}</button>
+                <button onClick={()=>onOpenPlan(c.id)} style={{background:"#fff",color:"#0071CE",border:"1px solid #bfd7f5",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>주간계획</button>
+              </div>
+
+              {/* 인라인 순위 입력 / 이상 신고 */}
+              {open&&(<div style={{marginTop:10,paddingTop:10,borderTop:"1px dashed #d1d5db"}}>
+                {kws.length===0?(
+                  <p style={{fontSize:11,color:"#92400e",margin:0}}>이 계약에 등록된 키워드가 없습니다. 계약 수정에서 키워드를 먼저 넣어주세요.</p>
+                ):(<>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:9}}>
+                    {kws.map(kw=>{
+                      const before=parseInt(rs.cur?.keywords?.[kw]?.rank);
+                      return(<div key={kw} style={{background:"#fff",border:"1px solid #f0f1f3",borderRadius:9,padding:"7px 10px",display:"flex",alignItems:"center",gap:7}}>
+                        <span style={{fontSize:11,fontWeight:700,color:"#374151"}}>{kw}</span>
+                        {!isNaN(before)&&<span style={{fontSize:10,color:"#adb5bd"}}>직전 {before}위 →</span>}
+                        <input type="number" min="1" value={(inputs[c.id]||{})[kw]??""} onChange={e=>setInputs(m=>({...m,[c.id]:{...(m[c.id]||{}),[kw]:e.target.value}}))} placeholder="순위" style={{width:56,border:"1px solid #f0f1f3",borderRadius:7,padding:"4px 6px",fontSize:12,textAlign:"center",outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+                      </div>);
+                    })}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                    <label style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"#6b7280",cursor:"pointer"}}>
+                      <input type="checkbox" checked={mkExtra} onChange={e=>setMkExtra(e.target.checked)} style={{width:14,height:14,cursor:"pointer",accentColor:"#0891b2"}}/>
+                      하락한 키워드가 있으면 주간계획에 추가 투입 줄 만들기
+                    </label>
+                    <button onClick={()=>submitRank(c,rs)} disabled={busy} style={{marginLeft:"auto",background:"#0891b2",color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",fontSize:12,fontWeight:700,cursor:busy?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{busy?"저장 중…":"오늘 순위로 저장"}</button>
+                  </div>
+                </>)}
+              </div>)}
+            </div>);
+          })}
+        </div>
+      )}
+      <p style={{fontSize:10,color:"#adb5bd",margin:"12px 0 0",lineHeight:1.6}}>순위는 오늘 날짜로 기록되며 계약 상세의 순위 히스토리에 그대로 쌓입니다. 소진율·초과는 <b>계획 배분량</b> 기준이라, 실제 투입 대비 미달 업체를 걸러내려면 일일현황(실적 입력)이 필요합니다.</p>
     </div>
   </div>);
 }
@@ -1826,7 +2065,7 @@ function MainApp({user,onLogout}){
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[contractMonth,setContractMonth]=useState("all");const[contractStatus,setContractStatus]=useState("all");
   const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");
-  const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[workSubTab,setWorkSubTab]=useState("plan");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
+  const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[workSubTab,setWorkSubTab]=useState("board");const[planFocus,setPlanFocus]=useState("");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());
   const[calFilter,setCalFilter]=useState("all");const[selectedDay,setSelectedDay]=useState(null);
   const[fOwner,setFOwner]=useState("all");const[fStatus,setFStatus]=useState("all");const[fPriority,setFPriority]=useState("all");const[fProject,setFProject]=useState("all");
@@ -1875,6 +2114,24 @@ function MainApp({user,onLogout}){
   const saveContract=async c=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0)list[idx]=c;else list.push(c);await st.set("contracts:all",list);setContracts([...list]);setShowCF(false);setEditContract(null);};
   const deleteContract=async id=>{const list=(await st.get("contracts:all")||[]).filter(c=>c.id!==id);await st.set("contracts:all",list);setContracts(list);};
   const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);};
+  // 현황판 인라인 순위 입력 — 오늘 날짜로 순위체크 기록 추가
+  const saveRankQuick=async(cid,result)=>{
+    const nd=await st.get("ce:rankdata")||{};
+    nd[`${cid}:순위체크:${todayStr}`]={keywords:result,date:todayStr};
+    await st.set("ce:rankdata",nd);
+    setRankDataMap({...nd});
+  };
+  // 순위 하락 신고 -> 해당 계약 주간계획에 추가 투입 줄 생성
+  const appendPlanExtra=async(cid,{keyword,rank})=>{
+    const raw=await st.get("traffic:plan:"+cid);
+    const arr=Array.isArray(raw)?[...raw]:[];
+    const cur=arr.find(r=>(r.start||"")<=todayStr&&todayStr<=(r.end||""));
+    const week=cur?cur.week:(arr.reduce((m,r)=>Math.max(m,parseInt(r.week)||0),0)+1);
+    const nr={id:uid(),week,start:todayStr,end:cur?cur.end:planAddDays(todayStr,7),keyword:keyword||"",type:cur?.type||"traffic",daily:"",days:"",startRank:String(rank||""),endRank:"",note:"순위하락 대응",extra:true,setupDone:false};
+    let idx=-1;arr.forEach((r,i)=>{if(r.week===week)idx=i;});
+    arr.splice(idx+1,0,nr);
+    await st.set("traffic:plan:"+cid,arr);
+  };
   const loadRankData=async()=>{const r=await st.get("ce:rankdata")||{};setRankDataMap(r);};
   const handleRankConfirm=async(event,keywordsResult)=>{
     const k=ceKey(event);
@@ -2180,13 +2437,16 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
             <div>
               {/* 세부탭 */}
               <div style={{display:"flex",background:"#fff",borderRadius:12,padding:4,marginBottom:14,border:"1px solid #f0f1f3",gap:4}}>
-                {[{id:"plan",label:"주간계획"},{id:"rank",label:"순위체크"}].map(t=>(
+                {[{id:"board",label:"현황판"},{id:"plan",label:"주간계획"},{id:"rank",label:"순위체크"}].map(t=>(
                   <button key={t.id} onClick={()=>setWorkSubTab(t.id)} style={{flex:1,padding:"9px",borderRadius:9,border:"none",fontSize:13,fontWeight:workSubTab===t.id?700:500,cursor:"pointer",background:workSubTab===t.id?"#0071CE":"transparent",color:workSubTab===t.id?"#fff":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{t.label}</button>
                 ))}
               </div>
 
               {/* ===== 주간계획 탭 ===== */}
-              {workSubTab==="plan"&&<WeeklyPlanTab contracts={visibleContracts} st={st}/>}
+              {/* ===== 현황판 탭 ===== */}
+              {workSubTab==="board"&&<StatusBoardTab contracts={visibleContracts} st={st} rankDataMap={rankDataMap} onSaveRank={saveRankQuick} onAppendExtra={appendPlanExtra} onOpenPlan={id=>{setPlanFocus(id+"#"+Date.now());setWorkSubTab("plan");}}/>}
+
+              {workSubTab==="plan"&&<WeeklyPlanTab contracts={visibleContracts} st={st} focusId={planFocus} rankDataMap={rankDataMap}/>}
 
               {/* ===== 순위체크 탭 ===== */}
               {workSubTab==="rank"&&(()=>{
