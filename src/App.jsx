@@ -536,19 +536,31 @@ function RankHistoryPanel({contract,user,onContractUpdate,readOnly=true}){
     const hist={};
     // 현재 계약 순위 기록
     Object.assign(hist,await rankLoadOne(contract.id));
-    // 이전 계약(linkedMemoId) 순위 기록 체인 방식으로 소급
+    // 이전 계약 소급 — ① linkedMemoId 체인 ② 같은 상호명의 더 이른 계약
+    // ②가 필요한 이유: 재연장을 등록할 때 "이전 계약 연결"을 하지 않으면 체인이 끊긴다.
     const allContracts=await st.get("contracts:all")||[];
-    let prevId=contract.linkedMemoId;
     const visited=new Set([contract.id]);
-    let rootC=null;
+    const prevList=[];
+    let prevId=contract.linkedMemoId;
     while(prevId&&!visited.has(prevId)){
       visited.add(prevId);
-      Object.assign(hist,await rankLoadOne(prevId));
-      const prevContract=allContracts.find(c=>c.id===prevId);
-      if(prevContract&&Object.keys(prevContract.initialRanks||{}).length>0)rootC=prevContract;
-      prevId=prevContract?.linkedMemoId;
+      const pc=allContracts.find(c=>c.id===prevId);
+      if(pc)prevList.push(pc);
+      prevId=pc?.linkedMemoId;
     }
-    setRootInit(rootC?{ranks:rootC.initialRanks||{},date:rootC.initRankDate||rootC.startDate||"",name:rootC.name||""}:null);
+    const myName=(contract.name||"").trim();
+    const myStart=contract.startDate||"";
+    allContracts.forEach(c=>{
+      if(visited.has(c.id))return;
+      if(!myName||(c.name||"").trim()!==myName)return;
+      if((c.startDate||"")>=myStart)return;
+      visited.add(c.id);prevList.push(c);
+    });
+    for(const pc of prevList)Object.assign(hist,await rankLoadOne(pc.id));
+    // 가장 이른 계약 중 시작순위가 기록된 것을 "첫 계약"으로 본다
+    const rootC=[...prevList].sort((a,b)=>(a.startDate||"").localeCompare(b.startDate||""))
+      .find(c=>Object.keys(c.initialRanks||{}).length>0)||null;
+    setRootInit(rootC?{ranks:rootC.initialRanks||{},date:rootC.initRankDate||rootC.startDate||"",name:rootC.name||"",linked:!!contract.linkedMemoId}:null);
     setRankHistory(hist);
     setRankLoading(false);
   };
@@ -611,6 +623,7 @@ function RankHistoryPanel({contract,user,onContractUpdate,readOnly=true}){
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:7}}>
                 <span style={{fontSize:12,fontWeight:700,color:"#166534"}}>⓪ 첫 계약 시작 순위</span>
                 <span style={{fontSize:10,color:"#adb5bd"}}>{rootInit.name}{rootInit.date?" · "+rootInit.date:""}</span>
+                {!rootInit.linked&&<span style={{fontSize:9,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:5,padding:"1px 6px"}}>상호명으로 연결됨</span>}
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {Object.entries(rootInit.ranks).map(([kw,v])=>(
@@ -990,7 +1003,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
     const last=rows[rows.length-1];
     const maxWeek=rows.reduce((m,r)=>Math.max(m,parseInt(r.week)||0),0);
     const start=last?.end?planAddDays(last.end,1):(sel?.startDate||todayStr);
-    const end=planAddDays(start,7);
+    const end=planAddDays(start,6);// 시작일 포함 7일
     setRows(rs=>[...rs,{id:uid(),week:maxWeek+1,start,end,keyword:kwOptions[0]||"",type:"traffic",daily:"",days:String(planDays({start,end})),startRank:"",endRank:"",note:"",extra:false,setupDone:false}]);
     setDirty(true);
   };
@@ -1007,7 +1020,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   };
   const upd=(id,patch)=>{setRows(rs=>rs.map(r=>r.id===id?{...r,...patch}:r));setDirty(true);};
   const withDays=p=>({...p,days:String(planDays(p)||"")});
-  const setStart=(id,v)=>{const cur=rows.find(r=>r.id===id)||{};upd(id,v?withDays({...cur,start:v,end:planAddDays(v,7)}):{start:"",end:"",days:""});};
+  const setStart=(id,v)=>{const cur=rows.find(r=>r.id===id)||{};upd(id,v?withDays({...cur,start:v,end:planAddDays(v,6)}):{start:"",end:"",days:""});};
   const setEnd=(id,v)=>{const cur=rows.find(r=>r.id===id)||{};upd(id,withDays({...cur,end:v}));};
   const delRow=id=>{setRows(rs=>rs.filter(r=>r.id!==id));setDirty(true);};
   const save=async()=>{
@@ -1207,7 +1220,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
               </table>
             </div>
             <button onClick={addRow} style={{width:"100%",marginTop:10,background:"#f0f7ff",color:"#0071CE",border:"1px dashed #bfd7f5",borderRadius:9,padding:"9px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 주차 추가 (시작일·종료일 자동 연결)</button>
-            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일이 자동으로 잡히고, 다음 주차는 직전 종료일 <b>다음 날</b>부터 이어집니다. 작업일수는 시작일·종료일을 <b>모두 포함</b>해 자동 계산되며, 계획량은 일일량 × 작업일수입니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 직전 줄의 종료순위가 시작순위로 넘어옵니다.<br/>순위는 숫자만 넣으면 되고(12 → 5 이면 ▲7), 키워드별 누적 성과는 표 위에 자동 집계됩니다.</p>
+            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일이 자동으로 잡히고(시작일 포함 7일), 다음 주차는 직전 종료일 <b>다음 날</b>부터 이어집니다. 작업일수는 시작일·종료일을 <b>모두 포함</b>해 자동 계산되며, 계획량은 일일량 × 작업일수입니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 직전 줄의 종료순위가 시작순위로 넘어옵니다.<br/>순위는 숫자만 넣으면 되고(12 → 5 이면 ▲7), 키워드별 누적 성과는 표 위에 자동 집계됩니다.</p>
           </>)}
         </div>
       </>)}
@@ -1215,6 +1228,20 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   </div>);
 }
 // ===== 현황판 (매일 5분 점검용 뷰) =====
+// 재연장 소급 — ① linkedMemoId 체인 ② 같은 상호명의 더 이른 계약. 시작일 오름차순.
+const relatedContracts=(contract,contracts)=>{
+  const out=[],seen=new Set([contract?.id]);
+  let p=contract?.linkedMemoId;
+  while(p&&!seen.has(p)){seen.add(p);const pc=(contracts||[]).find(c=>c.id===p);if(pc)out.push(pc);p=pc?.linkedMemoId;}
+  const nm=(contract?.name||"").trim(),sd=contract?.startDate||"";
+  (contracts||[]).forEach(c=>{
+    if(seen.has(c.id))return;
+    if(!nm||(c.name||"").trim()!==nm)return;
+    if((c.startDate||"")>=sd)return;
+    seen.add(c.id);out.push(c);
+  });
+  return out.sort((a,b)=>(a.startDate||"").localeCompare(b.startDate||""));
+};
 // 계약별 순위 요약 — 계약 등록 시 기록한 최초순위를 0차 기준으로 삼는다.
 // 재연장 업체는 이번 계약 시작순위(renewalInitRanks)가 있으면 그쪽이 기준이 된다.
 const rankSummaryOf=(contract,rankDataMap)=>{
@@ -1232,9 +1259,7 @@ const rankSummaryOf=(contract,rankDataMap)=>{
   const ranks=cur
     ?Object.entries(cur.keywords||{}).map(([kw,v])=>({kw,rank:parseInt(v?.rank)})).filter(x=>!isNaN(x.rank))
     :Object.entries(baseline).map(([kw,rank])=>({kw,rank}));
-  // 비교 기준: 직전 회차가 있으면 그것, 없으면 최초순위
   const prevOf=kw=>{const p=parseInt(prev?.keywords?.[kw]?.rank);if(!isNaN(p))return p;const b=baseline[kw];return b===undefined?null:b;};
-  // 현재값: 최근 회차가 없으면 최초순위
   const curOf=kw=>{const c=parseInt(cur?.keywords?.[kw]?.rank);if(!isNaN(c))return c;const b=baseline[kw];return b===undefined?null:b;};
   const dropped=[];
   if(cur)Object.keys(cur.keywords||{}).forEach(kw=>{
@@ -1245,68 +1270,162 @@ const rankSummaryOf=(contract,rankDataMap)=>{
   return{cur,prev,lastDate,ranks,dropped,worst,baseline,baseDate,hasBase,fromInitial:!cur&&hasBase,prevOf,curOf};
 };
 const DANGER_RANK=5;// 이 순위 밖이면 위험군 — 매일이 아니라 이틀마다 체크
+const KW_COLORS=["#0071CE","#ef4444","#10b981","#8468D3","#f59e0b"];
+
+// ===== 트래픽 · 순위 추이 그래프 =====
+function TrendChart({days,keywords}){
+  const W=680,H=176,PL=36,PR=38,PT=12,PB=22;
+  const iw=W-PL-PR,ih=H-PT-PB;
+  const dated=days.filter(d=>d.traffic>0||d.ranks);
+  if(dated.length<2)return null;
+  const t0=new Date(dated[0].date+"T00:00:00").getTime();
+  const t1=new Date(dated[dated.length-1].date+"T00:00:00").getTime();
+  const span=Math.max(1,t1-t0);
+  const xOf=ds=>PL+((new Date(ds+"T00:00:00").getTime()-t0)/span)*iw;
+  const maxT=Math.max(1,...dated.map(d=>d.traffic||0));
+  const allRanks=[];dated.forEach(d=>(d.ranks||[]).forEach(r=>{if(!isNaN(r.rank))allRanks.push(r.rank);}));
+  const maxR=Math.max(10,...allRanks);
+  const yRank=r=>PT+((r-1)/Math.max(1,maxR-1))*ih;// 1위가 위
+  const yTraf=v=>PT+ih-(v/maxT)*ih;
+  const barW=Math.max(2,Math.min(9,iw/Math.max(1,dated.length)-1));
+  const series=keywords.map((kw,i)=>({
+    kw,color:KW_COLORS[i%KW_COLORS.length],
+    pts:dated.map(d=>{const hit=(d.ranks||[]).find(r=>r.kw===kw&&!isNaN(r.rank));return hit?{x:xOf(d.date),y:yRank(hit.rank),rank:hit.rank,date:d.date,initial:!!hit.initial}:null;}).filter(Boolean),
+  })).filter(s=>s.pts.length>0);
+
+  return(<div style={{background:"#fff",border:"1px solid #f0f1f3",borderRadius:12,padding:"10px 12px 6px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:4}}>
+      <span style={{fontSize:11,fontWeight:700,color:"#0f1117"}}>트래픽 · 순위 추이</span>
+      <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,color:"#adb5bd"}}>
+        <span style={{width:9,height:9,background:"#dbeafe",borderRadius:2,display:"inline-block"}}/>일일 트래픽
+      </span>
+      {series.map(s=>(
+        <span key={s.kw} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,color:"#6b7280"}}>
+          <span style={{width:11,height:2,background:s.color,display:"inline-block"}}/>{s.kw}
+        </span>
+      ))}
+      <span style={{fontSize:10,color:"#adb5bd",marginLeft:"auto"}}>왼쪽 축 = 순위(위가 높은 순위) · 오른쪽 축 = 타수</span>
+    </div>
+    <div style={{overflowX:"auto"}}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",minWidth:420,height:H,display:"block"}}>
+        {[0,0.5,1].map(f=>(<line key={f} x1={PL} x2={PL+iw} y1={PT+f*ih} y2={PT+f*ih} stroke="#f0f1f3" strokeWidth="1"/>))}
+        {/* 순위 축 */}
+        <text x={PL-6} y={PT+4} textAnchor="end" fontSize="9" fill="#adb5bd">1위</text>
+        <text x={PL-6} y={PT+ih} textAnchor="end" fontSize="9" fill="#adb5bd">{maxR}위</text>
+        {/* 타수 축 */}
+        <text x={PL+iw+6} y={PT+4} fontSize="9" fill="#adb5bd">{maxT.toLocaleString()}</text>
+        <text x={PL+iw+6} y={PT+ih} fontSize="9" fill="#adb5bd">0</text>
+        {/* 트래픽 막대 */}
+        {dated.filter(d=>d.traffic>0).map(d=>(
+          <rect key={d.date} x={xOf(d.date)-barW/2} y={yTraf(d.traffic)} width={barW} height={Math.max(1,PT+ih-yTraf(d.traffic))} fill="#dbeafe" rx="1"/>
+        ))}
+        {/* 순위 선 */}
+        {series.map(s=>(
+          <g key={s.kw}>
+            <polyline points={s.pts.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke={s.color} strokeWidth="1.8" strokeLinejoin="round"/>
+            {s.pts.map((p,i)=>(<circle key={i} r={p.initial?3.4:2.6} cx={p.x} cy={p.y} fill={p.initial?"#fff":s.color} stroke={s.color} strokeWidth={p.initial?2:0}><title>{`${p.date} · ${s.kw} ${p.rank}위${p.initial?" (최초)":""}`}</title></circle>))}
+          </g>
+        ))}
+        <text x={PL} y={H-6} fontSize="9" fill="#adb5bd">{dated[0].date}</text>
+        <text x={PL+iw} y={H-6} textAnchor="end" fontSize="9" fill="#adb5bd">{dated[dated.length-1].date}</text>
+      </svg>
+    </div>
+  </div>);
+}
 
 // ===== 업체별 작업내역 · 순위 타임라인 =====
-// 주차 계획을 하루 단위로 펼치고, 같은 날짜의 순위 기록을 붙여 보여준다.
-function WorkLogModal({contract,rows,rankDataMap,onClose}){
-  const rs=useMemo(()=>rankSummaryOf(contract,rankDataMap),[contract,rankDataMap]);
+// 재연장이면 이전 계약의 주간계획·순위 기록까지 합쳐서 보여준다.
+function WorkLogModal({contract,contracts,plans,rankDataMap,st,onClose}){
+  const chain=useMemo(()=>[...relatedContracts(contract,contracts),contract],[contract,contracts]);
+  const[extraPlans,setExtraPlans]=useState({});
+  useEffect(()=>{
+    let alive=true;
+    const need=chain.map(c=>c.id).filter(id=>!(plans||{})[id]);
+    if(need.length===0){setExtraPlans({});return;}
+    Promise.all(need.map(id=>st.get("traffic:plan:"+id).then(r=>[id,Array.isArray(r)?r:[]]).catch(()=>[id,[]])))
+      .then(res=>{if(alive)setExtraPlans(Object.fromEntries(res));});
+    return()=>{alive=false;};
+  },[contract.id]);
+  const rowsOf=id=>(plans||{})[id]||extraPlans[id]||[];
+
   const days=useMemo(()=>{
     const map={};
-    const touch=d=>{if(!map[d])map[d]={date:d,works:[],ranks:null};return map[d];};
-    (rows||[]).forEach(r=>{
-      if(!r.start||!r.end||r.end<r.start)return;
-      const t=planType(r.type);
-      const daily=parseInt(r.daily)||0;
-      let d=r.start,guard=0;
-      while(d<=r.end&&guard++<400){
-        touch(d).works.push({week:r.week,extra:!!r.extra,keyword:r.keyword||"",label:t.label,color:t.color,unit:t.unit,daily,setupDone:!!r.setupDone,note:r.note||""});
-        const nx=planAddDays(d,1);
-        if(nx<=d)break;
-        d=nx;
+    const touch=d=>{if(!map[d])map[d]={date:d,works:[],ranks:null,traffic:0};return map[d];};
+    chain.forEach(c=>{
+      const isPrev=c.id!==contract.id;
+      rowsOf(c.id).forEach(r=>{
+        if(!r.start||!r.end||r.end<r.start)return;
+        const t=planType(r.type);
+        const daily=parseInt(r.daily)||0;
+        let d=r.start,guard=0;
+        while(d<=r.end&&guard++<400){
+          const cell=touch(d);
+          cell.works.push({week:r.week,extra:!!r.extra,keyword:r.keyword||"",label:t.label,color:t.color,unit:t.unit,daily,setupDone:!!r.setupDone,note:r.note||"",isPrev,cname:c.name});
+          if(t.pk==="rewardTraffic")cell.traffic+=daily;
+          const nx=planAddDays(d,1);
+          if(nx<=d)break;
+          d=nx;
+        }
+      });
+      Object.keys(rankDataMap||{}).filter(k=>k.startsWith(c.id+":순위체크:")).forEach(k=>{
+        const rec=rankDataMap[k];const d=rec?.date||k.split(":")[2];if(!d)return;
+        const list=Object.entries(rec?.keywords||{}).map(([kw,v])=>({kw,rank:parseInt(v?.rank),prev:parseInt(v?.prevRank),isPrev})).filter(x=>!isNaN(x.rank));
+        if(list.length)touch(d).ranks=[...(touch(d).ranks||[]),...list];
+      });
+      const rs=rankSummaryOf(c,rankDataMap);
+      if(rs.hasBase&&rs.baseDate){
+        const cell=touch(rs.baseDate);
+        const have=new Set((cell.ranks||[]).map(x=>x.kw));
+        const add=Object.entries(rs.baseline).filter(([kw])=>!have.has(kw)).map(([kw,rank])=>({kw,rank,prev:NaN,initial:true,isPrev}));
+        if(add.length)cell.ranks=[...(cell.ranks||[]),...add];
       }
     });
-    Object.keys(rankDataMap||{}).filter(k=>k.startsWith(contract.id+":순위체크:")).forEach(k=>{
-      const rec=rankDataMap[k];const d=rec?.date||k.split(":")[2];if(!d)return;
-      touch(d).ranks=Object.entries(rec?.keywords||{}).map(([kw,v])=>({kw,rank:parseInt(v?.rank),prev:parseInt(v?.prevRank)})).filter(x=>!isNaN(x.rank));
-    });
-    if(rs.hasBase&&rs.baseDate){
-      const t=touch(rs.baseDate);
-      if(!t.ranks)t.ranks=Object.entries(rs.baseline).map(([kw,rank])=>({kw,rank,prev:NaN,initial:true}));
-    }
     return Object.values(map).sort((a,b)=>a.date.localeCompare(b.date));
-  },[rows,rankDataMap,contract,rs]);
+  },[chain,rankDataMap,extraPlans,plans,contract]);
+
+  const chartKws=useMemo(()=>{
+    const cnt={};
+    days.forEach(d=>(d.ranks||[]).forEach(r=>{cnt[r.kw]=(cnt[r.kw]||0)+1;}));
+    return Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,5).map(x=>x[0]);
+  },[days]);
 
   const totalByType=useMemo(()=>{
     const m={};
     days.forEach(d=>d.works.forEach(w=>{m[w.label]=(m[w.label]||0)+w.daily;}));
     return m;
   },[days]);
+  const prevContracts=chain.filter(c=>c.id!==contract.id);
   const DOW=["일","월","화","수","목","금","토"];
   const diffTag=d=>isNaN(d)||d===null?null:d>0?{t:"▲"+d,c:"#10b981"}:d<0?{t:"▼"+Math.abs(d),c:"#ef4444"}:{t:"－",c:"#adb5bd"};
 
   return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:720,maxHeight:"86vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.2)"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:780,maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 64px rgba(0,0,0,0.2)"}}>
       <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <div style={{flex:1,minWidth:160}}>
           <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
             <span style={{fontSize:15,fontWeight:800,color:"#0f1117"}}>{contract.name}</span>
             {(contract.industry||"").trim()&&<span style={{fontSize:9,fontWeight:700,color:"#0891b2",background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:5,padding:"1px 6px"}}>{contract.industry.trim()}</span>}
+            {prevContracts.length>0&&<span style={{fontSize:9,fontWeight:700,color:"#8468D3",background:"#f5f3ff",border:"1px solid #e9d5ff",borderRadius:5,padding:"1px 6px"}}>이전 계약 {prevContracts.length}건 포함</span>}
           </div>
-          <div style={{fontSize:11,color:"#adb5bd",marginTop:3}}>{contract.startDate} ~ {contract.endDate} · 작업내역과 순위 기록</div>
+          <div style={{fontSize:11,color:"#adb5bd",marginTop:3}}>
+            {prevContracts.length>0?`${prevContracts[0].startDate} ~ ${contract.endDate} (통합)`:`${contract.startDate} ~ ${contract.endDate}`} · 작업내역과 순위 기록
+          </div>
         </div>
         <button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#adb5bd"}}>✕</button>
       </div>
 
-      {Object.keys(totalByType).length>0&&(
-        <div style={{padding:"10px 22px",background:"#f7f8fa",borderBottom:"1px solid #f0f1f3",display:"flex",gap:12,flexWrap:"wrap"}}>
-          {Object.entries(totalByType).map(([label,v])=>(
-            <span key={label} style={{fontSize:11,fontWeight:700,color:"#374151"}}>{label} <b style={{color:"#0071CE"}}>{v.toLocaleString()}</b></span>
-          ))}
-          <span style={{fontSize:11,color:"#adb5bd",marginLeft:"auto"}}>계획 기준 누적</span>
-        </div>
-      )}
-
       <div style={{flex:1,overflowY:"auto",padding:"14px 22px 20px"}}>
+        {chartKws.length>0&&<div style={{marginBottom:12}}><TrendChart days={days} keywords={chartKws}/></div>}
+
+        {Object.keys(totalByType).length>0&&(
+          <div style={{display:"flex",gap:12,flexWrap:"wrap",background:"#f7f8fa",borderRadius:10,padding:"9px 13px",marginBottom:12}}>
+            {Object.entries(totalByType).map(([label,v])=>(
+              <span key={label} style={{fontSize:11,fontWeight:700,color:"#374151"}}>{label} <b style={{color:"#0071CE"}}>{v.toLocaleString()}</b></span>
+            ))}
+            <span style={{fontSize:11,color:"#adb5bd",marginLeft:"auto"}}>계획 기준 누적{prevContracts.length>0?" (이전 계약 포함)":""}</span>
+          </div>
+        )}
+
         {days.length===0?(
           <p style={{fontSize:13,color:"#adb5bd",textAlign:"center",padding:"40px 0"}}>아직 주간계획도 순위 기록도 없습니다.</p>
         ):(
@@ -1314,10 +1433,12 @@ function WorkLogModal({contract,rows,rankDataMap,onClose}){
             {days.map(d=>{
               const dow=DOW[new Date(d.date+"T00:00:00").getDay()];
               const isToday=d.date===todayStr;
-              return(<div key={d.date} style={{display:"flex",gap:10,alignItems:"flex-start",background:isToday?"#f0f7ff":d.ranks?"#fffdf7":"#f7f8fa",border:`1px solid ${isToday?"#bfd7f5":d.ranks?"#fde68a":"#f0f1f3"}`,borderRadius:9,padding:"8px 12px"}}>
+              const anyPrev=d.works.some(w=>w.isPrev)||(d.ranks||[]).some(r=>r.isPrev);
+              return(<div key={d.date} style={{display:"flex",gap:10,alignItems:"flex-start",background:isToday?"#f0f7ff":anyPrev?"#fdf8ff":d.ranks?"#fffdf7":"#f7f8fa",border:`1px solid ${isToday?"#bfd7f5":anyPrev?"#e9d5ff":d.ranks?"#fde68a":"#f0f1f3"}`,borderRadius:9,padding:"8px 12px"}}>
                 <div style={{minWidth:74,flexShrink:0}}>
-                  <div style={{fontSize:12,fontWeight:700,color:isToday?"#0071CE":"#0f1117"}}>{d.date.slice(5)} {dow}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:isToday?"#0071CE":"#0f1117"}}>{d.date.slice(2).replace(/-/g,".")} {dow}</div>
                   {isToday&&<div style={{fontSize:9,fontWeight:700,color:"#0071CE"}}>오늘</div>}
+                  {!isToday&&anyPrev&&<div style={{fontSize:9,fontWeight:700,color:"#8468D3"}}>이전 계약</div>}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   {d.works.length===0?<span style={{fontSize:11,color:"#d1d5db"}}>작업 없음</span>:(
@@ -1348,7 +1469,7 @@ function WorkLogModal({contract,rows,rankDataMap,onClose}){
             })}
           </div>
         )}
-        <p style={{fontSize:10,color:"#adb5bd",margin:"12px 0 0",lineHeight:1.6}}>작업량은 주간계획에 잡아둔 <b>계획</b>을 하루 단위로 펼친 값입니다. 실제 투입량과는 다를 수 있습니다.</p>
+        <p style={{fontSize:10,color:"#adb5bd",margin:"12px 0 0",lineHeight:1.6}}>작업량은 주간계획에 잡아둔 <b>계획</b>을 하루 단위로 펼친 값입니다. 실제 투입량과는 다를 수 있습니다.{prevContracts.length>0&&` 이전 계약 ${prevContracts.map(c=>c.startDate).join(", ")} 기록이 함께 표시됩니다.`}</p>
       </div>
     </div>
   </div>);
@@ -1358,23 +1479,42 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
   const[plans,setPlans]=useState(null);
   const[loading,setLoading]=useState(false);
   const[filter,setFilter]=useState("check");
+  const[allSub,setAllSub]=useState("active");
+  const[allSearch,setAllSearch]=useState("");
   const[openId,setOpenId]=useState("");
   const[inputs,setInputs]=useState({});
   const[mkExtra,setMkExtra]=useState(true);
   const[busy,setBusy]=useState(false);
   const[logId,setLogId]=useState("");
+  const[endedLoaded,setEndedLoaded]=useState(false);
+  const[endedLoading,setEndedLoading]=useState(false);
   const tomorrow=planAddDays(todayStr,1);
 
-  const active=useMemo(()=>contracts.filter(c=>!c.cancelled&&(c.endDate||"")>=todayStr),[contracts]);
+  const scope=useMemo(()=>contracts.filter(c=>!c.cancelled),[contracts]);
+  const active=useMemo(()=>scope.filter(c=>(c.endDate||"")>=todayStr),[scope]);
+  const ended=useMemo(()=>scope.filter(c=>(c.endDate||"")<todayStr),[scope]);
   const logContract=useMemo(()=>contracts.find(c=>c.id===logId)||null,[contracts,logId]);
 
+  // 계약별 주간계획은 문서가 하나씩이라, 필요한 것만 불러온다.
+  const fetchPlans=list=>Promise.all(list.map(c=>st.get("traffic:plan:"+c.id).then(r=>[c.id,Array.isArray(r)?r:[]]).catch(()=>[c.id,[]])));
   const load=async()=>{
     setLoading(true);
-    const res=await Promise.all(active.map(c=>st.get("traffic:plan:"+c.id).then(r=>[c.id,Array.isArray(r)?r:[]]).catch(()=>[c.id,[]])));
-    setPlans(Object.fromEntries(res));
+    const res=await fetchPlans(active);
+    setPlans(p=>({...(p||{}),...Object.fromEntries(res)}));
     setLoading(false);
+    // 종료 업체를 이미 본 적이 있으면 같이 갱신
+    if(endedLoaded){const r2=await fetchPlans(ended);setPlans(p=>({...(p||{}),...Object.fromEntries(r2)}));}
+  };
+  const loadEnded=async()=>{
+    if(endedLoading||endedLoaded)return;
+    setEndedLoading(true);
+    const res=await fetchPlans(ended);
+    setPlans(p=>({...(p||{}),...Object.fromEntries(res)}));
+    setEndedLoaded(true);setEndedLoading(false);
   };
   useEffect(()=>{load();},[]);
+  // 전체 > 종료 를 처음 누른 시점에만 종료 업체를 읽는다
+  useEffect(()=>{if(filter==="all"&&allSub==="ended")loadEnded();},[filter,allSub,ended.length]);
 
   const buckets=useMemo(()=>{
     const b={check:[],setup:[],rankdown:[],nearend:[],noplan:[],over:[]};
@@ -1383,7 +1523,6 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
       const dday=c.endDate?Math.ceil((new Date(c.endDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/86400000):null;
       const rs=rankSummaryOf(c,rankDataMap);
 
-      // ⓪ 오늘 순위 체크 대상 — 상태별로 주기를 달리 적용
       const gap=rs.lastDate?Math.round((new Date(todayStr+"T00:00:00")-new Date(rs.lastDate+"T00:00:00"))/86400000):null;
       let why=null,every=7;
       if(!rs.lastDate){why="최초 체크";every=0;}
@@ -1398,7 +1537,6 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
         b.check.push({c,rs,why,every,detail,urgent:every<=1});
       }
 
-      // ① 오늘·내일 주차 종료 → 다음 주차 세팅 필요
       const soon=rows.filter(r=>r.end===todayStr||r.end===tomorrow);
       if(soon.length>0){
         const lastEnd=soon.reduce((m,r)=>(r.end||"")>m?(r.end||""):m,"");
@@ -1408,11 +1546,9 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
         }
       }
 
-      // ② 직전 기준 대비 하락 (직전 회차가 없으면 최초순위와 비교)
       if(rs.dropped.length>0)b.rankdown.push({c,rs,detail:rs.dropped.map(d=>`${d.kw} ${d.from}위→${d.to}위`).join(" · ")+` (${rs.lastDate})`,urgent:true});
 
       if(!plans)return;
-      // ③④ 리워드트래픽 배분 소진율
       const total=parseInt(c.provide?.rewardTraffic)||0;
       const used=rows.filter(r=>planType(r.type).pk==="rewardTraffic").reduce((s,r)=>s+planQty(r),0);
       if(total>0){
@@ -1421,7 +1557,6 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
         else if(pct>=90)b.nearend.push({c,rs,detail:`총 ${total.toLocaleString()}타 중 ${used.toLocaleString()}타 배분 · 잔여 ${(total-used).toLocaleString()}타`,pct});
       }
 
-      // ⑤ 계획이 비어 있음
       if(rows.length===0)b.noplan.push({c,rs,detail:"주간계획 미작성"});
       else{
         const maxEnd=rows.reduce((m,r)=>(r.end||"")>m?(r.end||""):m,"");
@@ -1434,6 +1569,27 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
     return b;
   },[plans,active,rankDataMap,tomorrow]);
 
+  // 전체 목록 — 진행중 / 종료
+  const allItems=useMemo(()=>{
+    if(allSub==="ended"&&!endedLoaded)return[];
+    const base=allSub==="ended"?ended:active;
+    const q=allSearch.trim().toLowerCase();
+    const list=q?base.filter(c=>(c.name||"").toLowerCase().includes(q)||(c.industry||"").toLowerCase().includes(q)):base;
+    return[...list].sort((a,b)=>allSub==="ended"?(b.endDate||"").localeCompare(a.endDate||""):(a.endDate||"").localeCompare(b.endDate||""))
+      .map(c=>{
+        const rs=rankSummaryOf(c,rankDataMap);
+        const rows=(plans||{})[c.id]||[];
+        const total=parseInt(c.provide?.rewardTraffic)||0;
+        const used=rows.filter(r=>planType(r.type).pk==="rewardTraffic").reduce((s,r)=>s+planQty(r),0);
+        const bits=[];
+        bits.push(`${c.startDate} ~ ${c.endDate}`);
+        if(total>0)bits.push(`${used.toLocaleString()}/${total.toLocaleString()}타 (${Math.round(used/total*100)}%)`);
+        else if(used>0)bits.push(`${used.toLocaleString()}타 배분`);
+        if(rs.ranks.length>0)bits.push(rs.ranks.map(x=>x.kw+" "+x.rank+"위").join(" · "));
+        return{c,rs,detail:bits.join(" · "),why:rows.length>0?`${rows.length}개 주차`:"계획 없음"};
+      });
+  },[allSub,allSearch,active,ended,plans,rankDataMap,endedLoaded]);
+
   const TABS=[
     {k:"check",label:"오늘 순위 체크",desc:`하락 추적·종료 임박은 매일, ${DANGER_RANK}위 밖은 이틀마다, 안정권은 주 1회`,color:"#0891b2",bg:"#ecfeff",bd:"#a5f3fc",live:true},
     {k:"setup",label:"세팅 필요",desc:"오늘·내일 주차가 끝나 다음 주차를 잡아야 하는 업체",color:"#0071CE",bg:"#f0f7ff",bd:"#bfd7f5"},
@@ -1441,9 +1597,10 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
     {k:"nearend",label:"소진 임박",desc:"리워드트래픽 배분이 총량의 90%를 넘은 업체",color:"#f59e0b",bg:"#fffbeb",bd:"#fde68a"},
     {k:"noplan",label:"계획 없음",desc:"주간계획이 없거나, 마지막 주차가 끝난 뒤 이어지는 계획이 없는 업체",color:"#8468D3",bg:"#f5f3ff",bd:"#e9d5ff"},
     {k:"over",label:"총량 초과",desc:"계약 제공내역보다 많이 배분된 업체",color:"#b91c1c",bg:"#fef2f2",bd:"#fecaca"},
+    {k:"all",label:"전체",desc:"진행중·종료 업체를 모두 봅니다. 업체명을 누르면 작업내역과 순위 추이가 열립니다.",color:"#374151",bg:"#f7f8fa",bd:"#e5e7eb",live:true},
   ];
   const curTab=TABS.find(t=>t.k===filter)||TABS[0];
-  const items=buckets[filter]||[];
+  const items=filter==="all"?allItems:(buckets[filter]||[]);
 
   const kwsOf=c=>{const mk=(c.mainKeywords||[]).filter(Boolean);return[...new Set([...mk,...(c.keywords||[])])];};
   const toggleOpen=c=>{
@@ -1461,7 +1618,6 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
     if(Object.keys(result).length===0)return alert("최소 1개 키워드의 순위를 입력해주세요");
     setBusy(true);
     await onSaveRank(c.id,result);
-    // 기준값보다 나빠진 키워드가 있으면 주간계획에 추가 투입 줄 생성
     if(mkExtra){
       const worse=Object.keys(result).filter(kw=>{const p=result[kw].prevRank;return p!==null&&result[kw].rank>p;})
         .sort((a,b)=>result[b].rank-result[a].rank);
@@ -1472,21 +1628,19 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
   };
 
   return(<div>
-    {logContract&&<WorkLogModal contract={logContract} rows={(plans||{})[logContract.id]||[]} rankDataMap={rankDataMap} onClose={()=>setLogId("")}/>}
+    {logContract&&<WorkLogModal contract={logContract} contracts={contracts} plans={plans} rankDataMap={rankDataMap} st={st} onClose={()=>setLogId("")}/>}
 
-    {/* 상단 요약 */}
     <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:"14px 18px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <div style={{flex:1,minWidth:180}}>
         <div style={{fontSize:15,fontWeight:800,color:"#0f1117"}}>오늘의 현황판</div>
-        <div style={{fontSize:11,color:"#adb5bd",marginTop:3}}>진행중 계약 {active.length}건 · {todayStr} 기준{plans?"":" · 주간계획 불러오는 중"}</div>
+        <div style={{fontSize:11,color:"#adb5bd",marginTop:3}}>진행중 {active.length}건 · 종료 {ended.length}건{endedLoaded?"":" (계획은 전체 &gt; 종료에서 불러옵니다)"} · {todayStr} 기준{plans?"":" · 불러오는 중"}</div>
       </div>
       <button onClick={load} disabled={loading} style={{background:"#f0f7ff",color:"#0071CE",border:"1px solid #bfd7f5",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{loading?"새로고침 중…":"새로고침"}</button>
     </div>
 
-    {/* 필터 카드 */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(132px,1fr))",gap:8,marginBottom:12}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:8,marginBottom:12}}>
       {TABS.map(t=>{
-        const n=(buckets[t.k]||[]).length,on=filter===t.k;
+        const n=t.k==="all"?scope.length:(buckets[t.k]||[]).length,on=filter===t.k;
         const ready=t.live||!!plans;
         return(<button key={t.k} onClick={()=>{setFilter(t.k);setOpenId("");}} style={{textAlign:"left",background:on?t.bg:"#fff",border:`2px solid ${on?t.color:"#f0f1f3"}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
           <div style={{fontSize:11,fontWeight:700,color:on?t.color:"#6b7280"}}>{t.label}</div>
@@ -1495,37 +1649,52 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
       })}
     </div>
 
-    {/* 목록 */}
     <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:16}}>
       <div style={{display:"flex",alignItems:"baseline",gap:9,flexWrap:"wrap",marginBottom:12,paddingBottom:10,borderBottom:"1px solid #f7f8fa"}}>
         <span style={{fontSize:13,fontWeight:800,color:curTab.color}}>{curTab.label}</span>
         <span style={{fontSize:11,color:"#adb5bd"}}>{curTab.desc}</span>
       </div>
-      {!plans&&!curTab.live?(
+
+      {filter==="all"&&(
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:12}}>
+          <div style={{display:"flex",gap:4}}>
+            {[{v:"active",l:`진행중 ${active.length}`},{v:"ended",l:`종료 ${ended.length}`}].map(f=>(
+              <button key={f.v} onClick={()=>{setAllSub(f.v);setOpenId("");}} style={{border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",background:allSub===f.v?"#374151":"#f7f8fa",color:allSub===f.v?"#fff":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{f.l}</button>
+            ))}
+          </div>
+          <input value={allSearch} onChange={e=>setAllSearch(e.target.value)} placeholder="상호명 · 업종 검색" style={{flex:1,minWidth:160,border:"1px solid #f0f1f3",borderRadius:8,padding:"7px 11px",fontSize:12,outline:"none",fontFamily:"'Pretendard',-apple-system,sans-serif"}}/>
+        </div>
+      )}
+
+      {filter==="all"&&allSub==="ended"&&!endedLoaded?(
+        <p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"30px 0"}}>종료 업체 {ended.length}건을 불러오는 중입니다…</p>
+      ):!plans&&!curTab.live?(
         <p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"30px 0"}}>계약별 주간계획을 불러오는 중입니다…</p>
       ):items.length===0?(
-        <p style={{fontSize:13,color:"#10b981",fontWeight:600,textAlign:"center",padding:"30px 0"}}>해당하는 업체가 없습니다</p>
+        <p style={{fontSize:13,color:filter==="all"?"#adb5bd":"#10b981",fontWeight:600,textAlign:"center",padding:"30px 0"}}>{filter==="all"?"해당하는 업체가 없습니다":"해당하는 업체가 없습니다"}</p>
       ):(
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           {items.map(({c,rs,detail,urgent,why})=>{
             const dday=c.endDate?Math.ceil((new Date(c.endDate+"T00:00:00")-new Date(todayStr+"T00:00:00"))/86400000):null;
             const open=openId===c.id;const kws=kwsOf(c);
-            return(<div key={c.id} style={{background:urgent?curTab.bg:"#f7f8fa",border:`1px solid ${urgent?curTab.bd:"#f0f1f3"}`,borderRadius:10,padding:"10px 13px"}}>
+            const isEnded=(c.endDate||"")<todayStr;
+            return(<div key={c.id} style={{background:urgent?curTab.bg:"#f7f8fa",border:`1px solid ${urgent?curTab.bd:"#f0f1f3"}`,borderRadius:10,padding:"10px 13px",opacity:isEnded&&filter==="all"?0.85:1}}>
               <div style={{display:"flex",alignItems:"center",gap:11,flexWrap:"wrap"}}>
                 <div onClick={()=>setLogId(c.id)} title="작업내역·순위 기록 보기" style={{minWidth:150,flex:"0 1 auto",cursor:"pointer"}}>
                   <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                     <span style={{fontSize:13,fontWeight:700,color:"#0f1117",textDecoration:"underline",textDecorationColor:"#d1d5db",textUnderlineOffset:3}}>{c.name}</span>
                     {(c.industry||"").trim()&&<span style={{fontSize:9,fontWeight:700,color:"#0891b2",background:"#ecfeff",border:"1px solid #a5f3fc",borderRadius:5,padding:"1px 6px"}}>{c.industry.trim()}</span>}
+                    {c.isRenewal&&<span style={{fontSize:9,fontWeight:700,color:"#8468D3",background:"#f5f3ff",border:"1px solid #e9d5ff",borderRadius:5,padding:"1px 6px"}}>R{c.renewalCount||1}</span>}
+                    {isEnded&&filter==="all"&&<span style={{fontSize:9,fontWeight:700,color:"#6b7280",background:"#f3f4f6",border:"1px solid #e5e7eb",borderRadius:5,padding:"1px 6px"}}>종료</span>}
                     {why&&<span style={{fontSize:9,fontWeight:700,color:urgent?"#b91c1c":"#6b7280",background:"#fff",border:"1px solid #f0f1f3",borderRadius:5,padding:"1px 6px"}}>{why}</span>}
                   </div>
                   <div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>{c.manager||"담당 미지정"}{dday!==null&&dday>=0?` · 계약 D-${dday}`:""}</div>
                 </div>
                 <div style={{flex:1,minWidth:180,fontSize:12,color:"#374151",fontWeight:600}}>{detail}</div>
-                <button onClick={()=>toggleOpen(c)} style={{background:open?"#0891b2":"#fff",color:open?"#fff":"#0891b2",border:"1px solid #a5f3fc",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{open?"닫기":"순위 입력"}</button>
+                {!isEnded&&<button onClick={()=>toggleOpen(c)} style={{background:open?"#0891b2":"#fff",color:open?"#fff":"#0891b2",border:"1px solid #a5f3fc",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{open?"닫기":"순위 입력"}</button>}
                 <button onClick={()=>onOpenPlan(c.id)} style={{background:"#fff",color:"#0071CE",border:"1px solid #bfd7f5",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>주간계획</button>
               </div>
 
-              {/* 인라인 순위 입력 / 이상 신고 */}
               {open&&(<div style={{marginTop:10,paddingTop:10,borderTop:"1px dashed #d1d5db"}}>
                 {kws.length===0?(
                   <p style={{fontSize:11,color:"#92400e",margin:0}}>이 계약에 등록된 키워드가 없습니다. 계약 수정에서 키워드를 먼저 넣어주세요.</p>
@@ -1553,7 +1722,7 @@ function StatusBoardTab({contracts,st,rankDataMap,onSaveRank,onAppendExtra,onOpe
           })}
         </div>
       )}
-      <p style={{fontSize:10,color:"#adb5bd",margin:"12px 0 0",lineHeight:1.6}}>업체명을 누르면 그동안의 작업내역과 순위 기록을 날짜별로 볼 수 있습니다. 계약 등록 시 넣은 최초순위가 0차 기준이 되고, 재연장 업체는 이번 계약 시작순위가 기준입니다.</p>
+      <p style={{fontSize:10,color:"#adb5bd",margin:"12px 0 0",lineHeight:1.6}}>업체명을 누르면 작업내역·순위 추이가 열립니다. 재연장 업체는 이전 계약 기록까지 합쳐서 보여줍니다. 소진율은 <b>계획 배분량</b> 기준입니다.</p>
     </div>
   </div>);
 }
@@ -2333,7 +2502,7 @@ function MainApp({user,onLogout}){
     const arr=Array.isArray(raw)?[...raw]:[];
     const cur=arr.find(r=>(r.start||"")<=todayStr&&todayStr<=(r.end||""));
     const week=cur?cur.week:(arr.reduce((m,r)=>Math.max(m,parseInt(r.week)||0),0)+1);
-    const nrEnd=cur?cur.end:planAddDays(todayStr,7);
+    const nrEnd=cur?cur.end:planAddDays(todayStr,6);
     const nr={id:uid(),week,start:todayStr,end:nrEnd,keyword:keyword||"",type:cur?.type||"traffic",daily:"",days:String(planDays({start:todayStr,end:nrEnd})),startRank:String(rank||""),endRank:"",note:"순위하락 대응",extra:true,setupDone:false};
     let idx=-1;arr.forEach((r,i)=>{if(r.week===week)idx=i;});
     arr.splice(idx+1,0,nr);
