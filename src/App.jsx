@@ -921,6 +921,207 @@ const planRankPerf=rows=>{
     return{...m,diff,perStep:(diff!==null&&diff>0&&m.qty>0)?Math.round(m.qty/diff):null};
   });
 };
+// ===== 블로그 리뷰 계획 (블플 포함 계약 전용) =====
+// 저장 위치: blog:plan:{계약id}  — 주간계획(traffic:plan:{계약id})과 같은 규칙.
+// 구조: {goal, runs:[리뷰나우 세팅], cms:[수기 업로드 기록], weekPlan:{주시작일:예정건수}}
+// 기존 계약엔 이 문서가 없으므로 어디서든 빈 값으로 읽히도록 blogNorm 을 거친다.
+const blogNorm=d=>({goal:d&&d.goal!=null?d.goal:"",runs:Array.isArray(d&&d.runs)?d.runs:[],cms:Array.isArray(d&&d.cms)?d.cms:[],weekPlan:(d&&d.weekPlan&&typeof d.weekPlan==="object")?d.weekPlan:{}});
+const blogHasProduct=c=>(parseInt(c&&c.provide&&c.provide.blogPlus)||0)>0;
+const intOr=(v,f)=>{const n=parseInt(v);return isNaN(n)?f:n;};
+// 예상 종료일 = 시작일 + ceil(총건수 ÷ 일건수) - 1일 (시작일 포함)
+const blogRunEnd=r=>{const t=intOr(r.total,0),d=intOr(r.daily,0);if(!r.start||t<=0||d<=0)return"";return planAddDays(r.start,Math.ceil(t/d)-1);};
+// 오늘 기준 예상 진행량 = min(총건수, 일건수 × 시작일부터 오늘까지 경과일수(시작일 포함))
+// · 시작일이 미래면 0  · 일시중지면 중지한 날까지만  · 실제 확인 건수(actual)가 있으면 그 값 우선
+const blogRunDone=(r,asOf)=>{
+  const t=intOr(r.total,0),d=intOr(r.daily,0);
+  const act=parseInt(r.actual);
+  if(!isNaN(act))return Math.max(0,Math.min(t||act,act));
+  if(!r.start||t<=0||d<=0)return 0;
+  const ref=(r.paused&&r.pausedAt)?(r.pausedAt<asOf?r.pausedAt:asOf):asOf;
+  if(ref<r.start)return 0;
+  const days=Math.round((new Date(ref+"T00:00:00")-new Date(r.start+"T00:00:00"))/86400000)+1;
+  return Math.min(t,d*days);
+};
+// 특정 기간(주차)에 리뷰나우가 올린 예상 건수 — 총건수 상한을 넘지 않도록 누적값 차이로 구한다.
+const blogRunInRange=(r,from,to)=>{const a=from?blogRunDone(r,planAddDays(from,-1)):0;const b=blogRunDone(r,to);return Math.max(0,b-a);};
+const blogCmsSum=(cms,from,to)=>(cms||[]).reduce((s,x)=>((!from||x.date>=from)&&(!to||x.date<=to))?s+intOr(x.count,1):s,0);
+// 계약 기간을 월요일 시작 주 단위로 쪼갠다.
+const blogWeeks=(start,end)=>{
+  if(!start||!end||end<start)return[];
+  const d=new Date(start+"T00:00:00");const dow=d.getDay();
+  d.setDate(d.getDate()-(dow===0?6:dow-1));// 그 주 월요일
+  const out=[];let cur=ymdLocal(d);let guard=0;
+  while(cur<=end&&guard++<200){const we=planAddDays(cur,6);out.push({start:cur,end:we>end?end:we,mon:cur});cur=planAddDays(cur,7);}
+  return out;
+};
+function BlogReviewPanel({contract,st}){
+  const cid=contract.id;
+  const[data,setData]=useState(blogNorm(null));
+  const[loading,setLoading]=useState(false);
+  const[saving,setSaving]=useState(false);
+  const[dirty,setDirty]=useState(false);
+  const[showWeeks,setShowWeeks]=useState(false);
+  const[cmsDraft,setCmsDraft]=useState({date:todayStr,count:"1",memo:""});
+  useEffect(()=>{let alive=true;setLoading(true);setDirty(false);
+    (async()=>{const d=await st.get("blog:plan:"+cid);if(!alive)return;setData(blogNorm(d));setLoading(false);})();
+    return()=>{alive=false;};},[cid]);
+  const patch=fn=>{setData(d=>fn(d));setDirty(true);};
+  const save=async()=>{setSaving(true);await st.set("blog:plan:"+cid,data);setSaving(false);setDirty(false);};
+
+  const goal=intOr(data.goal,0);
+  const runDone=data.runs.reduce((s,r)=>s+blogRunDone(r,todayStr),0);
+  const cmsDone=blogCmsSum(data.cms);
+  const done=runDone+cmsDone;
+  const remain=goal-done;
+  const pct=goal>0?Math.min(100,Math.round(done/goal*100)):0;
+  // 경고 1) 설정 합계가 총 목표를 넘음  2) 계약 종료일까지 목표를 못 채움
+  const plannedTotal=data.runs.reduce((s,r)=>s+intOr(r.total,0),0)+cmsDone;
+  const overSet=goal>0&&plannedTotal>goal;
+  const lateRun=data.runs.find(r=>{const e=blogRunEnd(r);return e&&contract.endDate&&e>contract.endDate;});
+  const shortFall=goal>0&&plannedTotal<goal;
+  const weeks=useMemo(()=>blogWeeks(contract.startDate,contract.endDate),[contract.startDate,contract.endDate]);
+
+  const addRun=()=>patch(d=>({...d,runs:[...d.runs,{id:uid(),total:"",daily:"",start:todayStr,paused:false,pausedAt:"",actual:"",memo:""}]}));
+  const setRun=(id,p)=>patch(d=>({...d,runs:d.runs.map(r=>r.id===id?{...r,...p}:r)}));
+  const delRun=id=>{if(!window.confirm("이 리뷰나우 세팅을 삭제할까요?"))return;patch(d=>({...d,runs:d.runs.filter(r=>r.id!==id)}));};
+  const togglePause=r=>setRun(r.id,r.paused?{paused:false,pausedAt:""}:{paused:true,pausedAt:todayStr});
+  const addCms=()=>{if(!cmsDraft.date)return;patch(d=>({...d,cms:[...d.cms,{id:uid(),date:cmsDraft.date,count:String(intOr(cmsDraft.count,1)),memo:cmsDraft.memo||""}].sort((a,b)=>a.date.localeCompare(b.date))}));setCmsDraft({date:todayStr,count:"1",memo:""});};
+  const delCms=id=>patch(d=>({...d,cms:d.cms.filter(x=>x.id!==id)}));
+  const setWeekPlan=(mon,v)=>patch(d=>({...d,weekPlan:{...d.weekPlan,[mon]:v}}));
+
+  const iS={border:"1px solid #f0f1f3",borderRadius:8,padding:"6px 9px",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"'Pretendard',-apple-system,sans-serif"};
+  const th={padding:"7px 8px",fontSize:11,fontWeight:700,color:"#6b7280",textAlign:"center",borderBottom:"1px solid #f0f1f3",whiteSpace:"nowrap"};
+  const td={padding:"6px 8px",fontSize:12,textAlign:"center",borderBottom:"1px solid #f7f8fa",color:"#374151"};
+  const warn=(bg,bd,col,text)=><div style={{background:bg,border:"1px solid "+bd,borderRadius:9,padding:"8px 12px",fontSize:11.5,fontWeight:600,color:col,lineHeight:1.6}}>{text}</div>;
+
+  return(<div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",marginTop:12,overflow:"hidden"}}>
+    <div style={{padding:"13px 18px",borderBottom:"1px solid #f0f1f3",background:"linear-gradient(90deg,#f5f3ff,#f0f7ff)",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <span style={{fontSize:14,fontWeight:800,color:"#0f1117"}}>블로그 리뷰 계획</span>
+      <span style={{fontSize:10,fontWeight:700,color:"#8468D3",background:"#fff",border:"1px solid #e9d5ff",borderRadius:6,padding:"2px 8px"}}>블플 {intOr(contract.provide&&contract.provide.blogPlus,0)}건 계약</span>
+      <div style={{flex:1}}/>
+      {dirty&&<span style={{fontSize:11,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,padding:"3px 8px"}}>저장 안 됨</span>}
+      <button onClick={save} disabled={saving||loading} style={{background:dirty?"#8468D3":"#f3f4f6",color:dirty?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:saving||loading?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{saving?"저장 중…":"저장"}</button>
+    </div>
+    {loading?<div style={{padding:"30px 0",textAlign:"center",fontSize:12,color:"#adb5bd"}}>불러오는 중…</div>:(<div style={{padding:"14px 18px"}}>
+
+      {/* 목표 · 진행 현황 */}
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:10}}>
+        <span style={{fontSize:12,fontWeight:700,color:"#374151"}}>총 목표</span>
+        <input type="number" min="0" value={data.goal} onChange={e=>patch(d=>({...d,goal:e.target.value}))} placeholder="예: 50" style={{...iS,width:90,textAlign:"center",fontWeight:700,color:"#0071CE"}}/>
+        <span style={{fontSize:12,color:"#6b7280"}}>건</span>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:10}}>
+        {[{l:"완료 합계",v:done+"건",c:"#0071CE",bg:"#f0f7ff"},{l:"리뷰나우",v:runDone+"건",c:"#8468D3",bg:"#f5f3ff"},{l:"CMS",v:cmsDone+"건",c:"#0891b2",bg:"#ecfeff"},{l:"남은 건수",v:goal>0?Math.max(0,remain)+"건":"—",c:remain<=0&&goal>0?"#10b981":"#374151",bg:remain<=0&&goal>0?"#f0fdf4":"#f7f8fa"}].map(x=>(
+          <div key={x.l} style={{background:x.bg,borderRadius:10,padding:"9px 12px",textAlign:"center"}}>
+            <div style={{fontSize:16,fontWeight:800,color:x.c}}>{x.v}</div>
+            <div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>{x.l}</div>
+          </div>))}
+      </div>
+      <div style={{marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6b7280",marginBottom:4}}>
+          <span>진행률</span><span style={{fontWeight:700,color:pct>=100?"#10b981":"#0071CE"}}>{pct}%{goal>0&&pct>=100?" · 목표 달성":""}</span>
+        </div>
+        <div style={{height:9,background:"#f0f1f3",borderRadius:99,overflow:"hidden"}}>
+          <div style={{width:pct+"%",height:"100%",background:pct>=100?"#10b981":"linear-gradient(90deg,#0071CE,#8468D3)",borderRadius:99,transition:"width 0.3s"}}/>
+        </div>
+      </div>
+      {(overSet||shortFall||lateRun)&&(<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
+        {overSet&&warn("#fffbeb","#fde68a","#92400e","설정 합계가 총 목표를 넘습니다 — 리뷰나우+CMS 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(plannedTotal-goal)+"건 초과)")}
+        {shortFall&&warn("#fef2f2","#fecaca","#b91c1c","현재 설정으로는 목표를 채우지 못합니다 — 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(goal-plannedTotal)+"건 부족)")}
+        {lateRun&&warn("#fef2f2","#fecaca","#b91c1c","리뷰나우 예상 종료일("+blogRunEnd(lateRun)+")이 계약 종료일("+contract.endDate+")보다 늦습니다 — 일 건수를 늘리거나 CMS로 보완하세요")}
+      </div>)}
+
+      {/* 방법 A: 리뷰나우 */}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+        <span style={{fontSize:12,fontWeight:800,color:"#8468D3"}}>방법 A · 리뷰나우</span>
+        <span style={{fontSize:10.5,color:"#adb5bd"}}>기간 자동 진행 · 여러 번 세팅 가능(1차·2차…)</span>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:9}}>
+        {data.runs.length===0&&<div style={{fontSize:11.5,color:"#adb5bd",background:"#f7f8fa",borderRadius:9,padding:"12px",textAlign:"center"}}>등록된 리뷰나우 세팅이 없습니다</div>}
+        {data.runs.map((r,i)=>{
+          const end=blogRunEnd(r),dn=blogRunDone(r,todayStr),tot=intOr(r.total,0);
+          const late=end&&contract.endDate&&end>contract.endDate;
+          const hasAdj=r.actual!==""&&r.actual!=null&&!isNaN(parseInt(r.actual));
+          return(<div key={r.id} style={{border:"1px solid "+(r.paused?"#e5e7eb":"#e9d5ff"),background:r.paused?"#f7f8fa":"#fff",borderRadius:10,padding:"10px 12px",opacity:r.paused?0.75:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:11,fontWeight:800,color:"#8468D3",background:"#f5f3ff",borderRadius:5,padding:"2px 8px"}}>{i+1}차</span>
+              {r.paused&&<span style={{fontSize:10,fontWeight:700,color:"#6b7280",background:"#f0f1f3",borderRadius:5,padding:"2px 7px"}}>일시중지 {r.pausedAt}</span>}
+              <div style={{flex:1}}/>
+              <button onClick={()=>togglePause(r)} style={{fontSize:10.5,fontWeight:700,color:r.paused?"#10b981":"#6b7280",background:r.paused?"#f0fdf4":"#f7f8fa",border:"1px solid "+(r.paused?"#bbf7d0":"#f0f1f3"),borderRadius:7,padding:"4px 10px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{r.paused?"재개":"일시중지"}</button>
+              <button onClick={()=>delRun(r.id)} style={{fontSize:10.5,fontWeight:700,color:"#b91c1c",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:7,padding:"4px 10px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>삭제</button>
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+              {[{k:"total",l:"총 건수",w:78,t:"number"},{k:"daily",l:"일 건수",w:70,t:"number"},{k:"start",l:"작업 시작일",w:132,t:"date"}].map(f=>(
+                <label key={f.k} style={{display:"flex",flexDirection:"column",gap:3}}>
+                  <span style={{fontSize:10,color:"#adb5bd",fontWeight:600}}>{f.l}</span>
+                  <input type={f.t} value={r[f.k]||""} onChange={e=>setRun(r.id,{[f.k]:e.target.value})} style={{...iS,width:f.w,textAlign:f.t==="number"?"center":"left"}}/>
+                </label>))}
+              <label style={{display:"flex",flexDirection:"column",gap:3}}>
+                <span style={{fontSize:10,color:"#adb5bd",fontWeight:600}}>실제 확인 건수</span>
+                <input type="number" min="0" value={r.actual||""} onChange={e=>setRun(r.id,{actual:e.target.value})} placeholder="보정" title="비워두면 자동 계산값을 씁니다. 숫자를 넣으면 그 값이 우선합니다." style={{...iS,width:76,textAlign:"center",background:hasAdj?"#fffbeb":"#fff",borderColor:hasAdj?"#fde68a":"#f0f1f3"}}/>
+              </label>
+              <label style={{display:"flex",flexDirection:"column",gap:3,flex:1,minWidth:110}}>
+                <span style={{fontSize:10,color:"#adb5bd",fontWeight:600}}>메모</span>
+                <input value={r.memo||""} onChange={e=>setRun(r.id,{memo:e.target.value})} style={{...iS,width:"100%"}}/>
+              </label>
+            </div>
+            <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px dashed #f0f1f3",fontSize:11.5}}>
+              <span style={{color:"#6b7280"}}>예상 종료일 <b style={{color:late?"#b91c1c":"#0f1117"}}>{end||"—"}</b></span>
+              <span style={{color:"#6b7280"}}>오늘 기준 진행 <b style={{color:"#8468D3"}}>{dn}건</b>{tot>0?" / "+tot+"건":""}{hasAdj&&<span style={{color:"#b45309",fontWeight:700}}> (보정값 적용)</span>}</span>
+            </div>
+          </div>);})}
+      </div>
+      <button onClick={addRun} style={{width:"100%",background:"#f5f3ff",color:"#8468D3",border:"1px dashed #e9d5ff",borderRadius:9,padding:"8px",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:16,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 리뷰나우 세팅 추가</button>
+
+      {/* 방법 B: CMS */}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+        <span style={{fontSize:12,fontWeight:800,color:"#0891b2"}}>방법 B · CMS</span>
+        <span style={{fontSize:10.5,color:"#adb5bd"}}>수기 업로드 기록 · 1건씩 추가</span>
+      </div>
+      <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"flex-end",marginBottom:8,background:"#f7f8fa",borderRadius:10,padding:"10px 12px"}}>
+        <label style={{display:"flex",flexDirection:"column",gap:3}}><span style={{fontSize:10,color:"#adb5bd",fontWeight:600}}>날짜</span><input type="date" value={cmsDraft.date} onChange={e=>setCmsDraft(d=>({...d,date:e.target.value}))} style={{...iS,width:132}}/></label>
+        <label style={{display:"flex",flexDirection:"column",gap:3}}><span style={{fontSize:10,color:"#adb5bd",fontWeight:600}}>건수</span><input type="number" min="1" value={cmsDraft.count} onChange={e=>setCmsDraft(d=>({...d,count:e.target.value}))} style={{...iS,width:64,textAlign:"center"}}/></label>
+        <label style={{display:"flex",flexDirection:"column",gap:3,flex:1,minWidth:120}}><span style={{fontSize:10,color:"#adb5bd",fontWeight:600}}>메모 (선택)</span><input value={cmsDraft.memo} onChange={e=>setCmsDraft(d=>({...d,memo:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addCms()} style={{...iS,width:"100%"}}/></label>
+        <button onClick={addCms} style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>기록 추가</button>
+      </div>
+      {data.cms.length>0?(<div style={{maxHeight:180,overflowY:"auto",border:"1px solid #f0f1f3",borderRadius:9,marginBottom:16}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr>{["날짜","건수","메모",""].map((h,i)=><th key={i} style={th}>{h}</th>)}</tr></thead><tbody>
+          {data.cms.map(x=>(<tr key={x.id}>
+            <td style={td}>{x.date}</td><td style={{...td,fontWeight:700,color:"#0891b2"}}>{intOr(x.count,1)}</td>
+            <td style={{...td,textAlign:"left",color:"#6b7280"}}>{x.memo||"—"}</td>
+            <td style={td}><button onClick={()=>delCms(x.id)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:13}}>✕</button></td>
+          </tr>))}
+        </tbody></table>
+      </div>):<div style={{fontSize:11.5,color:"#adb5bd",textAlign:"center",padding:"10px 0",marginBottom:16}}>아직 CMS 업로드 기록이 없습니다</div>}
+
+      {/* 주차별 보기 */}
+      <button onClick={()=>setShowWeeks(v=>!v)} style={{width:"100%",background:"#f0f7ff",color:"#0071CE",border:"1px solid #bfd7f5",borderRadius:9,padding:"8px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>주차별 보기 {showWeeks?"닫기":"열기"} ({weeks.length}주)</button>
+      {showWeeks&&(weeks.length===0?<div style={{fontSize:11.5,color:"#adb5bd",textAlign:"center",padding:"12px 0"}}>계약 시작일·종료일이 있어야 주차를 나눌 수 있습니다</div>:(
+        <div style={{overflowX:"auto",marginTop:9,border:"1px solid #f0f1f3",borderRadius:9}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:460}}><thead><tr>{["주차","기간","리뷰나우 예상","CMS 예정","CMS 실적"].map((h,i)=><th key={i} style={th}>{h}</th>)}</tr></thead><tbody>
+            {weeks.map((w,i)=>{
+              const rn=data.runs.reduce((s,r)=>s+blogRunInRange(r,w.start,w.end),0);
+              const act=blogCmsSum(data.cms,w.start,w.end);
+              const plan=data.weekPlan[w.mon];
+              const planN=intOr(plan,0);
+              const isNow=todayStr>=w.start&&todayStr<=w.end;
+              return(<tr key={w.mon} style={{background:isNow?"#f0f7ff":"transparent"}}>
+                <td style={{...td,fontWeight:700,color:isNow?"#0071CE":"#374151"}}>{i+1}주{isNow?" · 이번주":""}</td>
+                <td style={{...td,fontSize:11,color:"#6b7280"}}>{w.start.slice(5)} ~ {w.end.slice(5)}</td>
+                <td style={{...td,fontWeight:700,color:rn>0?"#8468D3":"#d1d5db"}}>{rn}건</td>
+                <td style={td}><input type="number" min="0" value={plan==null?"":plan} onChange={e=>setWeekPlan(w.mon,e.target.value)} placeholder="—" style={{...iS,width:62,textAlign:"center",padding:"4px 6px"}}/></td>
+                <td style={{...td,fontWeight:700,color:planN>0?(act>=planN?"#10b981":"#b45309"):"#0891b2"}}>{act}건{planN>0&&<span style={{fontSize:10,fontWeight:600}}> / {planN}</span>}</td>
+              </tr>);})}
+          </tbody></table>
+        </div>))}
+      <p style={{fontSize:10.5,color:"#adb5bd",margin:"9px 0 0",lineHeight:1.65}}>
+        <b>리뷰나우</b>는 시작일부터 하루 <b>일 건수</b>만큼 자동으로 올라간다고 보고 진행량을 계산합니다(시작일 포함). 실제와 다르면 <b>실제 확인 건수</b>에 숫자를 넣으세요 — 그 값이 우선합니다.<br/>
+        <b>CMS</b>는 올린 날짜마다 1건씩 기록하고, 주차별 보기에서 <b>이번 주 예정 건수</b>와 실제 실적을 비교할 수 있습니다.<br/>
+        입력 후 오른쪽 위 <b style={{color:"#8468D3"}}>저장</b> 버튼을 눌러야 저장됩니다.
+      </p>
+    </div>)}
+  </div>);
+}
 function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   const[search,setSearch]=useState("");
   const[statusFilter,setStatusFilter]=useState("active");
@@ -1223,6 +1424,8 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
             <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일이 자동으로 잡히고(시작일 포함 7일), 다음 주차는 직전 종료일 <b>다음 날</b>부터 이어집니다. 작업일수는 시작일·종료일을 <b>모두 포함</b>해 자동 계산되며, 계획량은 일일량 × 작업일수입니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 직전 줄의 종료순위가 시작순위로 넘어옵니다.<br/>순위는 숫자만 넣으면 되고(12 → 5 이면 ▲7), 키워드별 누적 성과는 표 위에 자동 집계됩니다.</p>
           </>)}
         </div>
+        {/* 블플이 포함된 계약에만 블로그 리뷰 계획을 붙인다 (provide.blogPlus > 0) */}
+        {blogHasProduct(sel)&&<BlogReviewPanel key={sel.id} contract={sel} st={st}/>}
       </>)}
     </div>
   </div>);
