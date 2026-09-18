@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import QuickAddBar from "../shared/QuickAddBar";
 import SidePanel from "../shared/SidePanel";
-import { C, FONT, card, btn, badge, subTabBar, subTabBtn, YMD, addDays, fmtDate, uid, WD } from "../shared/ui";
+import { C, FONT, card, btn, badge, inputSm, th, td, subTabBar, subTabBtn, YMD, addDays, fmtDate, uid, WD } from "../shared/ui";
 import { K, STATUS, loadAll } from "./store";
 import TaskPanel from "./TaskPanel";
 import TypesModal from "./TypesModal";
+import ScriptPanel from "./ScriptPanel";
+import AddScriptModal from "./AddScriptModal";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
 // 1단계 자료 제작 → 2단계 교육 과정 운영.
@@ -12,6 +14,7 @@ import TypesModal from "./TypesModal";
 const SUB_TABS = [
   { id: "list", label: "오늘·이번 주" },
   { id: "board", label: "자료 제작 보드" },
+  { id: "lib", label: "스크립트 목록" },
   { id: "cal", label: "캘린더" },
 ];
 
@@ -21,7 +24,13 @@ export default function WorkManagerTab({ st, today }) {
   const [loading, setLoading] = useState(true);
   const [types, setTypes] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [scripts, setScripts] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [people, setPeople] = useState([]);
+  const [libQuery, setLibQuery] = useState("");
   const [showTypes, setShowTypes] = useState(false);
+  const [showScript, setShowScript] = useState(false);
   const [side, setSide] = useState(null);           // {kind:"task", id}
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(TD + "T00:00:00"); return { y: d.getFullYear(), m: d.getMonth() }; });
 
@@ -30,7 +39,9 @@ export default function WorkManagerTab({ st, today }) {
     (async () => {
       const d = await loadAll(st);
       if (!alive) return;
-      setTypes(d.types); setTasks(d.tasks); setLoading(false);
+      setTypes(d.types); setTasks(d.tasks); setScripts(d.scripts);
+      setPrograms(d.programs); setSessions(d.sessions); setPeople(d.people);
+      setLoading(false);
     })();
     return () => { alive = false; };
   }, [st]);
@@ -43,6 +54,55 @@ export default function WorkManagerTab({ st, today }) {
   // ---- 저장 (화면 상태를 먼저 바꾸고 Firestore에 기록) ----
   const saveTasks = async (next) => { setTasks(next); await st.set(K.tasks, next); };
   const saveTypes = async (next) => { setTypes(next); await st.set(K.types, next); };
+  const saveScripts = async (next) => { setScripts(next); await st.set(K.scripts, next); };
+
+  // ---- 스크립트 ----
+  const scriptCats = useMemo(() => [...new Set(scripts.map((s) => s.cat).filter(Boolean))], [scripts]);
+  const addScript = async (name, cat) => {
+    const n = String(name || "").trim();
+    if (!n) return;
+    const sc = { id: uid(), name: n, cat: String(cat || "").trim() || "미분류", memo: "" };
+    await saveScripts([...scripts, sc]);
+    setSide({ kind: "script", id: sc.id });
+  };
+  const patchScript = async (id, patch) => saveScripts(scripts.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const deleteScript = async (sc) => {
+    if (scriptStats(sc.id).sessions.length > 0) return;
+    if (!window.confirm(`스크립트 "${sc.name}"을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    await saveScripts(scripts.filter((x) => x.id !== sc.id));
+    setSide(null);
+  };
+
+  const progName = useCallback((pid) => (programs.find((p) => String(p.id) === String(pid)) || {}).name || "(삭제된 과정)", [programs]);
+  const sessionsOfProgram = useCallback(
+    (pid) => sessions.filter((s) => String(s.pid) === String(pid)).sort((a, b) => a.date.localeCompare(b.date)),
+    [sessions]
+  );
+  // 회차 번호 — 취소된 회차는 세지 않는다
+  const roundOf = useCallback((sess) => {
+    const list = sessionsOfProgram(sess.pid).filter((x) => x.status !== "skip");
+    const i = list.findIndex((x) => x.id === sess.id);
+    return i < 0 ? "-" : i + 1;
+  }, [sessionsOfProgram]);
+
+  // 스크립트별 자동 집계 — 교육 횟수 / 마지막 교육일 / 이수 인원 / 미이수자
+  const allMembers = useMemo(() => [...new Set(programs.flatMap((p) => p.members || []))], [programs]);
+  const scriptStats = useCallback((sid) => {
+    const done = sessions
+      .filter((s) => s.status === "done" && (s.scripts || []).includes(sid))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const learned = new Set();
+    done.forEach((s) => Object.entries(s.attend || {}).forEach(([n, v]) => { if (v) learned.add(n); }));
+    return {
+      sessions: done.map((s) => ({
+        id: s.id, date: s.date, progName: progName(s.pid), round: roundOf(s),
+        attended: Object.values(s.attend || {}).filter(Boolean).length,
+      })),
+      people: [...learned],
+      lastDate: done.length ? done[0].date : "",
+      missing: allMembers.filter((m) => !learned.has(m)),
+    };
+  }, [sessions, progName, roundOf, allMembers]);
 
   const addTask = async (p) => {
     const t = {
@@ -72,6 +132,7 @@ export default function WorkManagerTab({ st, today }) {
 
   const openSide = (kind, id) => setSide({ kind, id });
   const selTask = side?.kind === "task" ? tasks.find((t) => t.id === side.id) : null;
+  const selScript = side?.kind === "script" ? scripts.find((x) => x.id === side.id) : null;
   useEffect(() => { if (side?.kind === "task" && !selTask) setSide(null); }, [side, selTask]);
 
   // ---- 항목 한 줄 ----
@@ -160,6 +221,58 @@ export default function WorkManagerTab({ st, today }) {
     </>
   );
 
+  // ---- 스크립트 목록 ----
+  const libView = () => {
+    const q = libQuery.trim();
+    const found = scripts.filter((x) => !q || (x.name || "").includes(q) || (x.cat || "").includes(q));
+    const cats = [...new Set(found.map((x) => x.cat || "미분류"))];
+    return (
+      <>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <input value={libQuery} onChange={(e) => setLibQuery(e.target.value)}
+            placeholder="스크립트 검색 (이름·분류, 예: 반론)"
+            style={inputSm({ width: 260, maxWidth: "100%", fontSize: 12.5, padding: "7px 10px" })} />
+          <span style={{ fontSize: 11, color: C.faint }}>총 {scripts.length}개 · 교육 회차 기록이 자동 집계됩니다</span>
+          <button onClick={() => setShowScript(true)} style={btn("primary", { padding: "6px 12px", fontSize: 11.5 })}>+ 스크립트 추가</button>
+        </div>
+        {found.length === 0
+          ? <div style={{ textAlign: "center", padding: "40px 0", color: C.faint, fontSize: 13 }}>
+              {scripts.length === 0 ? "등록된 스크립트가 없습니다. [+ 스크립트 추가]로 시작하세요." : "검색 결과가 없습니다."}
+            </div>
+          : cats.map((cat) => (
+            <div key={cat} style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.title, marginBottom: 6, display: "flex", gap: 6, alignItems: "center" }}>
+                {cat}<span style={{ ...badge(C.muted, C.soft), fontSize: 10.5 }}>{found.filter((x) => (x.cat || "미분류") === cat).length}</span>
+              </div>
+              <div style={{ overflowX: "auto", border: `1px solid ${C.line}`, borderRadius: 9 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 540 }}>
+                  <thead><tr>{["스크립트", "교육 횟수", "마지막 교육", "이수 인원", "미이수"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {found.filter((x) => (x.cat || "미분류") === cat).map((x) => {
+                      const stx = scriptStats(x.id), on = side?.kind === "script" && side?.id === x.id;
+                      return (
+                        <tr key={x.id} onClick={() => openSide("script", x.id)}
+                          style={{ cursor: "pointer", background: on ? C.mainBg : "transparent" }}>
+                          <td style={{ ...td, fontWeight: 600, color: C.title }}>{x.name}</td>
+                          <td style={td}>{stx.sessions.length
+                            ? stx.sessions.length + "회"
+                            : <span style={{ color: C.amber, fontSize: 11, fontWeight: 600 }}>교육 전</span>}</td>
+                          <td style={{ ...td, color: C.faint }}>{stx.lastDate ? fmtDate(stx.lastDate) : "—"}</td>
+                          <td style={{ ...td, color: C.faint }}>{stx.people.length}명</td>
+                          <td style={{ ...td, color: C.faint }}>
+                            {stx.sessions.length ? (stx.missing.length ? stx.missing.join(", ") : "없음") : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+      </>
+    );
+  };
+
   // ---- 캘린더 ----
   const calView = () => {
     const { y, m } = calMonth;
@@ -227,6 +340,7 @@ export default function WorkManagerTab({ st, today }) {
       <div style={card({ padding: 16 })}>
         {sub === "list" && listView()}
         {sub === "board" && boardView()}
+        {sub === "lib" && libView()}
         {sub === "cal" && calView()}
       </div>
 
@@ -241,6 +355,13 @@ export default function WorkManagerTab({ st, today }) {
       <SidePanel open={!!selTask} kind="작업 상세" onClose={() => setSide(null)}>
         <TaskPanel task={selTask} types={types} onPatch={patchTask} onDelete={deleteTask} />
       </SidePanel>
+
+      <SidePanel open={!!selScript} kind="스크립트 상세" onClose={() => setSide(null)}>
+        {selScript && <ScriptPanel script={selScript} cats={scriptCats} stats={scriptStats(selScript.id)}
+          onPatch={patchScript} onDelete={deleteScript} />}
+      </SidePanel>
+
+      {showScript && <AddScriptModal cats={scriptCats} onAdd={addScript} onClose={() => setShowScript(false)} />}
 
       {showTypes && <TypesModal types={types} tasks={tasks} onSave={saveTypes} onClose={() => setShowTypes(false)} />}
     </div>
