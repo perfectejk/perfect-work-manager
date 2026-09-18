@@ -9,6 +9,7 @@ import ScriptPanel from "./ScriptPanel";
 import AddScriptModal from "./AddScriptModal";
 import ProgramModal from "./ProgramModal";
 import ProgramPanel from "./ProgramPanel";
+import SessionPanel from "./SessionPanel";
 import { blankSession, genDates, ruleLabel } from "./recur";
 import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR } from "./store";
 
@@ -187,21 +188,59 @@ export default function WorkManagerTab({ st, today }) {
     setSide(null);
   };
   const cycleStatus = async (t) => patchTask(t.id, { status: t.status === "done" ? "todo" : "done" });
+  // 목록·캘린더의 체크버튼 — 작업과 회차를 구분해 완료 표시를 뒤집는다
+  const toggleItem = async (it) => {
+    if (it.kind === "task") {
+      const t = tasks.find((x) => x.id === it.id);
+      if (t) await cycleStatus(t);
+    } else {
+      const sx = sessions.find((x) => x.id === it.id);
+      if (sx) await patchSession(sx.id, { status: sx.status === "done" ? "plan" : "done" });
+    }
+  };
 
-  // ---- 화면에 뿌릴 공통 항목 목록 ----
-  const items = useMemo(
-    () => tasks.map((t) => ({
+  // ---- 화면에 뿌릴 공통 항목 목록 (작업 + 교육 회차) ----
+  const items = useMemo(() => {
+    const a = tasks.map((t) => ({
       kind: "task", id: t.id, title: t.title, color: typeOf(t.type).c,
       date: t.date, time: t.time, done: t.status === "done",
-      statusLabel: (STATUS.find((s) => s[0] === t.status) || STATUS[0])[1],
-    })).sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || ""))),
-    [tasks, typeOf]
-  );
+      statusLabel: (STATUS.find((x) => x[0] === t.status) || STATUS[0])[1],
+    }));
+    const b = sessions.filter((sx) => sx.status !== "skip").map((sx) => ({
+      kind: "session", id: sx.id, pid: sx.pid,
+      title: progName(sx.pid) + " " + roundOf(sx) + "회차",
+      color: EDU_COLOR, date: sx.date, time: sx.time, done: sx.status === "done",
+      statusLabel: SESSION_STATUS[sx.status], isEdu: true,
+    }));
+    return a.concat(b).sort((x, y) => (x.date + (x.time || "")).localeCompare(y.date + (y.time || "")));
+  }, [tasks, sessions, typeOf, progName, roundOf]);
 
   const openSide = (kind, id) => setSide({ kind, id });
   const selTask = side?.kind === "task" ? tasks.find((t) => t.id === side.id) : null;
   const selScript = side?.kind === "script" ? scripts.find((x) => x.id === side.id) : null;
   const selProgram = side?.kind === "program" ? programs.find((x) => x.id === side.id) : null;
+  const selSession = side?.kind === "session" ? sessions.find((x) => x.id === side.id) : null;
+  const selSessionProgram = selSession ? programs.find((x) => String(x.id) === String(selSession.pid)) : null;
+  // 바로 앞 회차 (취소된 회차는 제외)
+  const prevSession = useMemo(() => {
+    if (!selSession) return null;
+    const list = sessionsOfProgram(selSession.pid).filter((x) => x.status !== "skip");
+    const i = list.findIndex((x) => x.id === selSession.id);
+    return i > 0 ? list[i - 1] : null;
+  }, [selSession, sessionsOfProgram]);
+
+  // 자료 개선점 → 자료 제작 보드에 개선 작업으로 추가
+  const improveToTask = async (sx) => {
+    if (!String(sx.improve || "").trim()) { alert("자료 개선점을 먼저 입력하세요."); return; }
+    const prog = programs.find((x) => String(x.id) === String(sx.pid));
+    const t = {
+      id: uid(), title: "[개선] " + (prog ? prog.name : "교육") + " " + roundOf(sx) + "회차 피드백 반영",
+      type: "script", date: addDays(TD, 3), time: "", status: "todo",
+      desc: sx.improve, subs: [], links: [], createdAt: TD,
+    };
+    await saveTasks([...tasks, t]);
+    alert("자료 제작 보드에 개선 작업을 추가했습니다.");
+  };
   useEffect(() => { if (side?.kind === "task" && !selTask) setSide(null); }, [side, selTask]);
 
   // ---- 항목 한 줄 ----
@@ -212,7 +251,7 @@ export default function WorkManagerTab({ st, today }) {
         style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", marginBottom: 6, cursor: "pointer",
           background: C.white, border: `1px solid ${on ? C.main : C.line}`, borderRadius: 9,
           boxShadow: on ? `0 0 0 2px ${C.mainBg}` : "none", opacity: it.done ? 0.65 : 1 }}>
-        <button onClick={(e) => { e.stopPropagation(); cycleStatus(tasks.find((t) => t.id === it.id)); }}
+        <button onClick={(e) => { e.stopPropagation(); toggleItem(it); }}
           style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, cursor: "pointer",
             border: `2px solid ${it.done ? C.green : "#c5cdd8"}`, background: it.done ? C.green : C.white,
             color: C.white, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>{it.done ? "✓" : ""}</button>
@@ -230,12 +269,17 @@ export default function WorkManagerTab({ st, today }) {
   const listView = () => {
     const weekEnd = addDays(TD, (7 - new Date(TD + "T00:00:00").getDay()) % 7);
     const g = { late: [], today: [], week: [], later: [], done: [] };
+    const shown = {};
     items.forEach((i) => {
       if (i.done) g.done.push(i);
       else if (i.date < TD) g.late.push(i);
       else if (i.date === TD) g.today.push(i);
       else if (i.date <= weekEnd) g.week.push(i);
-      else g.later.push(i);
+      else {
+        // 예정 구간에서 교육은 과정별 다음 회차 하나만 보여준다
+        if (i.isEdu) { if (shown[i.pid]) return; shown[i.pid] = 1; }
+        g.later.push(i);
+      }
     });
     g.done = g.done.slice(-5).reverse();
     const sec = (k, title, danger) => g[k].length ? (
@@ -249,7 +293,7 @@ export default function WorkManagerTab({ st, today }) {
     ) : null;
     const any = Object.values(g).some((x) => x.length);
     if (!any) return <div style={{ textAlign: "center", padding: "44px 0", color: C.faint, fontSize: 13 }}>작업이 없습니다. 위 입력창에 한 줄로 적어보세요.</div>;
-    return <>{sec("late", "지연됨", true)}{sec("today", "오늘")}{sec("week", "이번 주")}{sec("later", "예정")}{sec("done", "최근 완료")}</>;
+    return <>{sec("late", "지연됨", true)}{sec("today", "오늘")}{sec("week", "이번 주")}{sec("later", "예정 (교육은 과정별 다음 회차만)")}{sec("done", "최근 완료")}</>;
   };
 
   // ---- 자료 제작 보드 (드래그로 단계 이동) ----
@@ -492,6 +536,9 @@ export default function WorkManagerTab({ st, today }) {
             <i style={{ width: 8, height: 8, borderRadius: "50%", background: t.c, display: "inline-block" }} />{t.n}
           </span>
         ))}
+        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <i style={{ width: 8, height: 8, borderRadius: "50%", background: EDU_COLOR, display: "inline-block" }} />교육 회차
+        </span>
       </div>
 
       <SidePanel open={!!selTask} kind="작업 상세" onClose={() => setSide(null)}>
@@ -507,6 +554,15 @@ export default function WorkManagerTab({ st, today }) {
         {selProgram && <ProgramPanel program={selProgram} sessions={sessionsOfProgram(selProgram.id)}
           people={people} roundOf={roundOf} onPatch={patchProgram} onAddPerson={addPerson}
           onOpenSession={(id) => setSide({ kind: "session", id })} onDelete={deleteProgram} />}
+      </SidePanel>
+
+      <SidePanel open={!!selSession} kind="교육 회차 기록" onClose={() => setSide(null)}>
+        {selSession && selSessionProgram && (
+          <SessionPanel session={selSession} program={selSessionProgram} prevSession={prevSession}
+            round={roundOf(selSession)} scripts={scripts} people={people}
+            onPatch={patchSession} onPatchPrev={patchSession} onAddPerson={addPerson}
+            onImproveToTask={improveToTask} />
+        )}
       </SidePanel>
 
       {showProgram && <ProgramModal people={people} onAddPerson={addPerson} today={TD}
