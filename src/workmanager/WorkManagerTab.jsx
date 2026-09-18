@@ -7,6 +7,10 @@ import TaskPanel from "./TaskPanel";
 import TypesModal from "./TypesModal";
 import ScriptPanel from "./ScriptPanel";
 import AddScriptModal from "./AddScriptModal";
+import ProgramModal from "./ProgramModal";
+import ProgramPanel from "./ProgramPanel";
+import { blankSession, genDates, ruleLabel } from "./recur";
+import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR } from "./store";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
 // 1단계 자료 제작 → 2단계 교육 과정 운영.
@@ -14,6 +18,7 @@ import AddScriptModal from "./AddScriptModal";
 const SUB_TABS = [
   { id: "list", label: "오늘·이번 주" },
   { id: "board", label: "자료 제작 보드" },
+  { id: "edu", label: "교육 과정" },
   { id: "lib", label: "스크립트 목록" },
   { id: "cal", label: "캘린더" },
 ];
@@ -31,6 +36,7 @@ export default function WorkManagerTab({ st, today }) {
   const [libQuery, setLibQuery] = useState("");
   const [showTypes, setShowTypes] = useState(false);
   const [showScript, setShowScript] = useState(false);
+  const [showProgram, setShowProgram] = useState(false);
   const [side, setSide] = useState(null);           // {kind:"task", id}
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(TD + "T00:00:00"); return { y: d.getFullYear(), m: d.getMonth() }; });
 
@@ -71,6 +77,68 @@ export default function WorkManagerTab({ st, today }) {
     if (!window.confirm(`스크립트 "${sc.name}"을 삭제할까요? 되돌릴 수 없습니다.`)) return;
     await saveScripts(scripts.filter((x) => x.id !== sc.id));
     setSide(null);
+  };
+
+  // ---- 사람 목록 ----
+  const savePeople = async (next) => { setPeople(next); await st.set(K.people, next); };
+  const addPerson = async (n) => { if (!n || people.includes(n)) return; await savePeople([...people, n]); };
+
+  // ---- 교육 과정 ----
+  const savePrograms = async (next) => { setPrograms(next); await st.set(K.programs, next); };
+  // 회차는 과정별 문서에 저장한다
+  const saveSessions = async (next, pid) => { setSessions(next); await saveSessionsOf(st, pid, next); };
+
+  const createProgram = async ({ name, target, members, rule, start, time, dates }) => {
+    const id = uid();
+    const prog = { id, name, target, members, rule, start, time, createdAt: TD };
+    const made = dates.map((d) => blankSession(uid(), id, d, time, members));
+    await savePrograms([...programs, prog]);
+    await saveSessions([...sessions, ...made], id);
+    setSub("edu");
+    setSide({ kind: "program", id });
+  };
+
+  const patchProgram = async (id, patch) => {
+    await savePrograms(programs.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    // 명단 변경은 앞으로의 회차(예정)에만 반영하고,
+    // 이미 끝난 회차의 기록은 그대로 보존한다.
+    if (patch.members) {
+      const ms = patch.members;
+      const ns = sessions.map((sx) => {
+        if (String(sx.pid) !== String(id) || sx.status !== "plan") return sx;
+        const attend = { ...(sx.attend || {}) };
+        ms.forEach((m) => { if (!(m in attend)) attend[m] = false; });
+        Object.keys(attend).forEach((m) => { if (!ms.includes(m) && !attend[m]) delete attend[m]; });
+        return { ...sx, attend };
+      });
+      await saveSessions(ns, id);
+    }
+  };
+
+  const deleteProgram = async (prog) => {
+    if (!window.confirm("교육 과정 \"" + prog.name + "\"을 삭제할까요? 이 과정의 회차 기록도 함께 사라집니다. 되돌릴 수 없습니다.")) return;
+    await savePrograms(programs.filter((x) => x.id !== prog.id));
+    setSessions(sessions.filter((sx) => String(sx.pid) !== String(prog.id)));
+    await removeSessionsOf(st, prog.id);
+    setSide(null);
+  };
+
+  const patchSession = async (id, patch) => {
+    const target = sessions.find((sx) => sx.id === id);
+    if (!target) return;
+    await saveSessions(sessions.map((sx) => (sx.id === id ? { ...sx, ...patch } : sx)), target.pid);
+  };
+
+  // 다음 회차 한 건 추가 — 마지막 회차 날짜에서 주기만큼 뒤로
+  const addSession = async (pid) => {
+    const prog = programs.find((x) => x.id === pid);
+    if (!prog) return;
+    const list = sessionsOfProgram(pid);
+    const from = list.length ? list[list.length - 1].date : prog.start;
+    const next = genDates(from, prog.rule, 2)[1] || addDays(from, 7);
+    const sess = blankSession(uid(), pid, next, prog.time, prog.members);
+    await saveSessions([...sessions, sess], pid);
+    setSide({ kind: "session", id: sess.id });
   };
 
   const progName = useCallback((pid) => (programs.find((p) => String(p.id) === String(pid)) || {}).name || "(삭제된 과정)", [programs]);
@@ -133,6 +201,7 @@ export default function WorkManagerTab({ st, today }) {
   const openSide = (kind, id) => setSide({ kind, id });
   const selTask = side?.kind === "task" ? tasks.find((t) => t.id === side.id) : null;
   const selScript = side?.kind === "script" ? scripts.find((x) => x.id === side.id) : null;
+  const selProgram = side?.kind === "program" ? programs.find((x) => x.id === side.id) : null;
   useEffect(() => { if (side?.kind === "task" && !selTask) setSide(null); }, [side, selTask]);
 
   // ---- 항목 한 줄 ----
@@ -273,6 +342,77 @@ export default function WorkManagerTab({ st, today }) {
     );
   };
 
+  // ---- 교육 과정 ----
+  const eduView = () => {
+    if (programs.length === 0) return (
+      <div style={{ textAlign: "center", padding: "40px 0", color: C.faint, fontSize: 13 }}>
+        등록된 교육 과정이 없습니다. 오른쪽 위 [+ 교육 과정 등록]으로 시작하세요.
+      </div>
+    );
+    return programs.map((prog) => {
+      const list = sessionsOfProgram(prog.id);
+      const active = list.filter((sx) => sx.status !== "skip");
+      const doneCnt = active.filter((sx) => sx.status === "done").length;
+      const next = active.find((sx) => sx.status === "plan");
+      const covered = new Set(list.filter((sx) => sx.status === "done").flatMap((sx) => sx.scripts || []));
+      return (
+        <div key={prog.id} style={{ border: "1px solid " + C.line, borderRadius: 12, padding: 14, marginBottom: 14 }}>
+          <div onClick={() => openSide("program", prog.id)} title="클릭하면 과정 상세·대상자 편집"
+            style={{ fontSize: 15, fontWeight: 700, color: C.title, cursor: "pointer", marginBottom: 4 }}>
+            {prog.name} <span style={{ fontSize: 11, fontWeight: 500, color: C.faint }}>› 대상자 편집</span>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.faint }}>
+            <span>대상: {prog.target || "—"} ({(prog.members || []).length}명)</span>
+            <span>{ruleLabel(prog.rule, prog.start)} {prog.time}</span>
+            <span>진행 {doneCnt}/{active.length}회</span>
+            <span>교육한 스크립트 {covered.size}개</span>
+            <button onClick={() => addSession(prog.id)}
+              style={btn("ghost", { marginLeft: "auto", padding: "4px 10px", fontSize: 11 })}>+ 회차 추가</button>
+          </div>
+          <div style={{ height: 6, background: C.line, borderRadius: 3, overflow: "hidden", margin: "9px 0 12px" }}>
+            <div style={{ height: "100%", width: (active.length ? (doneCnt / active.length) * 100 : 0) + "%", background: EDU_COLOR }} />
+          </div>
+          <div style={{ background: C.greenBg, color: C.greenDeep, borderRadius: 8, padding: "8px 10px",
+            fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>
+            {next
+              ? "다음 교육: " + fmtDate(next.date) + " " + next.time + " · " + roundOf(next) + "회차" + (next.date < TD ? " (지난 일정, 결과 기록 필요)" : "")
+              : "모든 회차가 끝났습니다."}
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+              <thead><tr>{["회차", "날짜", "상태", "다룬 스크립트", "참석", "이해도", "과제"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {list.map((sx) => {
+                  const sc = (sx.scripts || []).map((sid) => scripts.find((y) => y.id === sid)).filter(Boolean);
+                  const ad = (sx.actions || []).filter((a) => a.d).length;
+                  const on = side?.kind === "session" && side?.id === sx.id;
+                  const stc = { plan: [C.muted, C.soft], done: [C.greenDeep, C.greenBg], skip: [C.red, C.redBg] }[sx.status] || [C.muted, C.soft];
+                  return (
+                    <tr key={sx.id} onClick={() => openSide("session", sx.id)} style={{ cursor: "pointer", background: on ? C.mainBg : "transparent" }}>
+                      <td style={td}>{sx.status === "skip" ? "—" : roundOf(sx) + "회"}</td>
+                      <td style={{ ...td, color: C.faint }}>{fmtDate(sx.date)} {sx.time}</td>
+                      <td style={td}><span style={badge(stc[0], stc[1], { fontSize: 10.5 })}>{SESSION_STATUS[sx.status]}</span></td>
+                      <td style={td}>
+                        {sc.slice(0, 2).map((y) => <span key={y.id} style={{ ...badge(C.main, C.mainBg), marginRight: 4 }}>{y.name}</span>)}
+                        {sc.length > 2 && <span style={{ fontSize: 11, color: C.faint }}>외 {sc.length - 2}</span>}
+                        {!sc.length && sx.status === "done" && <span style={{ fontSize: 11, color: C.amber, fontWeight: 600 }}>미기록</span>}
+                      </td>
+                      <td style={{ ...td, color: C.faint }}>
+                        {sx.status === "done" ? Object.values(sx.attend || {}).filter(Boolean).length + "/" + (prog.members || []).length : "—"}</td>
+                      <td style={{ ...td, color: sx.score ? "#f2a400" : C.faint }}>
+                        {sx.status === "done" && sx.score ? "★".repeat(sx.score) : "—"}</td>
+                      <td style={{ ...td, color: C.faint }}>{(sx.actions || []).length ? ad + "/" + sx.actions.length : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    });
+  };
+
   // ---- 캘린더 ----
   const calView = () => {
     const { y, m } = calMonth;
@@ -335,11 +475,13 @@ export default function WorkManagerTab({ st, today }) {
           ))}
         </div>
         <button onClick={() => setShowTypes(true)} style={btn("ghost", { padding: "8px 14px", fontSize: 12 })}>유형 관리</button>
+        <button onClick={() => setShowProgram(true)} style={btn("accent", { padding: "8px 14px", fontSize: 12 })}>+ 교육 과정 등록</button>
       </div>
 
       <div style={card({ padding: 16 })}>
         {sub === "list" && listView()}
         {sub === "board" && boardView()}
+        {sub === "edu" && eduView()}
         {sub === "lib" && libView()}
         {sub === "cal" && calView()}
       </div>
@@ -361,6 +503,14 @@ export default function WorkManagerTab({ st, today }) {
           onPatch={patchScript} onDelete={deleteScript} />}
       </SidePanel>
 
+      <SidePanel open={!!selProgram} kind="교육 과정 상세" onClose={() => setSide(null)}>
+        {selProgram && <ProgramPanel program={selProgram} sessions={sessionsOfProgram(selProgram.id)}
+          people={people} roundOf={roundOf} onPatch={patchProgram} onAddPerson={addPerson}
+          onOpenSession={(id) => setSide({ kind: "session", id })} onDelete={deleteProgram} />}
+      </SidePanel>
+
+      {showProgram && <ProgramModal people={people} onAddPerson={addPerson} today={TD}
+        onCreate={createProgram} onClose={() => setShowProgram(false)} />}
       {showScript && <AddScriptModal cats={scriptCats} onAdd={addScript} onClose={() => setShowScript(false)} />}
 
       {showTypes && <TypesModal types={types} tasks={tasks} onSave={saveTypes} onClose={() => setShowTypes(false)} />}
