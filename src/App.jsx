@@ -2220,6 +2220,72 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
   );
 }
 
+// 계약 자동 일정 일괄 정리 — 온보딩·순위체크·리포트만 대상으로 한다.
+// 이 일정들은 계약에서 파생 계산되는 값이라 지울 문서가 없다. 그래서 "삭제"는
+// ce:hidden 에 키를 남겨 다시 그리지 않는 방식이며, 계약·순위·매출 데이터는 손대지 않는다.
+function CEcleanupModal({events,contracts,onClose,onDelete}){
+  const[type,setType]=useState("all");
+  const[scope,setScope]=useState("past");
+  const[sel,setSel]=useState({});
+  const[busy,setBusy]=useState(false);
+  const list=useMemo(()=>events
+    .filter(e=>type==="all"||e.type===type)
+    .filter(e=>scope==="all"||(scope==="past"?e.date<todayStr:e.date>=todayStr))
+    .sort((a,b)=>b.date.localeCompare(a.date)||(a.name||"").localeCompare(b.name||"")),[events,type,scope]);
+  const selKeys=Object.keys(sel).filter(k=>sel[k]);
+  const allOn=list.length>0&&list.every(e=>sel[ceKey(e)]);
+  const toggleAll=()=>{const nx={...sel};list.forEach(e=>{nx[ceKey(e)]=!allOn;});setSel(nx);};
+  const run=async()=>{
+    if(selKeys.length===0)return;
+    if(!window.confirm("삭제할 일정 "+selKeys.length+"건, 되돌릴 수 없습니다. (계약·순위 기록·매출 데이터는 지워지지 않습니다)"))return;
+    setBusy(true);await onDelete(selKeys);setBusy(false);setSel({});
+  };
+  const pill=(on,color)=>({border:"1.5px solid "+(on?color:"#f0f1f3"),borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:on?color+"18":"#fff",color:on?color:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"});
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1100,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Pretendard',-apple-system,sans-serif"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:600,maxWidth:"94vw",maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.18)"}}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid #f0f1f3",display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:15,fontWeight:800,color:"#0f1117"}}>자동 생성 일정 정리</span>
+        <div style={{flex:1}}/>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#adb5bd"}}>✕</button>
+      </div>
+      <div style={{padding:"12px 20px",borderBottom:"1px solid #f7f8fa",display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{fontSize:11.5,color:"#6b7280",lineHeight:1.6,background:"#f7f8fa",borderRadius:9,padding:"9px 12px"}}>
+          계약에서 자동으로 만들어지는 <b>온보딩 · 순위체크 · 리포트</b> 일정만 나옵니다. 직접 추가한 일정은 여기 없습니다.<br/>
+          삭제해도 <b>계약 정보 · 순위 기록 · 매출 데이터는 그대로</b>이고, 캘린더에서만 사라집니다.
+        </div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{fontSize:11,fontWeight:600,color:"#6b7280"}}>유형:</span>
+          {[["all","전체","#6b7280"],["순위체크","순위체크","#0891b2"],["리포트","리포트","#7c3aed"],["온보딩","온보딩","#6b7280"]].map(([v,l,c])=>(
+            <button key={v} onClick={()=>setType(v)} style={pill(type===v,c)}>{l}</button>))}
+        </div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{fontSize:11,fontWeight:600,color:"#6b7280"}}>기간:</span>
+          {[["past","지난 일정","#0071CE"],["future","오늘 이후","#8468D3"],["all","전체","#6b7280"]].map(([v,l,c])=>(
+            <button key={v} onClick={()=>setScope(v)} style={pill(scope===v,c)}>{l}</button>))}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={toggleAll} disabled={list.length===0} style={{background:"#f0f7ff",color:"#0071CE",border:"1px solid #bfd7f5",borderRadius:8,padding:"6px 14px",fontSize:11.5,fontWeight:700,cursor:list.length?"pointer":"not-allowed",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{allOn?"전체 선택 해제":"전체 선택"} ({list.length}건)</button>
+          <span style={{fontSize:11.5,color:selKeys.length?"#ef4444":"#adb5bd",fontWeight:700}}>선택 {selKeys.length}건</span>
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"8px 20px"}}>
+        {list.length===0?<div style={{textAlign:"center",padding:"36px 0",fontSize:12.5,color:"#adb5bd"}}>조건에 맞는 자동 일정이 없습니다</div>:
+        list.map(e=>{const k=ceKey(e);const on=!!sel[k];const ce=CE[e.type];const past=e.date<todayStr;
+          return(<label key={k} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderBottom:"1px solid #f7f8fa",cursor:"pointer",background:on?"#fff5f5":"transparent",borderRadius:7}}>
+            <input type="checkbox" checked={on} onChange={()=>setSel(p=>({...p,[k]:!p[k]}))} style={{width:15,height:15,cursor:"pointer",accentColor:"#ef4444"}}/>
+            <span style={{fontSize:10,fontWeight:700,color:ce.color,background:ce.bg,borderRadius:5,padding:"2px 7px",flexShrink:0}}>{e.type}</span>
+            <span style={{fontSize:12,fontWeight:600,color:"#0f1117",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.name}</span>
+            {e.manager&&<span style={{fontSize:10,color:"#8468D3",fontWeight:600,flexShrink:0}}>{e.manager}</span>}
+            <span style={{fontSize:11,color:past?"#adb5bd":"#374151",fontWeight:past?400:600,flexShrink:0}}>{e.date}</span>
+          </label>);})}
+      </div>
+      <div style={{padding:"12px 20px",borderTop:"1px solid #f0f1f3",display:"flex",gap:8}}>
+        <button onClick={onClose} disabled={busy} style={{flex:1,background:"#f7f8fa",color:"#6b7280",border:"1px solid #f0f1f3",borderRadius:9,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>닫기</button>
+        <button onClick={run} disabled={busy||selKeys.length===0} style={{flex:1,background:selKeys.length?"#ef4444":"#f3f4f6",color:selKeys.length?"#fff":"#9ca3af",border:"none",borderRadius:9,padding:"10px",fontSize:13,fontWeight:700,cursor:(busy||!selKeys.length)?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{busy?"삭제 중…":"선택한 "+selKeys.length+"건 삭제"}</button>
+      </div>
+    </div>
+  </div>);
+}
 function TaskCard({task,onCycle,onDelete,onEdit,showOwner,canEdit}){
   const[exp,setExp]=useState(false);
   const p=P[task.priority],s=S[task.status],isDone=task.status==="done";
@@ -2254,7 +2320,7 @@ function TaskCard({task,onCycle,onDelete,onEdit,showOwner,canEdit}){
     </div>
   </div>);
 }
-function ContractEventCard({event,contract,isDone,onToggle,onMemo}){
+function ContractEventCard({event,contract,isDone,onToggle,onMemo,onDelete}){
   const[exp,setExp]=useState(false);const ce=CE[event.type];
   const isPast=event.date<todayStr;
   const isRankType=event.type==="순위체크";
@@ -2270,6 +2336,7 @@ function ContractEventCard({event,contract,isDone,onToggle,onMemo}){
           <Badge label="계약" color={isPast&&!isDone?"#9ca3af":ce.color} bg={isPast&&!isDone?"#f3f4f6":ce.bg}/>
           {event.manager&&<Badge label={event.manager} color="#7c3aed" bg="#f5f3ff"/>}
           {isPast&&!isDone&&isRankType&&<span style={{fontSize:9,color:"#adb5bd",background:"#f3f4f6",borderRadius:4,padding:"1px 5px"}}>과거 기록 가능</span>}
+          {onDelete&&<button onClick={e=>{e.stopPropagation();onDelete();}} title="이 일정을 캘린더에서 삭제" style={{marginLeft:"auto",background:"#fff5f5",border:"1px solid #fca5a5",color:"#ef4444",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>삭제</button>}
         </div>
         <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
           {contract.phone&&<span style={{fontSize:10,color:"#6b7280"}}>{contract.phone}</span>}
@@ -2590,7 +2657,7 @@ function MainApp({user,onLogout}){
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[contractMonth,setContractMonth]=useState("all");const[contractStatus,setContractStatus]=useState("all");
   const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");
-  const[completions,setCompletions]=useState({});const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[workSubTab,setWorkSubTab]=useState("board");const[planFocus,setPlanFocus]=useState("");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
+  const[completions,setCompletions]=useState({});const[hiddenCE,setHiddenCE]=useState({});const[showCECleanup,setShowCECleanup]=useState(false);const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[workSubTab,setWorkSubTab]=useState("board");const[planFocus,setPlanFocus]=useState("");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());
   const[calFilter,setCalFilter]=useState("all");const[selectedDay,setSelectedDay]=useState(null);
   const[fOwner,setFOwner]=useState("all");const[fStatus,setFStatus]=useState("all");const[fPriority,setFPriority]=useState("all");const[fProject,setFProject]=useState("all");
@@ -2610,7 +2677,7 @@ function MainApp({user,onLogout}){
   const[analysisMonth,setAnalysisMonth]=useState(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
   const[analysisData,setAnalysisData]=useState(null);const[loadingAnalysis,setLoadingAnalysis]=useState(false);
 
-  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadRankData();loadProfiles();loadProjectCategories();loadAccounts();},[]);
+  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadHiddenCE();loadRankData();loadProfiles();loadProjectCategories();loadAccounts();},[]);
   useEffect(()=>{if(selTs)loadReports(selTs);},[selTs]);
   useEffect(()=>{loadDateFinalReports(reportViewDate);},[reportViewDate]);
   useEffect(()=>{
@@ -2645,6 +2712,17 @@ function MainApp({user,onLogout}){
   const saveContract=async c=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0)list[idx]={...c,calendarOff:list[idx].calendarOff};else list.push({...c,calendarOff:true});await st.set("contracts:all",list);setContracts([...list]);setShowCF(false);setEditContract(null);};
   const deleteContract=async id=>{const list=(await st.get("contracts:all")||[]).filter(c=>c.id!==id);await st.set("contracts:all",list);setContracts(list);};
   const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);};
+  // 사용자가 캘린더에서 지운 계약 자동 일정 목록. 일정 자체는 genEvents 가 계약에서 계산해
+  // 만들어내므로 "삭제"는 이 목록에 키를 남겨 다시 그리지 않는 방식으로 처리한다.
+  // 계약·순위·매출 데이터는 건드리지 않는다.
+  const loadHiddenCE=async()=>{const h=await st.get("ce:hidden")||{};setHiddenCE(h);};
+  const hideCEKeys=async keys=>{
+    if(!keys||keys.length===0)return;
+    const data=await st.get("ce:hidden")||{};
+    keys.forEach(k=>{data[k]=true;});
+    await st.set("ce:hidden",data);
+    setHiddenCE({...data});
+  };
   // 현황판 인라인 순위 입력 — 오늘 날짜로 기록 + 예정된 순위체크 일정 완료 처리 + Discord 알림
   // (순위체크 탭의 모달 입력과 동일한 부수효과를 갖도록 맞춤)
   const saveRankQuick=async(cid,result)=>{
@@ -2789,7 +2867,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
   const filtered=useMemo(()=>tasks.filter(t=>{if(fOwner!=="all"&&t.owner!==fOwner)return false;if(fStatus!=="all"&&t.status!==fStatus)return false;if(fPriority!=="all"&&t.priority!==fPriority)return false;if(fProject!=="all"&&t.project!==fProject)return false;return true;}),[tasks,fOwner,fStatus,fPriority,fProject]);
   const weekDays=useMemo(()=>getWeekDays(),[]);
   const visibleContracts=useMemo(()=>{const base=(user.isAdmin||user.role==="manager")?contracts:contracts.filter(c=>c.manager===user.name);return[...base].sort((a,b)=>(b.startDate||"").localeCompare(a.startDate||""));},[contracts,user]);
-  const allCE=useMemo(()=>visibleContracts.filter(showsAutoEvents).flatMap(genEvents),[visibleContracts]);
+  const allCE=useMemo(()=>visibleContracts.filter(showsAutoEvents).flatMap(genEvents).filter(e=>!hiddenCE[ceKey(e)]),[visibleContracts,hiddenCE]);
   const todayCE=useMemo(()=>filterCE(allCE.filter(e=>e.date===todayStr&&(e.type==="순위체크"||e.type==="리포트"))),[allCE,filterCE]);
   const todayTasks=useMemo(()=>filtered.filter(t=>isActiveOnDate(t,todayStr)&&t.status!=="done").sort((a,b)=>({high:0,medium:1,low:2}[a.priority]-{high:0,medium:1,low:2}[b.priority])),[filtered]);
   const allCEFiltered=useMemo(()=>filterCE(allCE.filter(e=>e.type==="순위체크"||e.type==="리포트")),[allCE,filterCE]);
@@ -2818,6 +2896,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
     <div style={{display:"flex",minHeight:"100vh",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#f7f8fa"}}>
       {showProfile&&<ProfileModal user={user} profiles={profiles} onUpdateProfile={updateProfile} onClose={()=>setShowProfile(false)} contracts={contracts}/>}
       {memoContract&&<ContractMemoModal contract={memoContract} user={user} onClose={()=>setMemoContract(null)} allContracts={contracts} rankDataMap={rankDataMap} completions={completions} onContractUpdate={list=>setContracts([...list])}/>}
+      {showCECleanup&&<CEcleanupModal events={filterCE(visibleContracts.filter(c=>!c.cancelled).flatMap(genEvents).filter(e=>!hiddenCE[ceKey(e)]))} contracts={visibleContracts} onClose={()=>setShowCECleanup(false)} onDelete={hideCEKeys}/>}
       {rankModalEvent&&rankModalContract&&<RankInputModal event={rankModalEvent} contract={rankModalContract} existingData={rankDataMap[ceKey(rankModalEvent)]} onClose={()=>{setRankModalEvent(null);setRankModalContract(null);}} onConfirm={async kwResult=>{await handleRankConfirm(rankModalEvent,kwResult);setRankModalEvent(null);setRankModalContract(null);}} onDelete={rankDataMap[ceKey(rankModalEvent)]?async()=>{await handleRankDelete(rankModalEvent);setRankModalEvent(null);setRankModalContract(null);}:undefined} onAddKeyword={async kw=>addKeywordToContract(rankModalContract.id,kw)}/>}
       {editingReport&&<AdminEditReportModal report={editingReport} dateStr={reportViewDate} onClose={()=>setEditingReport(null)} onSave={handleAdminSaveReport}/>}
       {dailyAlertItems&&dailyAlertItems!=='PENDING'&&Array.isArray(dailyAlertItems)&&<DailyAlertModal items={dailyAlertItems} onClose={()=>setDailyAlertItems(null)}/>}
@@ -2878,11 +2957,13 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid #f0f1f3"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><button onClick={()=>{let m=calM-1,y=calY;if(m<0){m=11;y--;}setCalM(m);setCalY(y);setSelectedDay(null);}} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:7,padding:"5px 12px",cursor:"pointer",fontSize:16}}>‹</button><div style={{fontWeight:800,fontSize:15,color:"#0f1117"}}>{calY}년 {calM+1}월</div><button onClick={()=>{let m=calM+1,y=calY;if(m>11){m=0;y++;}setCalM(m);setCalY(y);setSelectedDay(null);}} style={{background:"none",border:"1px solid #f0f1f3",borderRadius:7,padding:"5px 12px",cursor:"pointer",fontSize:16}}>›</button></div>
-                <div style={{display:"flex",gap:5,marginBottom:12,justifyContent:"center"}}>{[["all","전체"],["tasks","일반 일정"],["contracts","계약업체"]].map(([v,l])=>(<button key={v} onClick={()=>setCalFilter(v)} style={{border:`1.5px solid ${calFilter===v?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:calFilter===v?"#f0f7ff":"#fff",color:calFilter===v?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>))}</div>
+                <div style={{display:"flex",gap:5,marginBottom:12,justifyContent:"center"}}>{[["all","전체"],["tasks","일반 일정"],["contracts","계약업체"]].map(([v,l])=>(<button key={v} onClick={()=>setCalFilter(v)} style={{border:`1.5px solid ${calFilter===v?"#0071CE":"#f0f1f3"}`,borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:calFilter===v?"#f0f7ff":"#fff",color:calFilter===v?"#0071CE":"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{l}</button>))}<button onClick={()=>setShowCECleanup(true)} title="계약에서 자동 생성된 일정을 골라서 삭제합니다" style={{border:"1.5px solid #f0f1f3",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:600,cursor:"pointer",background:"#fff",color:"#6b7280",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>자동 일정 정리</button></div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:3}}>{DAYS_KR.map((d,i)=>(<div key={d} style={{textAlign:"center",fontSize:window.innerWidth<=768?9:11,fontWeight:700,color:i===0?"#ef4444":i===6?"#0071CE":"#adb5bd",padding:"3px 0"}}>{d}</div>))}</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>{cells.map((day,i)=>{if(!day)return <div key={i}/>;const ds=`${calY}-${String(calM+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;const isToday=ds===todayStr;const isSel=selectedDay===ds;const dow=(firstDay+day-1)%7;const cell=tasksByDay[day]||{t:[],e:[]};const allCellItems=[...cell.e.map(e=>({...e,_ce:true})),...cell.t];return(<div key={i} onClick={()=>setSelectedDay(isSel?null:ds)} style={{minHeight:window.innerWidth<=768?120:82,background:isSel?"#e8f4fd":isToday?"#f0f7ff":"#fff",border:`1px solid ${isSel?"#0071CE":isToday?"#93c5fd":"#f0f1f3"}`,borderRadius:6,padding:window.innerWidth<=768?"3px 2px":"5px 4px",cursor:"pointer",overflow:"hidden",boxSizing:"border-box"}}><div style={{fontSize:window.innerWidth<=768?10:11,fontWeight:isToday?800:500,color:isToday?"#0071CE":dow===0?"#ef4444":dow===6?"#3b82f6":"#374151",marginBottom:2,textAlign:"center",lineHeight:1.2}}>{isToday?<span style={{background:"#0071CE",color:"#fff",borderRadius:"50%",width:16,height:16,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:9}}>{day}</span>:day}</div><div style={{display:"flex",flexDirection:"column",gap:1}}>{allCellItems.slice(0,window.innerWidth<=768?3:3).map((item,ti)=>{const iD=item._ce?!!completions[ceKey(item)]:item.status==="done";const rawLabel=item._ce?item.type[0]+"."+item.name:item.title;const label=window.innerWidth<=768?(rawLabel.length>5?rawLabel.slice(0,5)+"…":rawLabel):rawLabel;const bg=item._ce?CE[item.type].bg:P[item.priority].bg;const color=item._ce?CE[item.type].color:P[item.priority].color;return <div key={ti} title={rawLabel} style={{fontSize:window.innerWidth<=768?8:9,background:bg,color,borderRadius:2,padding:"1px 2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,textDecoration:iD?"line-through":"none",opacity:iD?0.6:1,lineHeight:1.3,marginBottom:1}}>{label}</div>;})} {allCellItems.length>3&&<div style={{fontSize:7,color:"#9ca3af",textAlign:"center",fontWeight:600}}>+{allCellItems.length-3}</div>}</div></div>);})} </div>
               </div>
-              {selectedDay&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}><div style={{padding:"12px 18px",borderBottom:"1px solid #f0f1f3",background:selectedDay===todayStr?"#f0f7ff":"#f7f8fa",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>{new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span>{selectedDay===todayStr&&<span style={{fontSize:10,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:99,padding:"2px 7px"}}>오늘</span>}</div><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#adb5bd"}}>{selDayTasks.length+selDayCE.length}개</span><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:15}}>✕</button></div></div><div style={{padding:"14px 18px"}}>{selDayTasks.length===0&&selDayCE.length===0?<div style={{textAlign:"center",padding:"16px 0",color:"#adb5bd",fontSize:12}}>이 날 일정이 없어요</div>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:7}}>{selDayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>{if(e.type==="순위체크"){setRankModalEvent(e);setRankModalContract(c);}else toggleCE(e);}} onMemo={()=>setMemoContract(c)}/>:null;})}{selDayTasks.map(t=><TaskCard key={t.id+(t._sk||"")} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}</div></div>)}
+              {selectedDay&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}><div style={{padding:"12px 18px",borderBottom:"1px solid #f0f1f3",background:selectedDay===todayStr?"#f0f7ff":"#f7f8fa",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>{new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span>{selectedDay===todayStr&&<span style={{fontSize:10,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:99,padding:"2px 7px"}}>오늘</span>}</div><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#adb5bd"}}>{selDayTasks.length+selDayCE.length}개</span><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:15}}>✕</button></div></div><div style={{padding:"14px 18px"}}>{selDayTasks.length===0&&selDayCE.length===0?<div style={{textAlign:"center",padding:"16px 0",color:"#adb5bd",fontSize:12}}>이 날 일정이 없어요</div>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:7}}>{selDayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>{if(e.type==="순위체크"){setRankModalEvent(e);setRankModalContract(c);}else toggleCE(e);}} onMemo={()=>setMemoContract(c)} onDelete={async()=>{if(!window.confirm(`[${e.type}] ${c.name} · ${e.date}
+삭제할 일정 1건, 되돌릴 수 없습니다.
+(계약·순위·매출 데이터는 지워지지 않습니다)`))return;await hideCEKeys([ceKey(e)]);}}/>:null;})}{selDayTasks.map(t=><TaskCard key={t.id+(t._sk||"")} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}</div></div>)}
             </div>
           )}
           {tab==="revenue"&&<RevenueCalendarTab contracts={contracts} user={user} profiles={profiles}/>}
