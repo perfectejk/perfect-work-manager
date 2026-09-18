@@ -3,6 +3,9 @@ import*as XLSX from"xlsx";
 import{doc,getDoc,setDoc,deleteDoc,getDocs,collection,query,where}from'firebase/firestore';
 import{db}from'./firebase';
 import WorkManagerTab from'./workmanager/WorkManagerTab';
+import TaskQuickAdd from'./listtab/TaskQuickAdd';
+import TaskDetailPanel from'./listtab/TaskDetailPanel';
+import SidePanel from'./shared/SidePanel';
 const METRICS=[{key:"calls",label:"콜수",unit:"콜"},{key:"callTime",label:"콜시간",unit:"분"},{key:"materials",label:"자료수",unit:"개"},{key:"toss",label:"토스",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"},{key:"positive",label:"긍정백톡",unit:"개"},{key:"negative",label:"부정백톡",unit:"개"}];
 const FINAL_METRICS=[{key:"dailySales",label:"일매출",unit:"원"},{key:"connRate",label:"도입률-연결",unit:""},{key:"rate30s",label:"도입률-30초이상",unit:""}];
 const DEF_TARGETS={calls:200,materials:25,retarget:4};
@@ -2288,7 +2291,7 @@ function CEcleanupModal({events,contracts,onClose,onDelete}){
     </div>
   </div>);
 }
-function TaskCard({task,onCycle,onDelete,onEdit,showOwner,canEdit}){
+function TaskCard({task,onCycle,onDelete,onEdit,showOwner,canEdit,onOpen}){
   const[exp,setExp]=useState(false);
   const p=P[task.priority],s=S[task.status],isDone=task.status==="done";
   const isOver=task.due&&!isDone&&!task._ir&&task.due<todayStr;
@@ -2298,7 +2301,7 @@ function TaskCard({task,onCycle,onDelete,onEdit,showOwner,canEdit}){
   return(<div style={{background:"#fff",borderRadius:10,padding:"10px 12px",border:`1px solid ${borderColor}`,opacity:isDone?0.7:1}}>
     <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
       <button onClick={()=>canEdit&&onCycle(task)} style={{flexShrink:0,marginTop:1,width:20,height:20,borderRadius:"50%",border:`2px solid ${s.color}`,background:isDone?"#10b981":task.status==="doing"?"#eff6ff":"#fff",cursor:canEdit?"pointer":"default",fontSize:9,color:s.color,display:"flex",alignItems:"center",justifyContent:"center"}}>{isDone?"✓":task.status==="doing"?"▶":""}</button>
-      <div style={{flex:1,minWidth:0}}>
+      <div style={{flex:1,minWidth:0,cursor:(onOpen&&!task._ir)?"pointer":"default"}} onClick={()=>{if(onOpen&&!task._ir)onOpen(task);}}>
         <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
           <span style={{fontSize:12,fontWeight:600,color:isDone?"#9ca3af":"#111827",textDecoration:isDone?"line-through":"none"}}>{task.title}</span>
           <Badge label={p.label} color={p.color} bg={p.bg}/>
@@ -2309,9 +2312,9 @@ function TaskCard({task,onCycle,onDelete,onEdit,showOwner,canEdit}){
         <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
           {showOwner&&task.owner&&<span style={{fontSize:10,color:"#7c3aed",fontWeight:600}}>{task.owner}</span>}
           {task.project&&<span style={{fontSize:10,color:"#6b7280"}}>{task.project}</span>}
-          {task.due&&<span style={{fontSize:10,color:isOver?"#ef4444":"#9ca3af"}}>{task.due}{task._ir?" (반복)":""}</span>}
+          {task.due&&<span style={{fontSize:10,color:isOver?"#ef4444":"#9ca3af"}}>{task.due}{task.time?" "+task.time:""}{task._ir?" (반복)":""}</span>}
           {task.deadline&&<span style={{fontSize:10,color:ddLabel?.urgent?"#ef4444":"#9ca3af",fontWeight:ddLabel?.urgent?700:400}}>마감 {task.deadline}</span>}
-          {task.memo&&<button onClick={()=>setExp(v=>!v)} style={{fontSize:9,color:"#a855f7",background:"#faf5ff",border:"none",borderRadius:5,padding:"1px 5px",cursor:"pointer"}}>메모</button>}
+          {task.memo&&<button onClick={e=>{e.stopPropagation();setExp(v=>!v);}} style={{fontSize:9,color:"#a855f7",background:"#faf5ff",border:"none",borderRadius:5,padding:"1px 5px",cursor:"pointer"}}>메모</button>}
         </div>
         {exp&&task.memo&&<div style={{marginTop:5,background:"#faf5ff",borderRadius:7,padding:"5px 8px",fontSize:11,color:"#6b21a8",borderLeft:"3px solid #d8b4fe"}}>{task.memo}</div>}
       </div>
@@ -2654,6 +2657,7 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
 function MainApp({user,onLogout}){
   const[tasks,setTasks]=useState([]);const[loadingTasks,setLoadingTasks]=useState(true);
   const[navOrder,setNavOrder]=useState(["wm","list","calendar","revenue","contracts","work","keyword"]);
+  const[detailTask,setDetailTask]=useState(null);
   const[editTaskData,setEditTaskData]=useState(null);const[form,setForm]=useState(EF(user.isAdmin));const[showForm,setShowForm]=useState(false);
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
@@ -2704,6 +2708,34 @@ function MainApp({user,onLogout}){
   const handleCycle=async t=>{if(!user.isAdmin&&(t._sk==="tasks:_pub"||t._sk==="tasks:_prv"))return;const o=["todo","doing","done"];const ns=o[(o.indexOf(t.status)+1)%3];const items=await st.get(t._sk)||[];await st.set(t._sk,items.map(x=>x.id===t.id?{...x,status:ns}:x));setTasks(prev=>prev.map(x=>(x.id===t.id&&x._sk===t._sk)?{...x,status:ns}:x));};
   const handleDelete=async t=>{const items=await st.get(t._sk)||[];await st.set(t._sk,items.filter(x=>x.id!==t.id));setTasks(prev=>prev.filter(x=>!(x.id===t.id&&x._sk===t._sk)));};
   const handleEditTask=t=>{setForm({title:t.title,project:t.project||"",priority:t.priority,status:t.status,due:t.due||"",deadline:t.deadline||"",memo:t.memo||"",visibility:t.visibility||"personal",repeat:t.repeat||"none",repeatDays:t.repeatDays||[]});setEditTaskData(t);setShowForm(true);setTab("list");};
+  // 목록 일정 부분 저장 — 기존 저장 위치(t._sk)와 구조를 그대로 두고 필요한 값만 바꾼다.
+  // 공개 범위를 옮기는 일은 기존 작업 수정 폼이 계속 담당한다.
+  const canEditTask=t=>!!t&&(user.isAdmin||t.owner===user.name)&&!(!user.isAdmin&&(t._sk==="tasks:_pub"||t._sk==="tasks:_prv"));
+  const patchTaskFields=async(t,patch)=>{
+    if(!canEditTask(t)||t._ir)return;
+    const items=await st.get(t._sk)||[];
+    await st.set(t._sk,items.map(x=>x.id===t.id?{...x,...patch}:x));
+    setTasks(prev=>prev.map(x=>(x.id===t.id&&x._sk===t._sk)?{...x,...patch}:x));
+    setDetailTask(prev=>(prev&&prev.id===t.id&&prev._sk===t._sk)?{...prev,...patch}:prev);
+  };
+  // 한 줄 입력으로 일정 추가 — 기존 작업과 같은 문서·같은 구조로 저장한다.
+  // time / subs / contractId 는 선택 필드로만 덧붙인다.
+  const quickAddTask=async(parsed,contractId)=>{
+    const sk=skForVis(user.isAdmin?"public":"personal");
+    const items=await st.get(sk)||[];
+    const t={...EF(user.isAdmin),title:parsed.title,due:parsed.date,
+      project:parsed.cat||"",time:parsed.time||"",
+      ...(contractId?{contractId}:{}),
+      id:uid(),owner:user.name};
+    await st.set(sk,[...items,t]);
+    await loadTasks();
+    setDetailTask({...t,_sk:sk});
+  };
+  const deleteTaskFromDetail=async t=>{
+    if(!window.confirm(`"${t.title}" 일정을 삭제할까요? 되돌릴 수 없습니다.`))return;
+    await handleDelete(t);
+    setDetailTask(null);
+  };
   const loadContracts=async()=>{const c=await st.get("contracts:all")||[];setContracts(c);};
   // 온보딩·순위체크·리포트 일정은 저장된 데이터가 아니라 genEvents() 가 계약에서 매번
   // 계산해 만드는 값이다. 그래서 "자동 등록을 끈다"는 곧 그 계산 결과를 캘린더에 그리지
@@ -2899,6 +2931,10 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
     <div style={{display:"flex",minHeight:"100vh",fontFamily:"'Pretendard',-apple-system,sans-serif",background:"#f7f8fa"}}>
       {showProfile&&<ProfileModal user={user} profiles={profiles} onUpdateProfile={updateProfile} onClose={()=>setShowProfile(false)} contracts={contracts}/>}
       {memoContract&&<ContractMemoModal contract={memoContract} user={user} onClose={()=>setMemoContract(null)} allContracts={contracts} rankDataMap={rankDataMap} completions={completions} onContractUpdate={list=>setContracts([...list])}/>}
+      <SidePanel open={!!detailTask} kind="일정 상세" onClose={()=>setDetailTask(null)}>
+        {detailTask&&<TaskDetailPanel task={detailTask} contracts={visibleContracts} projectCategories={projectCategories}
+          canEdit={canEditTask(detailTask)&&!detailTask._ir} onPatch={patchTaskFields} onDelete={deleteTaskFromDetail}/>}
+      </SidePanel>
       {showCECleanup&&<CEcleanupModal events={filterCE(visibleContracts.filter(c=>!c.cancelled).flatMap(genEvents).filter(e=>!hiddenCE[ceKey(e)]))} contracts={visibleContracts} onClose={()=>setShowCECleanup(false)} onDelete={hideCEKeys}/>}
       {rankModalEvent&&rankModalContract&&<RankInputModal event={rankModalEvent} contract={rankModalContract} existingData={rankDataMap[ceKey(rankModalEvent)]} onClose={()=>{setRankModalEvent(null);setRankModalContract(null);}} onConfirm={async kwResult=>{await handleRankConfirm(rankModalEvent,kwResult);setRankModalEvent(null);setRankModalContract(null);}} onDelete={rankDataMap[ceKey(rankModalEvent)]?async()=>{await handleRankDelete(rankModalEvent);setRankModalEvent(null);setRankModalContract(null);}:undefined} onAddKeyword={async kw=>addKeywordToContract(rankModalContract.id,kw)}/>}
       {editingReport&&<AdminEditReportModal report={editingReport} dateStr={reportViewDate} onClose={()=>setEditingReport(null)} onSave={handleAdminSaveReport}/>}
@@ -2931,6 +2967,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               {window.innerWidth<=768&&<button onClick={()=>{setEditTaskData(null);setForm(EF(user.isAdmin));setShowForm(v=>!v);}} style={{width:"100%",background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 새 작업 추가</button>}
               {showForm&&<TaskForm form={form} setForm={setForm} onSubmit={submitTask} onCancel={()=>{setShowForm(false);setEditTaskData(null);setForm(EF(user.isAdmin));}} isEdit={!!editTaskData} isAdminUser={user.isAdmin} projectCategories={projectCategories}/>}
+              <TaskQuickAdd projectCategories={projectCategories} contracts={visibleContracts} today={todayStr} onAdd={quickAddTask}/>
               <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                 {user.isAdmin&&owners.length>0&&<select value={fOwner} onChange={e=>setFOwner(e.target.value)} style={iS2}><option value="all">전체 사원</option>{owners.map(o=><option key={o} value={o}>{o}</option>)}</select>}
                 <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={iS2}><option value="all">전체 상태</option>{Object.entries(S).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select>
@@ -2947,11 +2984,11 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               <div style={{display:"flex",flexDirection:window.innerWidth<=768?"column":"row",gap:14,alignItems:"flex-start"}}>
                 <div style={{flex:window.innerWidth<=768?"none":"0 0 420px",width:window.innerWidth<=768?"100%":"auto",maxWidth:window.innerWidth<=768?"100%":420,background:"#fff",borderRadius:12,padding:"14px 16px",border:"1px solid #f0f1f3"}}>
                   <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>오늘 할 일</span><span style={{background:"#fef2f2",color:"#ef4444",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{todayTasks.length+todayCE.length}</span></div>
-                  {todayTasks.length===0&&todayCE.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>오늘 할 일이 없습니다</div>:<div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:window.innerWidth<=768?300:9999,overflowY:window.innerWidth<=768?"auto":"visible"}}>{todayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>{if(e.type==="순위체크"){setRankModalEvent(e);setRankModalContract(c);}else toggleCE(e);}} onMemo={()=>setMemoContract(c)}/>:null;})}{todayTasks.map(t=><TaskCard key={t.id+t._sk} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}
+                  {todayTasks.length===0&&todayCE.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>오늘 할 일이 없습니다</div>:<div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:window.innerWidth<=768?300:9999,overflowY:window.innerWidth<=768?"auto":"visible"}}>{todayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>{if(e.type==="순위체크"){setRankModalEvent(e);setRankModalContract(c);}else toggleCE(e);}} onMemo={()=>setMemoContract(c)}/>:null;})}{todayTasks.map(t=><TaskCard key={t.id+t._sk} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name} onOpen={setDetailTask}/>)}</div>}
                 </div>
                 <div style={{flex:1,minWidth:0,background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}>
                   <div onClick={()=>setShowAllTasks(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer"}}><div style={{display:"flex",alignItems:"center",gap:5}}><span style={{fontSize:12,fontWeight:700,color:"#0f1117"}}>전체 할 일</span><span style={{background:"#f7f8fa",color:"#6b7280",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{allItems.length}개</span></div><span style={{fontSize:10,fontWeight:600,color:"#0071CE",background:"#f0f7ff",borderRadius:6,padding:"3px 8px"}}>{showAllTasks?"숨기기 ▲":"전체보기 ▼"}</span></div>
-                  {showAllTasks&&<div style={{borderTop:"1px solid #f7f8fa",padding:"10px 16px",display:"flex",flexDirection:"column",gap:6,maxHeight:600,overflowY:"auto"}}>{allItems.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>작업이 없습니다</div>:allItems.map((item,i)=>{if(item._itemType==="ce"){const c=visibleContracts.find(x=>x.id===item.cid);return c?<ContractEventCard key={i} event={item} contract={c} isDone={!!completions[ceKey(item)]} onToggle={()=>{if(item.type==="순위체크"){setRankModalEvent(item);setRankModalContract(c);}else toggleCE(item);}} onMemo={()=>setMemoContract(c)}/>:null;}return <TaskCard key={item.id+item._sk} task={item} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||item.owner===user.name}/>;})}</div>}
+                  {showAllTasks&&<div style={{borderTop:"1px solid #f7f8fa",padding:"10px 16px",display:"flex",flexDirection:"column",gap:6,maxHeight:600,overflowY:"auto"}}>{allItems.length===0?<div style={{textAlign:"center",padding:"12px 0",color:"#adb5bd",fontSize:12}}>작업이 없습니다</div>:allItems.map((item,i)=>{if(item._itemType==="ce"){const c=visibleContracts.find(x=>x.id===item.cid);return c?<ContractEventCard key={i} event={item} contract={c} isDone={!!completions[ceKey(item)]} onToggle={()=>{if(item.type==="순위체크"){setRankModalEvent(item);setRankModalContract(c);}else toggleCE(item);}} onMemo={()=>setMemoContract(c)}/>:null;}return <TaskCard key={item.id+item._sk} task={item} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||item.owner===user.name} onOpen={setDetailTask}/>;})}</div>}
                 </div>
               </div>
             </div>
@@ -2966,7 +3003,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               </div>
               {selectedDay&&(<div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",overflow:"hidden"}}><div style={{padding:"12px 18px",borderBottom:"1px solid #f0f1f3",background:selectedDay===todayStr?"#f0f7ff":"#f7f8fa",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontWeight:700,fontSize:13,color:"#0f1117"}}>{new Date(selectedDay+"T00:00:00").toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})}</span>{selectedDay===todayStr&&<span style={{fontSize:10,color:"#0071CE",fontWeight:600,background:"#f0f7ff",borderRadius:99,padding:"2px 7px"}}>오늘</span>}</div><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:11,color:"#adb5bd"}}>{selDayTasks.length+selDayCE.length}개</span><button onClick={()=>setSelectedDay(null)} style={{background:"none",border:"none",color:"#adb5bd",cursor:"pointer",fontSize:15}}>✕</button></div></div><div style={{padding:"14px 18px"}}>{selDayTasks.length===0&&selDayCE.length===0?<div style={{textAlign:"center",padding:"16px 0",color:"#adb5bd",fontSize:12}}>이 날 일정이 없어요</div>:<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:7}}>{selDayCE.map((e,i)=>{const c=visibleContracts.find(x=>x.id===e.cid);return c?<ContractEventCard key={i} event={e} contract={c} isDone={!!completions[ceKey(e)]} onToggle={()=>{if(e.type==="순위체크"){setRankModalEvent(e);setRankModalContract(c);}else toggleCE(e);}} onMemo={()=>setMemoContract(c)} onDelete={async()=>{if(!window.confirm(`[${e.type}] ${c.name} · ${e.date}
 삭제할 일정 1건, 되돌릴 수 없습니다.
-(계약·순위·매출 데이터는 지워지지 않습니다)`))return;await hideCEKeys([ceKey(e)]);}}/>:null;})}{selDayTasks.map(t=><TaskCard key={t.id+(t._sk||"")} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name}/>)}</div>}</div></div>)}
+(계약·순위·매출 데이터는 지워지지 않습니다)`))return;await hideCEKeys([ceKey(e)]);}}/>:null;})}{selDayTasks.map(t=><TaskCard key={t.id+(t._sk||"")} task={t} onCycle={handleCycle} onDelete={handleDelete} onEdit={handleEditTask} showOwner={user.isAdmin} canEdit={user.isAdmin||t.owner===user.name} onOpen={setDetailTask}/>)}</div>}</div></div>)}
             </div>
           )}
           {tab==="revenue"&&<RevenueCalendarTab contracts={contracts} user={user} profiles={profiles}/>}
