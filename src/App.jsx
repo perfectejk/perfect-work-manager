@@ -22,6 +22,10 @@ const getDDayLabel=(dl)=>{if(!dl)return null;const d=getDDay(dl);if(d>0)return{t
 // startDate 기준이고 연장 회차 연결도 상호명·startDate 기준이라, endDate 를 건드리지 않으면
 // 매출 100%와 회차 연결이 자동으로 보존된다.
 const isEarlyDone=c=>!!(c&&c.earlyDone);
+// 계약에서 파생되는 자동 일정(온보딩·순위체크·리포트)을 화면에 내보낼지 여부.
+// 캘린더와 오늘 할 일·전체 작업 목록이 같은 기준을 쓰도록 한 곳에 모아 둔다.
+// 순위체크 탭과 순위 기록은 이 판정을 쓰지 않고 genEvents 를 그대로 쓴다.
+const showsAutoEvents=c=>!!c&&!c.cancelled&&!c.earlyDone&&!c.calendarOff;
 // 실질 종료일 — 조기완료면 실제 종료일, 아니면 원래 계약 종료일. D-day·연장 대상 판단에 쓴다.
 const effEndDate=c=>(c&&c.earlyDone&&c.earlyDoneDate)?c.earlyDoneDate:((c&&c.endDate)||'');
 // 진행중 = 해지도 조기완료도 아니고, 아직 종료일이 지나지 않음
@@ -2742,7 +2746,7 @@ function MainApp({user,onLogout}){
     const myTasks=tasks.filter(t=>t.status!=="done"&&(user.isAdmin||t.owner===user.name));
     myTasks.forEach(t=>{if(t.deadline===todayStr){const dd=getDDayLabel(t.deadline);items.push({type:"task",title:t.title,sub:`마감 당일 · ${t.project||"프로젝트 없음"}`,dday:dd?.text,urgent:true});}else if(t.deadline&&getDDay(t.deadline)<=3&&getDDay(t.deadline)>0){const dd=getDDayLabel(t.deadline);items.push({type:"task",title:t.title,sub:`마감 임박 · ${t.project||""}`,dday:dd?.text,urgent:true});}});
     const myContracts=(user.isAdmin||user.role==="manager")?contracts:contracts.filter(c=>c.manager===user.name);
-    myContracts.forEach(c=>{if(isEarlyDone(c)||c.cancelled)return;const evts=genEvents(c);evts.forEach(e=>{if(e.date===todayStr&&(e.type==="순위체크"||e.type==="리포트")){const isDone=!!completions[ceKey(e)];if(!isDone){items.push({type:"contract",ceType:e.type,title:c.name,sub:`${c.manager||"담당자 미지정"} · ${c.phone||""}`,urgent:false});}}});});
+    myContracts.forEach(c=>{if(!showsAutoEvents(c))return;const evts=genEvents(c);evts.forEach(e=>{if(e.date===todayStr&&(e.type==="순위체크"||e.type==="리포트")){const isDone=!!completions[ceKey(e)];if(!isDone){items.push({type:"contract",ceType:e.type,title:c.name,sub:`${c.manager||"담당자 미지정"} · ${c.phone||""}`,urgent:false});}}});});
     if(items.length>0)setDailyAlertItems(items);else setDailyAlertItems(null);
   },[dailyAlertItems,tasks,contracts,completions]);
 
@@ -2906,7 +2910,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
   const filtered=useMemo(()=>tasks.filter(t=>{if(fOwner!=="all"&&t.owner!==fOwner)return false;if(fStatus!=="all"&&t.status!==fStatus)return false;if(fPriority!=="all"&&t.priority!==fPriority)return false;if(fProject!=="all"&&t.project!==fProject)return false;return true;}),[tasks,fOwner,fStatus,fPriority,fProject]);
   const weekDays=useMemo(()=>getWeekDays(),[]);
   const visibleContracts=useMemo(()=>{const base=(user.isAdmin||user.role==="manager")?contracts:contracts.filter(c=>c.manager===user.name);return[...base].sort((a,b)=>(b.startDate||"").localeCompare(a.startDate||""));},[contracts,user]);
-  const allCE=useMemo(()=>visibleContracts.flatMap(genEvents),[visibleContracts]);
+  const allCE=useMemo(()=>visibleContracts.filter(showsAutoEvents).flatMap(genEvents),[visibleContracts]);
   const todayCE=useMemo(()=>filterCE(allCE.filter(e=>e.date===todayStr&&(e.type==="순위체크"||e.type==="리포트"))),[allCE,filterCE]);
   const todayTasks=useMemo(()=>filtered.filter(t=>isActiveOnDate(t,todayStr)&&t.status!=="done").sort((a,b)=>({high:0,medium:1,low:2}[a.priority]-{high:0,medium:1,low:2}[b.priority])),[filtered]);
   const allCEFiltered=useMemo(()=>filterCE(allCE.filter(e=>e.type==="순위체크"||e.type==="리포트")),[allCE,filterCE]);
@@ -2919,12 +2923,8 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
   const pagedContracts=useMemo(()=>filteredContracts.slice((contractPage-1)*contractsPerPage,contractPage*contractsPerPage),[filteredContracts,contractPage,contractsPerPage]);
   const renewalStats=useMemo(()=>{const now={count:0,amount:0},ren={count:0,amount:0};filteredContracts.forEach(c=>{const a=parseAmount(c.total);if(c.isRenewal){ren.count++;ren.amount+=a;}else{now.count++;now.amount+=a;}});return{new:now,renewal:ren};},[filteredContracts]);
   const calTasksExp=useMemo(()=>expandForMonth(filtered,calY,calM),[filtered,calY,calM]);
-  const calCE=useMemo(()=>filterCE(allCE.filter(e=>{
-    if(!e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`)||e.type==="온보딩")return false;
-    const c=visibleContracts.find(x=>x.id===e.cid);
-    // 해지·조기완료 계약, 그리고 자동 일정을 끈 계약(calendarOff)은 캘린더에 그리지 않는다
-    return !!c&&!c.cancelled&&!isEarlyDone(c)&&!c.calendarOff;
-  })),[allCE,calY,calM,filterCE,visibleContracts]);
+  // allCE 가 이미 showsAutoEvents 로 걸러져 있으므로 여기선 해당 월과 유형만 본다
+  const calCE=useMemo(()=>filterCE(allCE.filter(e=>e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`)&&e.type!=="온보딩")),[allCE,calY,calM,filterCE]);
   const tasksByDay=useMemo(()=>{const m={};if(calFilter!=="contracts")calTasksExp.forEach(t=>{if(t.due){const d=parseInt(t.due.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].t.push(t);}});if(calFilter!=="tasks")calCE.forEach(e=>{const d=parseInt(e.date.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].e.push(e);});return m;},[calTasksExp,calCE,calFilter]);
   const selDayTasks=useMemo(()=>calTasksExp.filter(t=>t.due===selectedDay),[calTasksExp,selectedDay]);
   const selDayCE=useMemo(()=>calCE.filter(e=>e.date===selectedDay),[calCE,selectedDay]);
