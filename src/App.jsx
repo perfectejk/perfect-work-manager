@@ -2753,7 +2753,13 @@ function MainApp({user,onLogout}){
   const handleDelete=async t=>{const items=await st.get(t._sk)||[];await st.set(t._sk,items.filter(x=>x.id!==t.id));setTasks(prev=>prev.filter(x=>!(x.id===t.id&&x._sk===t._sk)));};
   const handleEditTask=t=>{setForm({title:t.title,project:t.project||"",priority:t.priority,status:t.status,due:t.due||"",deadline:t.deadline||"",memo:t.memo||"",visibility:t.visibility||"personal",repeat:t.repeat||"none",repeatDays:t.repeatDays||[]});setEditTaskData(t);setShowForm(true);setTab("list");};
   const loadContracts=async()=>{const c=await st.get("contracts:all")||[];setContracts(c);};
-  const saveContract=async c=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0)list[idx]=c;else list.push(c);await st.set("contracts:all",list);setContracts([...list]);setShowCF(false);setEditContract(null);};
+  // 온보딩·순위체크·리포트 일정은 저장된 데이터가 아니라 genEvents() 가 계약에서 매번
+  // 계산해 만드는 값이다. 그래서 "자동 등록을 끈다"는 곧 그 계산 결과를 캘린더에 그리지
+  // 않는다는 뜻이고, 계약마다 calendarOff 플래그로 표시한다.
+  //  · 신규/재연장 등록  → calendarOff:true (캘린더에 안 뜸)
+  //  · 기존 계약 수정    → 원래 값 그대로 (수정만으로 일정이 되살아나지 않음)
+  // 순위체크 탭·순위 기록·주간요약은 genEvents 를 그대로 쓰므로 영향이 없다.
+  const saveContract=async c=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0)list[idx]={...c,calendarOff:list[idx].calendarOff};else list.push({...c,calendarOff:true});await st.set("contracts:all",list);setContracts([...list]);setShowCF(false);setEditContract(null);};
   const deleteContract=async id=>{const list=(await st.get("contracts:all")||[]).filter(c=>c.id!==id);await st.set("contracts:all",list);setContracts(list);};
   const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);};
   // 현황판 인라인 순위 입력 — 오늘 날짜로 기록 + 예정된 순위체크 일정 완료 처리 + Discord 알림
@@ -2913,7 +2919,12 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
   const pagedContracts=useMemo(()=>filteredContracts.slice((contractPage-1)*contractsPerPage,contractPage*contractsPerPage),[filteredContracts,contractPage,contractsPerPage]);
   const renewalStats=useMemo(()=>{const now={count:0,amount:0},ren={count:0,amount:0};filteredContracts.forEach(c=>{const a=parseAmount(c.total);if(c.isRenewal){ren.count++;ren.amount+=a;}else{now.count++;now.amount+=a;}});return{new:now,renewal:ren};},[filteredContracts]);
   const calTasksExp=useMemo(()=>expandForMonth(filtered,calY,calM),[filtered,calY,calM]);
-  const calCE=useMemo(()=>filterCE(allCE.filter(e=>e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`)&&e.type!=="온보딩"&&!visibleContracts.find(c=>c.id===e.cid)?.cancelled&&!isEarlyDone(visibleContracts.find(c=>c.id===e.cid)))),[allCE,calY,calM,filterCE,visibleContracts]);
+  const calCE=useMemo(()=>filterCE(allCE.filter(e=>{
+    if(!e.date.startsWith(`${calY}-${String(calM+1).padStart(2,"0")}`)||e.type==="온보딩")return false;
+    const c=visibleContracts.find(x=>x.id===e.cid);
+    // 해지·조기완료 계약, 그리고 자동 일정을 끈 계약(calendarOff)은 캘린더에 그리지 않는다
+    return !!c&&!c.cancelled&&!isEarlyDone(c)&&!c.calendarOff;
+  })),[allCE,calY,calM,filterCE,visibleContracts]);
   const tasksByDay=useMemo(()=>{const m={};if(calFilter!=="contracts")calTasksExp.forEach(t=>{if(t.due){const d=parseInt(t.due.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].t.push(t);}});if(calFilter!=="tasks")calCE.forEach(e=>{const d=parseInt(e.date.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].e.push(e);});return m;},[calTasksExp,calCE,calFilter]);
   const selDayTasks=useMemo(()=>calTasksExp.filter(t=>t.due===selectedDay),[calTasksExp,selectedDay]);
   const selDayCE=useMemo(()=>calCE.filter(e=>e.date===selectedDay),[calCE,selectedDay]);
