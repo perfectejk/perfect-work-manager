@@ -13,6 +13,7 @@ import SessionPanel from "./SessionPanel";
 import { blankSession, genDates, ruleLabel } from "./recur";
 import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, CONTRACT_TYPE } from "./store";
 import { findContract, findSubType } from "./contractMatch";
+import ImportModal from "./ImportModal";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
 // 1단계 자료 제작 → 2단계 교육 과정 운영.
@@ -44,6 +45,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [showTypes, setShowTypes] = useState(false);
   const [showScript, setShowScript] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [side, setSide] = useState(null);           // {kind:"task", id}
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(TD + "T00:00:00"); return { y: d.getFullYear(), m: d.getMonth() }; });
 
@@ -674,6 +676,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           ))}
         </div>
         <button onClick={() => setShowTypes(true)} style={btn("ghost", { padding: "8px 14px", fontSize: 12 })}>유형 관리</button>
+        <button onClick={() => setShowImport(true)} title="목록·캘린더 탭의 일정을 업무관리로 복사합니다"
+          style={btn("ghost", { padding: "8px 14px", fontSize: 12 })}>기존 일정 가져오기</button>
         <button onClick={() => setShowProgram(true)} style={btn("accent", { padding: "8px 14px", fontSize: 12 })}>+ 교육 과정 등록</button>
       </div>
 
@@ -726,6 +730,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
         onCreate={createProgram} onClose={() => setShowProgram(false)} />}
       {showScript && <AddScriptModal cats={scriptCats} onAdd={addScript} onClose={() => setShowScript(false)} />}
 
+      {showImport && <ImportModal st={st} contracts={contracts} subTypes={subTypes}
+        existing={tasks} today={TD} onDone={saveTasks} onClose={() => setShowImport(false)} />}
       {showTypes && <TypesModal types={types} tasks={tasks} onSave={saveTypes}
         subTypes={subTypes} onSaveSubTypes={saveSubTypes} onClose={() => setShowTypes(false)} />}
     </div>
