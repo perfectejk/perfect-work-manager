@@ -6,8 +6,11 @@ import { C, FONT, card, input, btn, fmtDate } from "./ui";
 // 한 줄 입력창 + 인식 결과 미리보기. 분류 목록은 쓰는 화면에서 넘겨받는다.
 //   cats     : [{k, n, c?, kw?}]  — 없으면 분류 인식을 건너뛴다
 //   fallback : 분류를 못 찾았을 때 쓸 기본 분류 키 (없으면 null)
-//   onAdd    : (파싱결과) => void
-export default function QuickAddBar({ cats = [], fallback = null, onAdd, placeholder, today }) {
+//   onAdd    : (파싱결과, 추가정보) => void
+//   detect   : (파싱결과) => { chips:[{label,color}], data:{...} }
+//              쓰는 화면이 제목에서 뭔가를 더 알아내어 미리보기 칩으로 보여주고,
+//              그 결과를 onAdd 의 두 번째 인자로 받고 싶을 때 쓴다. (예: 계약업체 인식)
+export default function QuickAddBar({ cats = [], fallback = null, onAdd, placeholder, today, detect }) {
   const [text, setText] = useState("");
   const parsed = useMemo(
     () => quickParse(text, { cats, today, fallback }),
@@ -15,11 +18,13 @@ export default function QuickAddBar({ cats = [], fallback = null, onAdd, placeho
   );
   const hint = useMemo(() => quickHint(cats, fallback), [cats, fallback]);
   const catOf = (k) => cats.find((c) => c.k === k);
-  const hit = catOf(parsed.cat);
+  const found = useMemo(() => (detect && parsed.title ? detect(parsed) : null), [detect, parsed]);
+  // 화면이 알아낸 분류가 있으면 그쪽을 우선해 미리보기에 보여준다
+  const hit = catOf(found && found.catOverride ? found.catOverride : parsed.cat);
 
   const submit = () => {
     if (!text.trim() || !parsed.title) return;
-    onAdd(parsed);
+    onAdd(parsed, found ? found.data : undefined);
     setText("");
   };
 
@@ -51,6 +56,8 @@ export default function QuickAddBar({ cats = [], fallback = null, onAdd, placeho
           {chip(fmtDate(parsed.date) + (parsed.dateGuessed ? " · 날짜 미입력 → 오늘" : ""))}
           {parsed.time ? chip(parsed.time) : null}
           {hit ? chip(hit.n, { background: (hit.c || C.sub) + "1f", color: hit.c || C.sub }) : null}
+          {found && (found.chips || []).map((x, i) =>
+            <span key={i}>{chip(x.label, { background: (x.color || C.main) + "1f", color: x.color || C.main })}</span>)}
         </div>
       )}
       <div style={{ fontSize: 10.5, color: C.faint, marginTop: 6, lineHeight: 1.6, fontFamily: FONT }}>{hint}</div>

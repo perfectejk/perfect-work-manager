@@ -3110,7 +3110,7 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               />
             </div>
           )}
-          {tab==="wm"&&user.isAdmin&&(<WorkManagerTab st={st} today={todayStr}/>)}
+          {tab==="wm"&&user.isAdmin&&(<WorkManagerTab st={st} today={todayStr} contracts={visibleContracts} onOpenContract={id=>{const c=contracts.find(x=>x.id===id);if(c)setMemoContract(c);}}/>)}
           {tab==="admin"&&user.isAdmin&&(<AdminTab projectCategories={projectCategories} setProjectCategories={setProjectCategories} targets={targets} setTargets={setTargets} accounts={accounts} setAccounts={setAccounts} webhookUrl={webhookUrl} setWebhookUrl={setWebhookUrl} rankWebhookUrl={rankWebhookUrl} setRankWebhookUrl={setRankWebhookUrl} allData={allData} loadAllData={loadAllData} loadingAll={loadingAll} contracts={contracts} navOrder={navOrder} setNavOrder={setNavOrder}/>)}
         </div>
       </div>

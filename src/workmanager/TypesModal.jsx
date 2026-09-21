@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import { C, FONT, input, btn, modalBg, modalCard } from "../shared/ui";
 
 // 자료 유형 관리 — 추가 / 이름·색 변경 / 삭제(작업이 연결된 유형은 불가)
-export default function TypesModal({ types, tasks, onSave, onClose }) {
+export default function TypesModal({ types, tasks, onSave, subTypes = [], onSaveSubTypes, onClose }) {
   const [rows, setRows] = useState(types);
   const [name, setName] = useState("");
   const [color, setColor] = useState("#0e9aa7");
+  const [subRows, setSubRows] = useState(subTypes);
+  const [subName, setSubName] = useState("");
 
   const usedCount = (k) => tasks.filter((t) => t.type === k).length;
   const set = (i, patch) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -30,9 +32,32 @@ export default function TypesModal({ types, tasks, onSave, onClose }) {
     setRows(rows.filter((_, j) => j !== i));
   };
 
+  // 세부 분류 (계약업체 일정용)
+  const subUsed = (k) => tasks.filter((t) => t.subType === k).length;
+  const setSub = (i, patch) => setSubRows(subRows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const addSub = () => {
+    const n = subName.trim();
+    if (!n) return;
+    if (subRows.some((r) => r.n === n)) { alert("같은 이름의 분류가 이미 있습니다."); return; }
+    const next = [...subRows];
+    const etcAt = next.findIndex((r) => r.k === "etc");
+    const item = { k: "s" + Math.random().toString(36).slice(2, 8), n, kw: [] };
+    if (etcAt >= 0) next.splice(etcAt, 0, item); else next.push(item);
+    setSubRows(next);
+    setSubName("");
+  };
+  const removeSub = (i) => {
+    const r = subRows[i];
+    if (subUsed(r.k) > 0) return;
+    if (!window.confirm(`세부 분류 "${r.n}"을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    setSubRows(subRows.filter((_, j) => j !== i));
+  };
+
   const save = async () => {
     if (rows.some((r) => !String(r.n || "").trim())) { alert("이름이 빈 유형이 있습니다."); return; }
+    if (subRows.some((r) => !String(r.n || "").trim())) { alert("이름이 빈 세부 분류가 있습니다."); return; }
     await onSave(rows);
+    if (onSaveSubTypes) await onSaveSubTypes(subRows);
     onClose();
   };
 
@@ -71,6 +96,34 @@ export default function TypesModal({ types, tasks, onSave, onClose }) {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) add(); }}
               placeholder="새 유형 이름 (예: 교육 영상, 설문지)" style={input({ fontSize: 12.5 })} />
             <button onClick={add} style={btn("primary", { padding: "6px 12px", fontSize: 11.5 })}>추가</button>
+          </div>
+
+          {/* ── 계약업체 일정의 세부 분류 ── */}
+          <div style={{ marginTop: 22, paddingTop: 16, borderTop: `1px solid ${C.line}` }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.title, marginBottom: 4 }}>계약업체 세부 분류</div>
+            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, marginBottom: 12 }}>
+              계약업체 일정에 붙는 분류입니다. 한 줄 입력에서 이름에 든 단어로 자동 인식됩니다.
+              (예: "리워드"라고 쓰면 리워드 세팅)
+            </div>
+            {subRows.map((r, i) => {
+              const used = subUsed(r.k);
+              return (
+                <div key={r.k} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", marginBottom: 7 }}>
+                  <input value={r.n} onChange={(e) => setSub(i, { n: e.target.value })} style={input({ fontSize: 12.5 })} />
+                  {r.k === "etc"
+                    ? <span style={{ fontSize: 11, color: C.faint }}>기본</span>
+                    : used > 0
+                      ? <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>사용 중 {used}건</span>
+                      : <button onClick={() => removeSub(i)} style={btn("danger", { padding: "4px 10px", fontSize: 11 })}>삭제</button>}
+                </div>
+              );
+            })}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center", marginTop: 10 }}>
+              <input value={subName} onChange={(e) => setSubName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addSub(); }}
+                placeholder="새 세부 분류 (예: 영수증 리뷰, 순위 점검)" style={input({ fontSize: 12.5 })} />
+              <button onClick={addSub} style={btn("primary", { padding: "6px 12px", fontSize: 11.5 })}>추가</button>
+            </div>
           </div>
         </div>
 

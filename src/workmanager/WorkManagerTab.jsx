@@ -11,7 +11,8 @@ import ProgramModal from "./ProgramModal";
 import ProgramPanel from "./ProgramPanel";
 import SessionPanel from "./SessionPanel";
 import { blankSession, genDates, ruleLabel } from "./recur";
-import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR } from "./store";
+import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, CONTRACT_TYPE } from "./store";
+import { findContract, findSubType } from "./contractMatch";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
 // 1단계 자료 제작 → 2단계 교육 과정 운영.
@@ -19,12 +20,13 @@ import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR } from "./s
 const SUB_TABS = [
   { id: "list", label: "오늘·이번 주" },
   { id: "board", label: "자료 제작 보드" },
+  { id: "biz", label: "계약업체 일정" },
   { id: "edu", label: "교육 과정" },
   { id: "lib", label: "스크립트 목록" },
   { id: "cal", label: "캘린더" },
 ];
 
-export default function WorkManagerTab({ st, today }) {
+export default function WorkManagerTab({ st, today, contracts = [], onOpenContract }) {
   const TD = today || YMD(new Date());
   const [sub, setSub] = useState("list");
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,10 @@ export default function WorkManagerTab({ st, today }) {
   const [sessions, setSessions] = useState([]);
   const [people, setPeople] = useState([]);
   const [libQuery, setLibQuery] = useState("");
+  const [subTypes, setSubTypes] = useState([]);
+  const [pendingPick, setPendingPick] = useState(null);   // {parsed, info, candidates}
+  const [bizSub, setBizSub] = useState("all");
+  const [bizDone, setBizDone] = useState("open");
   const [showTypes, setShowTypes] = useState(false);
   const [showScript, setShowScript] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
@@ -48,6 +54,7 @@ export default function WorkManagerTab({ st, today }) {
       if (!alive) return;
       setTypes(d.types); setTasks(d.tasks); setScripts(d.scripts);
       setPrograms(d.programs); setSessions(d.sessions); setPeople(d.people);
+      setSubTypes(d.subTypes);
       setLoading(false);
     })();
     return () => { alive = false; };
@@ -61,6 +68,9 @@ export default function WorkManagerTab({ st, today }) {
   // ---- 저장 (화면 상태를 먼저 바꾸고 Firestore에 기록) ----
   const saveTasks = async (next) => { setTasks(next); await st.set(K.tasks, next); };
   const saveTypes = async (next) => { setTypes(next); await st.set(K.types, next); };
+  const saveSubTypes = async (next) => { setSubTypes(next); await st.set(K.subTypes, next); };
+  const subTypeName = useCallback((k) => (subTypes.find((x) => x.k === k) || {}).n || "", [subTypes]);
+  const contractName = useCallback((id) => (contracts.find((c) => c.id === id) || {}).name || "", [contracts]);
   const saveScripts = async (next) => { setScripts(next); await st.set(K.scripts, next); };
 
   // ---- 스크립트 ----
@@ -173,12 +183,43 @@ export default function WorkManagerTab({ st, today }) {
     };
   }, [sessions, progName, roundOf, allMembers]);
 
-  const addTask = async (p) => {
+  // 한 줄 입력에서 업체·세부 분류를 알아낸다. 미리보기 칩으로도 보여준다.
+  const detectContract = useCallback((parsed) => {
+    const hitSub = findSubType(parsed.title, subTypes);
+    const r = findContract(parsed.title, contracts, TD);
+    if (!r.name) return hitSub ? { chips: [{ label: subTypeName(hitSub), color: "#0891b2" }], data: { subType: hitSub } } : null;
+    const chips = [{ label: r.name, color: "#0891b2" }];
+    if (hitSub) chips.push({ label: subTypeName(hitSub), color: "#0891b2" });
+    if (!r.contract) chips.push({ label: `계약 ${r.candidates.length}건 — 고르기`, color: C.amber });
+    return {
+      catOverride: CONTRACT_TYPE,
+      chips,
+      data: { contractId: r.contract ? r.contract.id : "", subType: hitSub, candidates: r.candidates, name: r.name },
+    };
+  }, [contracts, subTypes, subTypeName, TD]);
+
+  const addTask = async (p, info) => {
+    // 업체는 찾았는데 계약이 여러 건이면 자동으로 고르지 않고 물어본다
+    if (info && info.candidates && info.candidates.length > 1 && !info.contractId) {
+      setPendingPick({ parsed: p, info });
+      return;
+    }
+    await createTask(p, info);
+  };
+
+  // 실제 저장 — 업체가 연결되면 유형이 자동으로 "계약업체"가 된다
+  const createTask = async (p, info, contractId) => {
+    const cid = contractId || (info && info.contractId) || "";
     const t = {
-      id: uid(), title: p.title, type: p.cat || "etc", date: p.date, time: p.time || "",
+      id: uid(), title: p.title,
+      type: cid ? CONTRACT_TYPE : (p.cat || "etc"),
+      date: p.date, time: p.time || "",
       status: "todo", desc: "", subs: [], links: [], createdAt: TD,
+      ...(cid ? { contractId: cid } : {}),
+      ...(info && info.subType ? { subType: info.subType } : {}),
     };
     await saveTasks([...tasks, t]);
+    setPendingPick(null);
     setSide({ kind: "task", id: t.id });
   };
   const patchTask = async (id, patch) => saveTasks(tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -386,6 +427,94 @@ export default function WorkManagerTab({ st, today }) {
     );
   };
 
+  // ---- 계약업체 일정 (업체별로 묶어서) ----
+  const bizView = () => {
+    let list = tasks.filter((t) => t.type === CONTRACT_TYPE);
+    if (bizSub !== "all") list = list.filter((t) => (t.subType || "") === bizSub);
+    if (bizDone === "open") list = list.filter((t) => t.status !== "done");
+    else if (bizDone === "done") list = list.filter((t) => t.status === "done");
+
+    // 업체별로 묶기 — 연결 안 된 건은 맨 아래 따로
+    const groups = new Map();
+    list.forEach((t) => {
+      const key = t.contractId || "__none__";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(t);
+    });
+    const entries = [...groups.entries()].sort((a, b) => {
+      if (a[0] === "__none__") return 1;
+      if (b[0] === "__none__") return -1;
+      return contractName(a[0]).localeCompare(contractName(b[0]));
+    });
+
+    const pill = (on, v, label, setter, color) => (
+      <button key={v} onClick={() => setter(v)}
+        style={{ border: `1.5px solid ${on ? color : C.line}`, borderRadius: 99, padding: "4px 12px",
+          fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
+          background: on ? color + "18" : C.white, color: on ? color : C.muted }}>{label}</button>
+    );
+
+    return (
+      <>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>세부 분류:</span>
+          {pill(bizSub === "all", "all", "전체", setBizSub, C.muted)}
+          {subTypes.map((x) => pill(bizSub === x.k, x.k, x.n, setBizSub, "#0891b2"))}
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginLeft: 6 }}>상태:</span>
+          {pill(bizDone === "open", "open", "미완료", setBizDone, C.main)}
+          {pill(bizDone === "done", "done", "완료", setBizDone, C.green)}
+          {pill(bizDone === "all", "all", "전체", setBizDone, C.muted)}
+        </div>
+
+        {entries.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 0", color: C.faint, fontSize: 13 }}>
+            조건에 맞는 계약업체 일정이 없습니다. 위 입력창에 업체명을 넣어 한 줄로 적어보세요.
+          </div>
+        ) : entries.map(([cid, items]) => {
+          const c = cid === "__none__" ? null : contracts.find((x) => x.id === cid);
+          const sorted = [...items].sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")));
+          return (
+            <div key={cid} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 9 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: c ? C.title : C.amber }}>
+                  {c ? c.name : "업체 연결 안 됨"}
+                </span>
+                <span style={{ ...badge(C.muted, C.soft), fontSize: 10.5 }}>{sorted.length}건</span>
+                {c && c.manager && <span style={{ fontSize: 11, color: C.faint }}>담당 {c.manager}</span>}
+                {c && c.endDate && <span style={{ fontSize: 11, color: C.faint }}>~ {c.endDate}</span>}
+                {c && onOpenContract && (
+                  <button onClick={() => onOpenContract(c.id)}
+                    style={btn("ghost", { marginLeft: "auto", padding: "4px 10px", fontSize: 11 })}>계약 화면으로 이동</button>
+                )}
+              </div>
+              {sorted.map((t) => {
+                const on = side?.kind === "task" && side?.id === t.id;
+                const isDone = t.status === "done";
+                return (
+                  <div key={t.id} onClick={() => openSide("task", t.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", marginBottom: 5,
+                      cursor: "pointer", background: C.white, borderRadius: 8,
+                      border: `1px solid ${on ? C.main : C.line}`, opacity: isDone ? 0.6 : 1 }}>
+                    <button onClick={(e) => { e.stopPropagation(); toggleItem({ kind: "task", id: t.id }); }}
+                      style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, cursor: "pointer",
+                        border: `2px solid ${isDone ? C.green : "#c5cdd8"}`, background: isDone ? C.green : C.white,
+                        color: C.white, fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>{isDone ? "\u2713" : ""}</button>
+                    {t.subType && <span style={{ ...badge("#0891b2", "#ecfeff"), fontSize: 10 }}>{subTypeName(t.subType)}</span>}
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500,
+                      color: isDone ? C.faint : C.title, overflow: "hidden", textOverflow: "ellipsis",
+                      whiteSpace: "nowrap", textDecoration: isDone ? "line-through" : "none" }}>{t.title}</span>
+                    <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>
+                      {fmtDate(t.date)}{t.time ? " " + t.time : ""}</span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </>
+    );
+  };
+
   // ---- 교육 과정 ----
   const eduView = () => {
     if (programs.length === 0) return (
@@ -509,8 +638,34 @@ export default function WorkManagerTab({ st, today }) {
 
   return (
     <div style={{ fontFamily: FONT }}>
-      <QuickAddBar cats={types} fallback="etc" today={TD} onAdd={addTask}
-        placeholder="한 줄로 입력하세요.  예) 내일 오후 3시 교육 운영안 보고 #보고" />
+      <QuickAddBar cats={types} fallback="etc" today={TD} onAdd={addTask} detect={detectContract}
+        placeholder="한 줄로 입력하세요.  예) 내일 3시 OO상회 리워드 세팅" />
+
+      {/* 같은 상호의 계약이 여러 건일 때 — 자동으로 고르지 않고 물어본다 */}
+      {pendingPick && (
+        <div style={{ background: C.amberBg, border: "1px solid #fde68a", borderRadius: 10,
+          padding: "11px 14px", marginBottom: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#92400e", marginBottom: 3 }}>
+            "{pendingPick.info.name}" 계약이 여러 건입니다. 어느 계약의 일정인가요?
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 9 }}>
+            {pendingPick.parsed.title} · {fmtDate(pendingPick.parsed.date)}
+            {pendingPick.parsed.time ? " " + pendingPick.parsed.time : ""}
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {pendingPick.info.candidates.map((c) => (
+              <button key={c.id} onClick={() => createTask(pendingPick.parsed, pendingPick.info, c.id)}
+                style={btn("primary", { padding: "6px 13px", fontSize: 11.5 })}>
+                {c.startDate} ~ {c.endDate}{c.manager ? ` · ${c.manager}` : ""}
+              </button>
+            ))}
+            <button onClick={() => createTask(pendingPick.parsed, { ...pendingPick.info, contractId: "" })}
+              style={btn("ghost", { padding: "6px 13px", fontSize: 11.5 })}>연결 안 함</button>
+            <button onClick={() => setPendingPick(null)}
+              style={btn("ghost", { padding: "6px 13px", fontSize: 11.5 })}>취소</button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <div style={{ ...subTabBar, marginBottom: 0, flex: 1, minWidth: 260 }}>
@@ -525,6 +680,7 @@ export default function WorkManagerTab({ st, today }) {
       <div style={card({ padding: 16 })}>
         {sub === "list" && listView()}
         {sub === "board" && boardView()}
+        {sub === "biz" && bizView()}
         {sub === "edu" && eduView()}
         {sub === "lib" && libView()}
         {sub === "cal" && calView()}
@@ -542,7 +698,8 @@ export default function WorkManagerTab({ st, today }) {
       </div>
 
       <SidePanel open={!!selTask} kind="작업 상세" onClose={() => setSide(null)}>
-        <TaskPanel task={selTask} types={types} onPatch={patchTask} onDelete={deleteTask} />
+        <TaskPanel task={selTask} types={types} subTypes={subTypes} contracts={contracts}
+          onPatch={patchTask} onDelete={deleteTask} onOpenContract={onOpenContract} />
       </SidePanel>
 
       <SidePanel open={!!selScript} kind="스크립트 상세" onClose={() => setSide(null)}>
@@ -569,7 +726,8 @@ export default function WorkManagerTab({ st, today }) {
         onCreate={createProgram} onClose={() => setShowProgram(false)} />}
       {showScript && <AddScriptModal cats={scriptCats} onAdd={addScript} onClose={() => setShowScript(false)} />}
 
-      {showTypes && <TypesModal types={types} tasks={tasks} onSave={saveTypes} onClose={() => setShowTypes(false)} />}
+      {showTypes && <TypesModal types={types} tasks={tasks} onSave={saveTypes}
+        subTypes={subTypes} onSaveSubTypes={saveSubTypes} onClose={() => setShowTypes(false)} />}
     </div>
   );
 }

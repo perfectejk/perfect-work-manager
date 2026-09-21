@@ -1,15 +1,19 @@
 import React from "react";
 import { C, FONT, input, btn } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section, CheckList, Textarea } from "../shared/SidePanel";
-import { STATUS } from "./store";
+import { STATUS, CONTRACT_TYPE } from "./store";
 
 // 작업 상세 — 유형 / 상태 / 날짜 / 시간 / 작업 설명 / 하위 작업 / 관련 링크
+// 유형이 "계약업체"면 연결된 계약과 세부 분류가 더 나온다.
+// 계약은 고유 식별값(contractId)으로 저장하고 화면에는 상호명을 보여준다.
 // 입력하는 즉시 onPatch 로 저장한다.
-export default function TaskPanel({ task, types, onPatch, onDelete }) {
+export default function TaskPanel({ task, types, subTypes = [], contracts = [], onPatch, onDelete, onOpenContract }) {
   const [link, setLink] = React.useState("");
   if (!task) return null;
   const p = (patch) => onPatch(task.id, patch);
   const sel = input({ padding: "5px 7px", fontSize: 12, background: C.soft, border: "1px solid transparent" });
+  const isContract = task.type === CONTRACT_TYPE;
+  const linked = task.contractId ? contracts.find((c) => c.id === task.contractId) : null;
 
   const addLink = () => {
     const v = link.trim();
@@ -39,7 +43,50 @@ export default function TaskPanel({ task, types, onPatch, onDelete }) {
 
         <PropLabel>시간</PropLabel>
         <input type="time" value={task.time || ""} onChange={(e) => p({ time: e.target.value })} style={sel} />
+
+        {isContract && (<>
+          <PropLabel>연결된 업체</PropLabel>
+          <select value={task.contractId || ""} onChange={(e) => p({ contractId: e.target.value })} style={sel}>
+            <option value="">연결 안 함</option>
+            {/* 목록에 없는 계약(권한·삭제 등)이라도 연결은 유지되도록 한 줄 넣어 둔다 */}
+            {task.contractId && !contracts.some((c) => c.id === task.contractId) &&
+              <option value={task.contractId}>(목록에 없는 계약)</option>}
+            {contracts.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}{c.startDate ? ` (${c.startDate.slice(2)}~)` : ""}
+              </option>
+            ))}
+          </select>
+
+          <PropLabel>세부 분류</PropLabel>
+          <select value={task.subType || ""} onChange={(e) => p({ subType: e.target.value })} style={sel}>
+            <option value="">선택 안 함</option>
+            {subTypes.map((x) => <option key={x.k} value={x.k}>{x.n}</option>)}
+          </select>
+        </>)}
       </Props>
+
+      {isContract && linked && (
+        <div style={{ background: "#ecfeff", border: "1px solid #a5f3fc", borderRadius: 9,
+          padding: "10px 12px", marginBottom: 16, fontSize: 11.5, color: C.text, lineHeight: 1.6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <b style={{ color: "#0891b2", fontSize: 12.5 }}>{linked.name}</b>
+            {linked.manager && <span style={{ color: C.faint }}>담당 {linked.manager}</span>}
+            {onOpenContract && (
+              <button onClick={() => onOpenContract(linked.id)}
+                style={btn("ghost", { marginLeft: "auto", padding: "4px 10px", fontSize: 11 })}>계약 화면으로 이동</button>
+            )}
+          </div>
+          {linked.startDate && linked.endDate &&
+            <div style={{ color: C.faint, marginTop: 3 }}>{linked.startDate} ~ {linked.endDate}</div>}
+        </div>
+      )}
+      {isContract && !linked && (
+        <div style={{ background: C.soft, borderRadius: 9, padding: "9px 11px", marginBottom: 16,
+          fontSize: 11, color: C.faint, lineHeight: 1.6 }}>
+          연결된 업체가 없습니다. 위에서 골라주세요.
+        </div>
+      )}
 
       <Section title="작업 설명">
         <Textarea value={task.desc || ""} onChange={(e) => p({ desc: e.target.value })}
