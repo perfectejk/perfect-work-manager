@@ -1,7 +1,7 @@
 import React from "react";
 import { C, FONT, input, btn } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section, CheckList, Textarea } from "../shared/SidePanel";
-import { STATUS, CONTRACT_TYPE } from "./store";
+import { STATUS, CONTRACT_TYPE, subTypesOf, withSubTypes } from "./store";
 
 // 작업 상세 — 유형 / 상태 / 날짜 / 시간 / 작업 설명 / 하위 작업 / 관련 링크
 // 유형이 "계약업체"면 연결된 계약과 세부 분류가 더 나온다.
@@ -14,6 +14,9 @@ export default function TaskPanel({ task, types, subTypes = [], contracts = [], 
   const sel = input({ padding: "5px 7px", fontSize: 12, background: C.soft, border: "1px solid transparent" });
   const isContract = task.type === CONTRACT_TYPE;
   const linked = task.contractId ? contracts.find((c) => c.id === task.contractId) : null;
+  const picked = subTypesOf(task);
+  const toggleSub = (k) =>
+    p(withSubTypes(picked.includes(k) ? picked.filter((x) => x !== k) : [...picked, k]));
 
   const addLink = () => {
     const v = link.trim();
@@ -59,10 +62,20 @@ export default function TaskPanel({ task, types, subTypes = [], contracts = [], 
           </select>
 
           <PropLabel>세부 분류</PropLabel>
-          <select value={task.subType || ""} onChange={(e) => p({ subType: e.target.value })} style={sel}>
-            <option value="">선택 안 함</option>
-            {subTypes.map((x) => <option key={x.k} value={x.k}>{x.n}</option>)}
-          </select>
+          {/* 블로그와 리워드를 함께 세팅하는 경우가 있어 여러 개를 고를 수 있다 */}
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {subTypes.map((x) => {
+              const on = picked.includes(x.k);
+              return (
+                <button key={x.k} onClick={() => toggleSub(x.k)}
+                  style={{ border: `1.5px solid ${on ? "#0891b2" : C.line}`, borderRadius: 99,
+                    padding: "4px 11px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
+                    background: on ? "#ecfeff" : C.white, color: on ? "#0891b2" : C.muted }}>
+                  {on ? "\u2713 " : ""}{x.n}
+                </button>
+              );
+            })}
+          </div>
         </>)}
       </Props>
 

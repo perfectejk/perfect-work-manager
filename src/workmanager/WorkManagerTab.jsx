@@ -11,8 +11,8 @@ import ProgramModal from "./ProgramModal";
 import ProgramPanel from "./ProgramPanel";
 import SessionPanel from "./SessionPanel";
 import { blankSession, genDates, ruleLabel } from "./recur";
-import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, CONTRACT_TYPE } from "./store";
-import { findContract, findSubType } from "./contractMatch";
+import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, CONTRACT_TYPE, subTypesOf, withSubTypes } from "./store";
+import { contractOptions, findSubTypes } from "./contractMatch";
 import ImportModal from "./ImportModal";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
@@ -42,6 +42,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [pendingPick, setPendingPick] = useState(null);   // {parsed, info, candidates}
   const [bizSub, setBizSub] = useState("all");
   const [bizDone, setBizDone] = useState("open");
+  const [calDay, setCalDay] = useState("");   // 캘린더에서 고른 날짜
   const [showTypes, setShowTypes] = useState(false);
   const [showScript, setShowScript] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
@@ -186,23 +187,22 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   }, [sessions, progName, roundOf, allMembers]);
 
   // 한 줄 입력에서 업체·세부 분류를 알아낸다. 미리보기 칩으로도 보여준다.
+  // 업체가 걸리면 "어느 계약인지" 고를 수 있게 선택 옵션을 함께 내려보낸다.
   const detectContract = useCallback((parsed) => {
-    const hitSub = findSubType(parsed.title, subTypes);
-    const r = findContract(parsed.title, contracts, TD);
-    if (!r.name) return hitSub ? { chips: [{ label: subTypeName(hitSub), color: "#0891b2" }], data: { subType: hitSub } } : null;
-    const chips = [{ label: r.name, color: "#0891b2" }];
-    if (hitSub) chips.push({ label: subTypeName(hitSub), color: "#0891b2" });
-    if (!r.contract) chips.push({ label: `계약 ${r.candidates.length}건 — 고르기`, color: C.amber });
+    const hitSubs = findSubTypes(parsed.title, subTypes);
+    const { name, options, runningCount } = contractOptions(parsed.title, contracts, TD);
+    const subChips = hitSubs.map((k) => ({ label: subTypeName(k), color: "#0891b2" }));
+    if (!name) return hitSubs.length ? { chips: subChips, data: { subTypes: hitSubs } } : null;
     return {
       catOverride: CONTRACT_TYPE,
-      chips,
-      data: { contractId: r.contract ? r.contract.id : "", subType: hitSub, candidates: r.candidates, name: r.name },
+      chips: [{ label: name, color: "#0891b2" }, ...subChips],
+      data: { name, options, runningCount, subTypes: hitSubs },
     };
   }, [contracts, subTypes, subTypeName, TD]);
 
   const addTask = async (p, info) => {
-    // 업체는 찾았는데 계약이 여러 건이면 자동으로 고르지 않고 물어본다
-    if (info && info.candidates && info.candidates.length > 1 && !info.contractId) {
+    // 업체가 걸리면 어느 계약에 붙일지 먼저 고르게 한다 (한 건이어도 확인을 받는다)
+    if (info && info.options && info.options.length > 0) {
       setPendingPick({ parsed: p, info });
       return;
     }
@@ -211,14 +211,15 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
 
   // 실제 저장 — 업체가 연결되면 유형이 자동으로 "계약업체"가 된다
   const createTask = async (p, info, contractId) => {
-    const cid = contractId || (info && info.contractId) || "";
+    const cid = contractId || "";
+    const subs = (info && info.subTypes) || [];
     const t = {
       id: uid(), title: p.title,
       type: cid ? CONTRACT_TYPE : (p.cat || "etc"),
       date: p.date, time: p.time || "",
       status: "todo", desc: "", subs: [], links: [], createdAt: TD,
       ...(cid ? { contractId: cid } : {}),
-      ...(info && info.subType ? { subType: info.subType } : {}),
+      ...(subs.length ? { subTypes: subs } : {}),
     };
     await saveTasks([...tasks, t]);
     setPendingPick(null);
@@ -432,7 +433,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   // ---- 계약업체 일정 (업체별로 묶어서) ----
   const bizView = () => {
     let list = tasks.filter((t) => t.type === CONTRACT_TYPE);
-    if (bizSub !== "all") list = list.filter((t) => (t.subType || "") === bizSub);
+    if (bizSub !== "all") list = list.filter((t) => subTypesOf(t).includes(bizSub));
     if (bizDone === "open") list = list.filter((t) => t.status !== "done");
     else if (bizDone === "done") list = list.filter((t) => t.status === "done");
 
@@ -501,7 +502,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                       style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, cursor: "pointer",
                         border: `2px solid ${isDone ? C.green : "#c5cdd8"}`, background: isDone ? C.green : C.white,
                         color: C.white, fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>{isDone ? "\u2713" : ""}</button>
-                    {t.subType && <span style={{ ...badge("#0891b2", "#ecfeff"), fontSize: 10 }}>{subTypeName(t.subType)}</span>}
+                    {subTypesOf(t).map((k) => (
+                      <span key={k} style={{ ...badge("#0891b2", "#ecfeff"), fontSize: 10 }}>{subTypeName(k)}</span>
+                    ))}
                     <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500,
                       color: isDone ? C.faint : C.title, overflow: "hidden", textOverflow: "ellipsis",
                       whiteSpace: "nowrap", textDecoration: isDone ? "line-through" : "none" }}>{t.title}</span>
@@ -589,6 +592,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   };
 
   // ---- 캘린더 ----
+  const dayItems = useMemo(() => (calDay ? items.filter((x) => x.date === calDay) : []), [items, calDay]);
   const calView = () => {
     const { y, m } = calMonth;
     const first = new Date(y, m, 1);
@@ -611,27 +615,73 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
             const ds = YMD(d), inMonth = d.getMonth() === m, isToday = ds === TD;
             const evs = items.filter((x) => x.date === ds);
             return (
-              <div key={i} style={{ minHeight: 86, padding: 4, borderRadius: 6, boxSizing: "border-box",
-                background: inMonth ? C.white : "#fafbfc", border: `1px solid ${isToday ? "#93c5fd" : C.line}`, overflow: "hidden" }}>
+              <div key={i} onClick={() => setCalDay(calDay === ds ? "" : ds)}
+                style={{ minHeight: 86, padding: 4, borderRadius: 6, boxSizing: "border-box", cursor: "pointer",
+                  background: calDay === ds ? "#e8f4fd" : inMonth ? C.white : "#fafbfc",
+                  border: `1px solid ${calDay === ds ? C.main : isToday ? "#93c5fd" : C.line}`, overflow: "hidden" }}>
                 <div style={{ fontSize: 11, fontWeight: isToday ? 800 : 500, marginBottom: 2, textAlign: "center",
                   color: !inMonth ? "#b5bdc9" : isToday ? C.main : C.text }}>
                   {isToday
                     ? <span style={{ background: C.main, color: C.white, borderRadius: "50%", width: 17, height: 17, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9.5 }}>{d.getDate()}</span>
                     : d.getDate()}
                 </div>
-                {evs.slice(0, 3).map((e) => (
-                  <div key={e.kind + e.id} onClick={() => openSide(e.kind, e.id)} title={e.title}
-                    style={{ fontSize: 9, padding: "1px 3px", borderRadius: 3, marginBottom: 1, cursor: "pointer",
+                {evs.slice(0, 2).map((e) => (
+                  <div key={e.kind + e.id} title={e.title}
+                    style={{ fontSize: 9, padding: "1px 3px", borderRadius: 3, marginBottom: 1,
                       background: e.color, color: C.white, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       opacity: e.done ? 0.45 : 1, textDecoration: e.done ? "line-through" : "none" }}>
                     {e.time ? e.time + " " : ""}{e.title}
                   </div>
                 ))}
-                {evs.length > 3 && <div style={{ fontSize: 8, color: C.faint, textAlign: "center", fontWeight: 600 }}>+{evs.length - 3}</div>}
+                {evs.length > 2 && <div style={{ fontSize: 8.5, color: C.main, textAlign: "center", fontWeight: 700 }}>+{evs.length - 2}건 더</div>}
               </div>
             );
           })}
         </div>
+
+        {/* 고른 날짜의 일정 목록 — 여기서 고르면 상세가 열린다.
+            칸이 좁아 3개 넘어가면 안 보이던 문제를 이 목록으로 해결한다. */}
+        {calDay && (
+          <div style={{ marginTop: 14, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px",
+              borderBottom: `1px solid ${C.line}`, background: calDay === TD ? C.mainBg : C.soft }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.title }}>{fmtDate(calDay)}</span>
+              {calDay === TD && <span style={badge(C.main, C.white, { fontSize: 10 })}>오늘</span>}
+              <span style={{ fontSize: 11, color: C.faint }}>{dayItems.length}건</span>
+              <button onClick={() => setCalDay("")}
+                style={{ marginLeft: "auto", border: "none", background: "none", color: C.faint, cursor: "pointer", fontSize: 15 }}>✕</button>
+            </div>
+            <div style={{ padding: "10px 12px" }}>
+              {dayItems.length === 0
+                ? <div style={{ textAlign: "center", padding: "16px 0", fontSize: 12.5, color: C.faint }}>이 날 일정이 없습니다</div>
+                : dayItems.map((e) => {
+                  const on = side?.kind === e.kind && side?.id === e.id;
+                  return (
+                    <div key={e.kind + e.id} onClick={() => openSide(e.kind, e.id)}
+                      style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 10px", marginBottom: 5,
+                        cursor: "pointer", background: C.white, borderRadius: 8,
+                        border: `1px solid ${on ? C.main : C.line}`, opacity: e.done ? 0.6 : 1 }}>
+                      <button onClick={(ev) => { ev.stopPropagation(); toggleItem(e); }}
+                        style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, cursor: "pointer",
+                          border: `2px solid ${e.done ? C.green : "#c5cdd8"}`, background: e.done ? C.green : C.white,
+                          color: C.white, fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>{e.done ? "\u2713" : ""}</button>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: e.color, flexShrink: 0 }} />
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500,
+                        color: e.done ? C.faint : C.title, overflow: "hidden", textOverflow: "ellipsis",
+                        whiteSpace: "nowrap", textDecoration: e.done ? "line-through" : "none" }}>{e.title}</span>
+                      {e.time && <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{e.time}</span>}
+                      <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{e.statusLabel}</span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+        {!calDay && (
+          <p style={{ fontSize: 11, color: C.faint, marginTop: 10, textAlign: "center" }}>
+            날짜를 누르면 그 날 일정 목록이 아래에 열립니다. 목록에서 고르면 상세가 열립니다.
+          </p>
+        )}
       </>
     );
   };
@@ -648,20 +698,23 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
         <div style={{ background: C.amberBg, border: "1px solid #fde68a", borderRadius: 10,
           padding: "11px 14px", marginBottom: 12 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: "#92400e", marginBottom: 3 }}>
-            "{pendingPick.info.name}" 계약이 여러 건입니다. 어느 계약의 일정인가요?
+            "{pendingPick.info.name}" 업체를 찾았습니다. 어느 계약에 연결할까요?
           </div>
           <div style={{ fontSize: 11, color: C.muted, marginBottom: 9 }}>
             {pendingPick.parsed.title} · {fmtDate(pendingPick.parsed.date)}
             {pendingPick.parsed.time ? " " + pendingPick.parsed.time : ""}
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {pendingPick.info.candidates.map((c) => (
-              <button key={c.id} onClick={() => createTask(pendingPick.parsed, pendingPick.info, c.id)}
-                style={btn("primary", { padding: "6px 13px", fontSize: 11.5 })}>
-                {c.startDate} ~ {c.endDate}{c.manager ? ` · ${c.manager}` : ""}
-              </button>
-            ))}
-            <button onClick={() => createTask(pendingPick.parsed, { ...pendingPick.info, contractId: "" })}
+            {pendingPick.info.options.map((c) => {
+              const running = !c.cancelled && !c.earlyDone && String(c.endDate || "") >= TD;
+              return (
+                <button key={c.id} onClick={() => createTask(pendingPick.parsed, pendingPick.info, c.id)}
+                  style={btn(running ? "primary" : "ghost", { padding: "6px 13px", fontSize: 11.5 })}>
+                  {running ? "진행중 · " : "종료 · "}{c.startDate} ~ {c.endDate}{c.manager ? ` · ${c.manager}` : ""}
+                </button>
+              );
+            })}
+            <button onClick={() => createTask(pendingPick.parsed, pendingPick.info, "")}
               style={btn("ghost", { padding: "6px 13px", fontSize: 11.5 })}>연결 안 함</button>
             <button onClick={() => setPendingPick(null)}
               style={btn("ghost", { padding: "6px 13px", fontSize: 11.5 })}>취소</button>

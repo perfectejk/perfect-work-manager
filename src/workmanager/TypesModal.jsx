@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { C, FONT, input, btn, modalBg, modalCard } from "../shared/ui";
+import { subTypesOf } from "./store";
 
 // 자료 유형 관리 — 추가 / 이름·색 변경 / 삭제(작업이 연결된 유형은 불가)
 export default function TypesModal({ types, tasks, onSave, subTypes = [], onSaveSubTypes, onClose }) {
@@ -33,7 +34,8 @@ export default function TypesModal({ types, tasks, onSave, subTypes = [], onSave
   };
 
   // 세부 분류 (계약업체 일정용)
-  const subUsed = (k) => tasks.filter((t) => t.subType === k).length;
+  // 세부 분류는 여러 개 붙을 수 있으므로 배열에 들어 있는지로 센다
+  const subUsed = (k) => tasks.filter((t) => subTypesOf(t).includes(k)).length;
   const setSub = (i, patch) => setSubRows(subRows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const addSub = () => {
     const n = subName.trim();

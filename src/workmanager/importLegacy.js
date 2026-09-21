@@ -2,7 +2,7 @@
 // 원칙
 //  · 원본(tasks:...)은 읽기만 한다. 지우거나 고치지 않는다.
 //  · 옮긴 일정에 원본 주소(srcKey)를 함께 남겨, 여러 번 실행해도 중복이 생기지 않는다.
-import { findContract, findSubType } from "./contractMatch";
+import { findContract, findSubTypes } from "./contractMatch";
 import { CONTRACT_TYPE } from "./store";
 
 // 원본 한 건의 고유 주소 — "{저장문서}#{원본id}"
@@ -19,7 +19,7 @@ export function convertOne(docKey, t, { contracts, subTypes, today, newId }) {
   const found = findContract(hay, contracts, today);
   // 후보가 여러 개면 자동으로 고르지 않는다 — 나중에 직접 연결하도록 남긴다
   const contractId = found.contract ? found.contract.id : "";
-  const subType = findSubType(hay, subTypes);
+  const subs = findSubTypes(hay, subTypes);   // 블로그+리워드처럼 여러 개일 수 있다
 
   return {
     task: {
@@ -34,7 +34,7 @@ export function convertOne(docKey, t, { contracts, subTypes, today, newId }) {
       links: [],
       createdAt: today,
       ...(contractId ? { contractId } : {}),
-      ...(subType ? { subType } : {}),
+      ...(subs.length ? { subTypes: subs } : {}),
       srcKey: srcKeyOf(docKey, t),
     },
     matchedName: found.name,          // 상호는 찾았는지 (계약을 못 고른 경우 참고용)

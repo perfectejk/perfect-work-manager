@@ -42,6 +42,16 @@ export const DEFAULT_SUBTYPES = [
   { k: "etc", n: "기타", kw: [] },
 ];
 
+// 세부 분류는 여러 개 고를 수 있다 (예: 블로그 + 리워드 동시 세팅).
+// 예전에는 subType 한 개만 저장했으므로, 읽을 때 둘 다 받아준다.
+export const subTypesOf = (t) => {
+  if (!t) return [];
+  if (Array.isArray(t.subTypes)) return t.subTypes.filter(Boolean);
+  return t.subType ? [t.subType] : [];
+};
+// 저장할 때는 subTypes 배열로 통일하고, 옛 subType 은 비워 둔다.
+export const withSubTypes = (list) => ({ subTypes: (list || []).filter(Boolean), subType: undefined });
+
 export const STATUS = [["todo", "대기"], ["doing", "진행중"], ["review", "검토"], ["done", "완료"]];
 export const SESSION_STATUS = { plan: "예정", done: "완료", skip: "취소" };
 export const EDU_COLOR = "#10b981";   // 교육 회차 — 기존 앱의 초록과 통일
