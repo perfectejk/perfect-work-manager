@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { C, FONT } from "./ui";
 
 // ===== 공용 부품 ② 오른쪽 상세 패널 (Notion 방식) =====
@@ -23,13 +23,20 @@ export default function SidePanel({ open, kind, onClose, children, width = 480 }
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // onClose 는 쓰는 쪽에서 매 렌더마다 새로 만들어 넘기는 경우가 많다.
+  // 그대로 effect 의 의존값에 넣으면 글자 하나 입력할 때마다 아래 effect 들이
+  // 정리·재실행되어 뒤로가기 기록이 되감겼다(= 패널이 저절로 닫혔다).
+  // 최신 onClose 는 ref 에 담아두고, effect 는 open 이 바뀔 때만 돌게 한다.
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+
   // Esc 로 닫기
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e) => { if (e.key === "Escape") closeRef.current(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   // 열려 있는 동안 뒤쪽 목록이 같이 스크롤되지 않게 잠근다
   useEffect(() => {
@@ -45,13 +52,13 @@ export default function SidePanel({ open, kind, onClose, children, width = 480 }
     if (!open) return;
     let closedByPop = false;
     window.history.pushState({ sidePanel: true }, "");
-    const onPop = () => { closedByPop = true; onClose(); };
+    const onPop = () => { closedByPop = true; closeRef.current(); };
     window.addEventListener("popstate", onPop);
     return () => {
       window.removeEventListener("popstate", onPop);
       if (!closedByPop && window.history.state && window.history.state.sidePanel) window.history.back();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   const panelStyle = isMobile
     ? {
