@@ -193,15 +193,32 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     const { name, options, runningCount } = contractOptions(parsed.title, contracts, TD);
     const subChips = hitSubs.map((k) => ({ label: subTypeName(k), color: "#0891b2" }));
     if (!name) return hitSubs.length ? { chips: subChips, data: { subTypes: hitSubs } } : null;
+    // 진행중 계약이 딱 한 건이면 미리 골라 둔다. 여러 건이면 직접 고르게 한다.
+    const running = options.filter((c) => !c.cancelled && !c.earlyDone && String(c.endDate || "") >= TD);
     return {
       catOverride: CONTRACT_TYPE,
       chips: [{ label: name, color: "#0891b2" }, ...subChips],
       data: { name, options, runningCount, subTypes: hitSubs },
+      pick: {
+        label: `"${name}" 업체를 찾았습니다. 어느 계약에 연결할까요?`,
+        autoId: running.length === 1 ? running[0].id : "",
+        options: options.map((c) => {
+          const isRunning = !c.cancelled && !c.earlyDone && String(c.endDate || "") >= TD;
+          return {
+            id: c.id,
+            primary: isRunning,
+            label: `${isRunning ? "진행중" : "종료"} · ${c.startDate} ~ ${c.endDate}${c.manager ? " · " + c.manager : ""}`,
+          };
+        }),
+      },
     };
   }, [contracts, subTypes, subTypeName, TD]);
 
   const addTask = async (p, info) => {
-    // 업체가 걸리면 어느 계약에 붙일지 먼저 고르게 한다 (한 건이어도 확인을 받는다)
+    // 입력 중에 계약을 골랐으면 그대로 연결한다
+    if (info && info.pickedId === "none") { await createTask(p, info, ""); return; }
+    if (info && info.pickedId) { await createTask(p, info, info.pickedId); return; }
+    // 안 골랐는데 업체가 걸렸으면 저장 전에 물어본다
     if (info && info.options && info.options.length > 0) {
       setPendingPick({ parsed: p, info });
       return;
