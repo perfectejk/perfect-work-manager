@@ -12,7 +12,7 @@ import ProgramPanel from "./ProgramPanel";
 import SessionPanel from "./SessionPanel";
 import { blankSession, genDates, ruleLabel } from "./recur";
 import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, CONTRACT_TYPE, subTypesOf, withSubTypes } from "./store";
-import { contractOptions, findSubTypes } from "./contractMatch";
+import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } from "./contractMatch";
 import ImportModal from "./ImportModal";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
@@ -188,7 +188,33 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
 
   // 한 줄 입력에서 업체·세부 분류를 알아낸다. 미리보기 칩으로도 보여준다.
   // 업체가 걸리면 "어느 계약인지" 고를 수 있게 선택 옵션을 함께 내려보낸다.
-  const detectContract = useCallback((parsed) => {
+  const detectContract = useCallback((parsed, rawText) => {
+    // ① "@" 를 쓰면 진행중인 업체 목록을 띄우고, 뒤에 글자를 치면 좁혀진다.
+    //    고르면 그 상호가 입력창에 끼워지고, 아래 ② 흐름이 이어받아 계약을 연결한다.
+    const m = parseMention(rawText != null ? rawText : parsed.title);
+    if (m.has) {
+      const found = searchRunningCompanies(m.query, contracts, TD);
+      return {
+        chips: [],
+        data: {},
+        pick: {
+          insertOnly: true,
+          range: { start: m.start, end: m.end },
+          label: m.query
+            ? `"${m.query}" 로 찾은 진행중 업체 ${found.length}곳 — 고르면 입력창에 넣습니다`
+            : `진행중인 업체 ${found.length}곳 — 고르거나 뒤에 글자를 더 쳐서 좁히세요`,
+          emptyLabel: `"${m.query}" 와 맞는 진행중 업체가 없습니다. 글자를 줄여보세요.`,
+          options: found.map((f) => ({
+            id: f.name,
+            insert: f.name,
+            primary: true,
+            label: f.name + (f.managers.length ? ` · ${f.managers.join(", ")}` : "") + (f.contracts.length > 1 ? ` · 계약 ${f.contracts.length}건` : ""),
+          })),
+        },
+      };
+    }
+
+    // ② 상호가 문장에 들어 있으면 어느 계약에 붙일지 고르게 한다
     const hitSubs = findSubTypes(parsed.title, subTypes);
     const { name, options, runningCount } = contractOptions(parsed.title, contracts, TD);
     const subChips = hitSubs.map((k) => ({ label: subTypeName(k), color: "#0891b2" }));

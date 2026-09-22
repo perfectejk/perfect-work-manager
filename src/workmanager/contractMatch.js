@@ -65,3 +65,49 @@ export function contractOptions(text, contracts, today) {
   const sortByStart = (a, b) => String(b.startDate || "").localeCompare(String(a.startDate || ""));
   return { name: r.name, options: [...running.sort(sortByStart), ...ended.sort(sortByStart)], runningCount: running.length };
 }
+
+// ===== @ 로 업체 불러오기 =====
+// 한 줄 입력에 "@" 를 쓰면 진행중인 업체 목록이 뜨고, 뒤에 글자를 더 치면 좁혀진다.
+// 상호를 정확히 다 치지 않아도 되도록, 띄어쓴 단어 중 하나만 걸려도 후보로 본다.
+
+// 입력에서 "@검색어" 부분을 찾아낸다. 검색어는 @ 뒤부터 문장 끝까지.
+export function parseMention(text) {
+  const s = String(text || "");
+  const at = s.lastIndexOf("@");
+  if (at < 0) return { has: false };
+  return { has: true, start: at, end: s.length, query: s.slice(at + 1).trim() };
+}
+
+/**
+ * 진행중인 계약이 있는 업체를 상호 단위로 찾는다.
+ * 검색어를 띄어쓰기로 쪼개, 단어 하나라도 상호에 들어 있으면 후보에 넣는다.
+ * @returns [{ name, contracts, managers }]
+ */
+export function searchRunningCompanies(query, contracts, today, limit = 8) {
+  const running = (contracts || []).filter((c) => isRunningContract(c, today) && String(c.name || "").trim());
+  const byName = new Map();
+  running.forEach((c) => {
+    const n = String(c.name).trim();
+    if (!byName.has(n)) byName.set(n, []);
+    byName.get(n).push(c);
+  });
+
+  const words = String(query || "").split(/\s+/).map(normName).filter(Boolean);
+  const scored = [];
+  byName.forEach((cs, name) => {
+    const nm = normName(name);
+    if (words.length === 0) { scored.push({ name, contracts: cs, score: 0 }); return; }
+    // 단어 하나라도 걸리면 후보. 앞에서부터 맞으면 더 위로 올린다.
+    const hits = words.filter((w) => nm.includes(w));
+    if (hits.length === 0) return;
+    const starts = words.some((w) => nm.startsWith(w)) ? 2 : 0;
+    scored.push({ name, contracts: cs, score: hits.length + starts });
+  });
+
+  scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  return scored.slice(0, limit).map(({ name, contracts: cs }) => ({
+    name,
+    contracts: cs,
+    managers: [...new Set(cs.map((c) => c.manager).filter(Boolean))],
+  }));
+}
