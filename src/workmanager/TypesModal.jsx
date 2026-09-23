@@ -1,14 +1,17 @@
 import React, { useState } from "react";
 import { C, FONT, input, btn, modalBg, modalCard } from "../shared/ui";
-import { subTypesOf } from "./store";
+import { subTypesOf, reportLabel } from "./store";
 
 // 자료 유형 관리 — 추가 / 이름·색 변경 / 삭제(작업이 연결된 유형은 불가)
-export default function TypesModal({ types, tasks, onSave, subTypes = [], onSaveSubTypes, onClose }) {
+export default function TypesModal({ types, tasks, onSave, subTypes = [], onSaveSubTypes, reportTargets = [], onSaveReportTargets, onClose }) {
   const [rows, setRows] = useState(types);
   const [name, setName] = useState("");
   const [color, setColor] = useState("#0e9aa7");
   const [subRows, setSubRows] = useState(subTypes);
   const [subName, setSubName] = useState("");
+  const [repRows, setRepRows] = useState(reportTargets);
+  const [repName, setRepName] = useState("");
+  const [repTitle, setRepTitle] = useState("");
 
   const usedCount = (k) => tasks.filter((t) => t.type === k).length;
   const set = (i, patch) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -55,11 +58,30 @@ export default function TypesModal({ types, tasks, onSave, subTypes = [], onSave
     setSubRows(subRows.filter((_, j) => j !== i));
   };
 
+  // 보고 대상
+  const repUsed = (k) => tasks.filter((t) => Array.isArray(t.reportTo) && t.reportTo.includes(k)).length;
+  const setRep = (i, patch) => setRepRows(repRows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const addRep = () => {
+    const n = repName.trim();
+    if (!n) return;
+    if (repRows.some((r) => r.name === n && (r.title || "") === repTitle.trim())) { alert("이미 있는 사람입니다."); return; }
+    setRepRows([...repRows, { k: "r" + Math.random().toString(36).slice(2, 8), name: n, title: repTitle.trim() }]);
+    setRepName(""); setRepTitle("");
+  };
+  const removeRep = (i) => {
+    const r = repRows[i];
+    if (repUsed(r.k) > 0) return;
+    if (!window.confirm(`보고 대상 "${reportLabel(r)}"을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    setRepRows(repRows.filter((_, j) => j !== i));
+  };
+
   const save = async () => {
     if (rows.some((r) => !String(r.n || "").trim())) { alert("이름이 빈 유형이 있습니다."); return; }
     if (subRows.some((r) => !String(r.n || "").trim())) { alert("이름이 빈 세부 분류가 있습니다."); return; }
     await onSave(rows);
+    if (repRows.some((r) => !String(r.name || "").trim())) { alert("이름이 빈 보고 대상이 있습니다."); return; }
     if (onSaveSubTypes) await onSaveSubTypes(subRows);
+    if (onSaveReportTargets) await onSaveReportTargets(repRows);
     onClose();
   };
 
@@ -125,6 +147,39 @@ export default function TypesModal({ types, tasks, onSave, subTypes = [], onSave
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addSub(); }}
                 placeholder="새 세부 분류 (예: 영수증 리뷰, 순위 점검)" style={input({ fontSize: 12.5 })} />
               <button onClick={addSub} style={btn("primary", { padding: "6px 12px", fontSize: 11.5 })}>추가</button>
+            </div>
+          </div>
+
+          {/* ── 보고 대상 ── */}
+          <div style={{ marginTop: 22, paddingTop: 16, borderTop: `1px solid ${C.line}` }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.title, marginBottom: 4 }}>보고 대상</div>
+            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, marginBottom: 12 }}>
+              보고는 자료 유형과 별개입니다. 어떤 유형의 일이든 보고 대상을 함께 붙일 수 있습니다.
+              한 줄 입력에서 <b>이름</b>이나 <b>직급</b>을 쓰면 자동으로 잡히고 제목에서는 빠집니다.
+              같은 직급이 두 명 이상이면 자동으로 고르지 않습니다.
+            </div>
+            {repRows.map((r, i) => {
+              const used = repUsed(r.k);
+              return (
+                <div key={r.k} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center", marginBottom: 7 }}>
+                  <input value={r.name} onChange={(e) => setRep(i, { name: e.target.value })}
+                    placeholder="이름" style={input({ fontSize: 12.5 })} />
+                  <input value={r.title || ""} onChange={(e) => setRep(i, { title: e.target.value })}
+                    placeholder="직급 (예: 대표님)" style={input({ fontSize: 12.5 })} />
+                  {used > 0
+                    ? <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>사용 중 {used}건</span>
+                    : <button onClick={() => removeRep(i)} style={btn("danger", { padding: "4px 10px", fontSize: 11 })}>삭제</button>}
+                </div>
+              );
+            })}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center", marginTop: 10 }}>
+              <input value={repName} onChange={(e) => setRepName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addRep(); }}
+                placeholder="새 이름" style={input({ fontSize: 12.5 })} />
+              <input value={repTitle} onChange={(e) => setRepTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addRep(); }}
+                placeholder="직급" style={input({ fontSize: 12.5 })} />
+              <button onClick={addRep} style={btn("primary", { padding: "6px 12px", fontSize: 11.5 })}>추가</button>
             </div>
           </div>
         </div>

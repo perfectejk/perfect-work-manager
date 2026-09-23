@@ -28,6 +28,8 @@ export default function QuickAddBar({ cats = [], fallback = null, onAdd, placeho
   );
   // 화면이 알아낸 분류가 있으면 그쪽을 우선해 미리보기에 보여준다
   const hit = catOf(found && found.catOverride ? found.catOverride : parsed.cat);
+  // detect 가 제목에서 뺄 말(보고 대상 등)을 정리해 주면 그 제목을 쓴다
+  const shown = (found && found.titleOverride != null) ? { ...parsed, title: found.titleOverride } : parsed;
 
   // 입력 중에 고른 항목 (예: 어느 계약에 붙일지)
   const pick = found && found.pick;
@@ -51,9 +53,9 @@ export default function QuickAddBar({ cats = [], fallback = null, onAdd, placeho
   };
 
   const submit = () => {
-    if (!text.trim() || !parsed.title) return;
+    if (!text.trim() || !shown.title) return;
     const extra = found ? { ...found.data, pickedId } : undefined;
-    onAdd(parsed, extra);
+    onAdd(shown, extra);
     setText("");
     setPickedId("");
   };
@@ -88,7 +90,7 @@ export default function QuickAddBar({ cats = [], fallback = null, onAdd, placeho
       {text.trim() && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8, fontSize: 11, color: C.faint }}>
           <span>인식 결과</span>
-          {chip(parsed.title || "(제목 없음)", { background: C.mainBg, color: C.main })}
+          {chip(shown.title || "(제목 없음)", { background: C.mainBg, color: C.main })}
           {chip(fmtDate(parsed.date) + (parsed.dateGuessed ? " · 날짜 미입력 → 오늘" : ""))}
           {parsed.time ? chip(parsed.time) : null}
           {hit ? chip(hit.n, { background: (hit.c || C.sub) + "1f", color: hit.c || C.sub }) : null}

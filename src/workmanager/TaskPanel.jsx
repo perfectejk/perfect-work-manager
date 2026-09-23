@@ -1,13 +1,13 @@
 import React from "react";
 import { C, FONT, input, btn } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section, CheckList, Textarea } from "../shared/SidePanel";
-import { STATUS, CONTRACT_TYPE, subTypesOf, withSubTypes } from "./store";
+import { STATUS, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
 
 // 작업 상세 — 유형 / 상태 / 날짜 / 시간 / 작업 설명 / 하위 작업 / 관련 링크
 // 유형이 "계약업체"면 연결된 계약과 세부 분류가 더 나온다.
 // 계약은 고유 식별값(contractId)으로 저장하고 화면에는 상호명을 보여준다.
 // 입력하는 즉시 onPatch 로 저장한다.
-export default function TaskPanel({ task, types, subTypes = [], contracts = [], onPatch, onDelete, onOpenContract }) {
+export default function TaskPanel({ task, types, subTypes = [], contracts = [], reportTargets = [], onPatch, onDelete, onOpenContract }) {
   const [link, setLink] = React.useState("");
   if (!task) return null;
   const p = (patch) => onPatch(task.id, patch);
@@ -15,6 +15,8 @@ export default function TaskPanel({ task, types, subTypes = [], contracts = [], 
   const isContract = task.type === CONTRACT_TYPE;
   const linked = task.contractId ? contracts.find((c) => c.id === task.contractId) : null;
   const picked = subTypesOf(task);
+  const reps = Array.isArray(task.reportTo) ? task.reportTo : [];
+  const toggleRep = (k) => p({ reportTo: reps.includes(k) ? reps.filter((x) => x !== k) : [...reps, k] });
   const toggleSub = (k) =>
     p(withSubTypes(picked.includes(k) ? picked.filter((x) => x !== k) : [...picked, k]));
 
@@ -101,8 +103,28 @@ export default function TaskPanel({ task, types, subTypes = [], contracts = [], 
         </div>
       )}
 
+      <Section title="보고 대상" optional count={reps.length ? reps.length + "명" : null}>
+        <div style={{ fontSize: 11, color: C.faint, marginBottom: 6, lineHeight: 1.55 }}>
+          유형과 상관없이, 이 일을 누구에게 보고하는지 고릅니다. 한 줄 입력에서 이름·직급을 쓰면 자동으로 잡힙니다.
+        </div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {reportTargets.map((x) => {
+            const on = reps.includes(x.k);
+            return (
+              <button key={x.k} onClick={() => toggleRep(x.k)}
+                style={{ border: `1.5px solid ${on ? "#b45309" : C.line}`, borderRadius: 99,
+                  padding: "4px 11px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
+                  background: on ? "#fffbeb" : C.white, color: on ? "#b45309" : C.muted }}>
+                {on ? "✓ " : ""}{reportLabel(x)}
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+
       <Section title="작업 설명">
         <Textarea value={task.desc || ""} onChange={(e) => p({ desc: e.target.value })}
+          style={{ minHeight: 200 }}
           placeholder="작업 개요, 참고 사항 등을 자유롭게 적으세요." />
       </Section>
 

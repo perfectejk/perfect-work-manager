@@ -11,8 +11,9 @@ import ProgramModal from "./ProgramModal";
 import ProgramPanel from "./ProgramPanel";
 import SessionPanel from "./SessionPanel";
 import { blankSession, genDates, ruleLabel } from "./recur";
-import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, CONTRACT_TYPE, subTypesOf, withSubTypes } from "./store";
+import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
 import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } from "./contractMatch";
+import { extractReportTargets } from "./reportTarget";
 import ImportModal from "./ImportModal";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
@@ -20,7 +21,7 @@ import ImportModal from "./ImportModal";
 // 모든 데이터는 wm: 접두어로만 저장하며, 기존 PRO 데이터는 읽지도 쓰지도 않는다.
 const SUB_TABS = [
   { id: "list", label: "오늘·이번 주" },
-  { id: "board", label: "자료 제작 보드" },
+  { id: "board", label: "진행 현황" },
   { id: "biz", label: "계약업체 일정" },
   { id: "edu", label: "교육 과정" },
   { id: "lib", label: "스크립트 목록" },
@@ -39,6 +40,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [people, setPeople] = useState([]);
   const [libQuery, setLibQuery] = useState("");
   const [subTypes, setSubTypes] = useState([]);
+  const [reportTargets, setReportTargets] = useState([]);
   const [pendingPick, setPendingPick] = useState(null);   // {parsed, info, candidates}
   const [bizSub, setBizSub] = useState("all");
   const [bizDone, setBizDone] = useState("open");
@@ -57,7 +59,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       if (!alive) return;
       setTypes(d.types); setTasks(d.tasks); setScripts(d.scripts);
       setPrograms(d.programs); setSessions(d.sessions); setPeople(d.people);
-      setSubTypes(d.subTypes);
+      setSubTypes(d.subTypes); setReportTargets(d.reportTargets);
       setLoading(false);
     })();
     return () => { alive = false; };
@@ -72,6 +74,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const saveTasks = async (next) => { setTasks(next); await st.set(K.tasks, next); };
   const saveTypes = async (next) => { setTypes(next); await st.set(K.types, next); };
   const saveSubTypes = async (next) => { setSubTypes(next); await st.set(K.subTypes, next); };
+  const saveReportTargets = async (next) => { setReportTargets(next); await st.set(K.reportTargets, next); };
+  const reportName = useCallback((k) => reportLabel(reportTargets.find((x) => x.k === k)), [reportTargets]);
   const subTypeName = useCallback((k) => (subTypes.find((x) => x.k === k) || {}).n || "", [subTypes]);
   const contractName = useCallback((id) => (contracts.find((c) => c.id === id) || {}).name || "", [contracts]);
   const saveScripts = async (next) => { setScripts(next); await st.set(K.scripts, next); };
@@ -214,17 +218,25 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       };
     }
 
-    // ② 상호가 문장에 들어 있으면 어느 계약에 붙일지 고르게 한다
-    const hitSubs = findSubTypes(parsed.title, subTypes);
-    const { name, options, runningCount } = contractOptions(parsed.title, contracts, TD);
+    // ② 보고 대상 — 유형과 별개다. 찾은 이름·직급은 제목에서 뺀다.
+    const rep = extractReportTargets(parsed.title, reportTargets);
+    const title = rep.cleaned || parsed.title;
+    const repChips = rep.targets.map((k) => ({ label: reportName(k), color: "#b45309" }));
+
+    // ③ 상호가 문장에 들어 있으면 어느 계약에 붙일지 고르게 한다
+    const hitSubs = findSubTypes(title, subTypes);
+    const { name, options, runningCount } = contractOptions(title, contracts, TD);
     const subChips = hitSubs.map((k) => ({ label: subTypeName(k), color: "#0891b2" }));
-    if (!name) return hitSubs.length ? { chips: subChips, data: { subTypes: hitSubs } } : null;
+    const base = { titleOverride: title, data: { subTypes: hitSubs, reportTo: rep.targets } };
+    if (!name) return (hitSubs.length || rep.targets.length || rep.cleaned !== parsed.title)
+      ? { ...base, chips: [...repChips, ...subChips] } : null;
     // 진행중 계약이 딱 한 건이면 미리 골라 둔다. 여러 건이면 직접 고르게 한다.
     const running = options.filter((c) => !c.cancelled && !c.earlyDone && String(c.endDate || "") >= TD);
     return {
+      ...base,
       catOverride: CONTRACT_TYPE,
-      chips: [{ label: name, color: "#0891b2" }, ...subChips],
-      data: { name, options, runningCount, subTypes: hitSubs },
+      chips: [{ label: name, color: "#0891b2" }, ...repChips, ...subChips],
+      data: { ...base.data, name, options, runningCount },
       pick: {
         label: `"${name}" 업체를 찾았습니다. 어느 계약에 연결할까요?`,
         autoId: running.length === 1 ? running[0].id : "",
@@ -263,6 +275,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       status: "todo", desc: "", subs: [], links: [], createdAt: TD,
       ...(cid ? { contractId: cid } : {}),
       ...(subs.length ? { subTypes: subs } : {}),
+      ...((info && info.reportTo && info.reportTo.length) ? { reportTo: info.reportTo } : {}),
     };
     await saveTasks([...tasks, t]);
     setPendingPick(null);
@@ -292,6 +305,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       kind: "task", id: t.id, title: t.title, color: typeOf(t.type).c,
       date: t.date, time: t.time, done: t.status === "done",
       statusLabel: (STATUS.find((x) => x[0] === t.status) || STATUS[0])[1],
+      reportTo: t.reportTo || [],
     }));
     const b = sessions.filter((sx) => sx.status !== "skip").map((sx) => ({
       kind: "session", id: sx.id, pid: sx.pid,
@@ -346,6 +360,11 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
         <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: it.done ? C.faint : C.title,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           textDecoration: it.done ? "line-through" : "none" }}>{it.title}</span>
+        {it.reportTo && it.reportTo.length > 0 && (
+          <span style={{ ...badge("#b45309", "#fffbeb"), fontSize: 10 }}>
+            보고 · {it.reportTo.map(reportName).filter(Boolean).join(", ")}
+          </span>
+        )}
         <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{fmtDate(it.date)}{it.time ? " " + it.time : ""}</span>
         <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{it.statusLabel}</span>
       </div>
@@ -799,6 +818,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
 
       <SidePanel open={!!selTask} kind="작업 상세" onClose={() => setSide(null)}>
         <TaskPanel task={selTask} types={types} subTypes={subTypes} contracts={contracts}
+          reportTargets={reportTargets}
           onPatch={patchTask} onDelete={deleteTask} onOpenContract={onOpenContract} />
       </SidePanel>
 
@@ -829,7 +849,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       {showImport && <ImportModal st={st} contracts={contracts} subTypes={subTypes}
         existing={tasks} today={TD} onDone={saveTasks} onClose={() => setShowImport(false)} />}
       {showTypes && <TypesModal types={types} tasks={tasks} onSave={saveTypes}
-        subTypes={subTypes} onSaveSubTypes={saveSubTypes} onClose={() => setShowTypes(false)} />}
+        subTypes={subTypes} onSaveSubTypes={saveSubTypes}
+        reportTargets={reportTargets} onSaveReportTargets={saveReportTargets}
+        onClose={() => setShowTypes(false)} />}
     </div>
   );
 }

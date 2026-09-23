@@ -18,6 +18,7 @@ export const K = {
   programs: "wm:programs",
   people: "wm:people",
   subTypes: "wm:subtypes",
+  reportTargets: "wm:reporttargets",
   sessions: (pid) => `wm:sessions:${pid}`,
   sessionsPrefix: "wm:sessions:",
 };
@@ -52,6 +53,15 @@ export const subTypesOf = (t) => {
 // 저장할 때는 subTypes 배열로 통일하고, 옛 subType 은 비워 둔다.
 export const withSubTypes = (list) => ({ subTypes: (list || []).filter(Boolean), subType: undefined });
 
+// 보고 대상 — 유형과 별개로 "누구에게 보고하는 일인지"를 붙인다. 유형 관리 창에서 수정한다.
+export const DEFAULT_REPORT_TARGETS = [
+  { k: "kdh", name: "김도현", title: "대표님" },
+  { k: "ldh", name: "김도훈", title: "이사님" },
+  { k: "lti", name: "이태익", title: "부대표님" },
+  { k: "lgh", name: "이건호", title: "이사님" },
+];
+export const reportLabel = (t) => (t ? (t.name + (t.title ? " " + t.title : "")) : "");
+
 export const STATUS = [["todo", "대기"], ["doing", "진행중"], ["review", "검토"], ["done", "완료"]];
 export const SESSION_STATUS = { plan: "예정", done: "완료", skip: "취소" };
 export const EDU_COLOR = "#10b981";   // 교육 회차 — 기존 앱의 초록과 통일
@@ -71,9 +81,9 @@ export function mergeDefaults(saved, defaults) {
 
 // 한 번에 모든 업무관리 데이터를 읽어온다.
 export async function loadAll(st) {
-  const [types, tasks, scripts, programs, people, subTypes] = await Promise.all([
+  const [types, tasks, scripts, programs, people, subTypes, reportTargets] = await Promise.all([
     st.get(K.types), st.get(K.tasks), st.get(K.scripts), st.get(K.programs), st.get(K.people),
-    st.get(K.subTypes),
+    st.get(K.subTypes), st.get(K.reportTargets),
   ]);
   const progs = Array.isArray(programs) ? programs : [];
   const keys = await st.list(K.sessionsPrefix);
@@ -83,6 +93,7 @@ export async function loadAll(st) {
   return {
     types: mergeDefaults(types, DEFAULT_TYPES),
     subTypes: mergeDefaults(subTypes, DEFAULT_SUBTYPES),
+    reportTargets: mergeDefaults(reportTargets, DEFAULT_REPORT_TARGETS),
     tasks: Array.isArray(tasks) ? tasks : [],
     scripts: Array.isArray(scripts) ? scripts : [],
     programs: progs,

@@ -37,10 +37,10 @@ export function quickParse(raw, opts = {}) {
 
   // ── 날짜 ──
   let m;
-  if ((m = s.match(/\s(오늘|내일|모레)\s/))) {
+  if ((m = s.match(/\s(오늘|내일|모레)(?=[\s\d])/))) {
     date = addDays(today, { 오늘: 0, 내일: 1, 모레: 2 }[m[1]]);
     s = s.replace(m[0], " ");
-  } else if ((m = s.match(/\s(다음\s?주\s?)?([일월화수목금토])요일\s/))) {
+  } else if ((m = s.match(/\s(다음\s?주\s?)?([일월화수목금토])요일(?=[\s\d])/))) {
     const want = WD.indexOf(m[2]);
     const dow = parseYMD(today).getDay();
     if (m[1]) {
@@ -63,10 +63,10 @@ export function quickParse(raw, opts = {}) {
 
   // ── 시간 ──
   const pad = (n) => String(n).padStart(2, "0");
-  if ((m = s.match(/\s(\d{1,2}):(\d{2})\s/))) {
+  if ((m = s.match(/(?:\s|^)(\d{1,2}):(\d{2})(?=\s|$)/))) {
     time = pad(+m[1]) + ":" + m[2];
     s = s.replace(m[0], " ");
-  } else if ((m = s.match(/\s(오전|오후)?\s?(\d{1,2})시(?:\s?(\d{1,2})분|\s?반)?\s/))) {
+  } else if ((m = s.match(/(?:\s|^)(오전|오후)?\s?(\d{1,2})시(?:\s?(\d{1,2})분|\s?반)?(?=\s|$)/))) {
     let h = +m[2];
     if (m[1] === "오후" && h < 12) h += 12;
     if (m[1] === "오전" && h === 12) h = 0;
