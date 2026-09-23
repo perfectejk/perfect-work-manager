@@ -370,7 +370,7 @@ function ContractMemoModal({contract,user,onClose,allContracts,rankDataMap,compl
         {/* 제공내역 탭 */}
         {activeTab==="provide"&&(
           <div style={{flex:1,overflowY:"auto",padding:"14px 20px 20px"}}>
-            {(()=>{const pv=contract.provide||{};const num=n=>parseInt(n)||0;const rows=[{label:"리워드트래픽",n:num(pv.rewardTraffic),unit:"타"},{label:"블플",n:num(pv.blogPlus),unit:"건"},{label:"영수증리뷰",n:num(pv.receipt),unit:"건"}];const etc=(pv.etc&&String(pv.etc).trim())?String(pv.etc).trim():"";return(
+            {(()=>{const pv=contract.provide||{};const num=n=>parseInt(n)||0;const rows=[{label:"리워드트래픽",n:num(pv.rewardTraffic),unit:"타"},{label:"프리미엄트래픽",n:num(pv.premiumTraffic),unit:"타"},{label:"블플",n:num(pv.blogPlus),unit:"건"},{label:"영수증리뷰",n:num(pv.receipt),unit:"건"}];const etc=(pv.etc&&String(pv.etc).trim())?String(pv.etc).trim():"";return(
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {rows.map(r=>(<div key={r.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f7f8fa",borderRadius:10,padding:"12px 14px",border:"1px solid #f0f1f3"}}>
                   <span style={{fontSize:12,fontWeight:600,color:"#374151"}}>{r.label}</span>
@@ -984,6 +984,7 @@ const PLAN_TYPES=[
   {k:"traffic",label:"트래픽",pk:"rewardTraffic",unit:"타",color:"#0071CE"},
   {k:"route",label:"길찾기 트래픽",pk:"rewardTraffic",unit:"타",color:"#0891b2"},
   {k:"savetraffic",label:"저장+트래픽",pk:"rewardTraffic",unit:"타",color:"#8468D3"},
+  {k:"premium",label:"프리미엄 트래픽",pk:"premiumTraffic",unit:"타",color:"#b45309"},
   {k:"save",label:"저장",pk:null,unit:"건",color:"#f59e0b"},
   {k:"alarm",label:"알림받기",pk:null,unit:"건",color:"#10b981"},
 ];
@@ -1022,9 +1023,35 @@ const planRankPerf=rows=>{
 const blogNorm=d=>({goal:d&&d.goal!=null?d.goal:"",runs:Array.isArray(d&&d.runs)?d.runs:[],cms:Array.isArray(d&&d.cms)?d.cms:[],weekPlan:(d&&d.weekPlan&&typeof d.weekPlan==="object")?d.weekPlan:{}});
 const blogHasProduct=c=>(parseInt(c&&c.provide&&c.provide.blogPlus)||0)>0;
 const intOr=(v,f)=>{const n=parseInt(v);return isNaN(n)?f:n;};
-// 예상 종료일 = 시작일 + ceil(총건수 ÷ 일건수) - 1일 (시작일 포함)
-const blogRunEnd=r=>{const t=intOr(r.total,0),d=intOr(r.daily,0);if(!r.start||t<=0||d<=0)return"";return planAddDays(r.start,Math.ceil(t/d)-1);};
-// 오늘 기준 예상 진행량 = min(총건수, 일건수 × 시작일부터 오늘까지 경과일수(시작일 포함))
+// 리뷰나우는 매일 올릴 수도 있고, 지정한 요일에만 올릴 수도 있다.
+// r.days = [0~6] (0=일). 비어 있거나 없으면 "매일" — 예전에 만든 설정도 그대로 동작한다.
+const BLOG_ALL_DAYS=[0,1,2,3,4,5,6];
+const blogDaysOf=r=>{const d=r&&r.days;return Array.isArray(d)&&d.length&&d.length<7?d:null;};
+// from~to 사이에서 실제로 올리는 날이 며칠인지 (양끝 포함)
+const blogWorkDayCount=(from,to,days)=>{
+  if(!from||!to||to<from)return 0;
+  const span=Math.round((new Date(to+"T00:00:00")-new Date(from+"T00:00:00"))/86400000)+1;
+  if(!days)return span;
+  let n=0;const d=new Date(from+"T00:00:00");
+  for(let i=0;i<span;i++){if(days.includes(d.getDay()))n++;d.setDate(d.getDate()+1);}
+  return n;
+};
+// 예상 종료일 — 올리는 날만 세어 총건수를 채우는 마지막 날
+const blogRunEnd=r=>{
+  const t=intOr(r.total,0),d=intOr(r.daily,0);
+  if(!r.start||t<=0||d<=0)return"";
+  const need=Math.ceil(t/d);                 // 필요한 작업일 수
+  const days=blogDaysOf(r);
+  if(!days)return planAddDays(r.start,need-1);
+  const cur=new Date(r.start+"T00:00:00");
+  let n=0;
+  for(let i=0;i<3000;i++){
+    if(days.includes(cur.getDay())){n++;if(n>=need)return ymdLocal(cur);}
+    cur.setDate(cur.getDate()+1);
+  }
+  return"";
+};
+// 오늘 기준 예상 진행량 = min(총건수, 일건수 × 올린 날 수)
 // · 시작일이 미래면 0  · 일시중지면 중지한 날까지만  · 실제 확인 건수(actual)가 있으면 그 값 우선
 const blogRunDone=(r,asOf)=>{
   const t=intOr(r.total,0),d=intOr(r.daily,0);
@@ -1033,8 +1060,15 @@ const blogRunDone=(r,asOf)=>{
   if(!r.start||t<=0||d<=0)return 0;
   const ref=(r.paused&&r.pausedAt)?(r.pausedAt<asOf?r.pausedAt:asOf):asOf;
   if(ref<r.start)return 0;
-  const days=Math.round((new Date(ref+"T00:00:00")-new Date(r.start+"T00:00:00"))/86400000)+1;
-  return Math.min(t,d*days);
+  return Math.min(t,d*blogWorkDayCount(r.start,ref,blogDaysOf(r)));
+};
+// 화면에 보여줄 요일 문구
+const blogDaysLabel=r=>{
+  const days=blogDaysOf(r);
+  if(!days)return"매일";
+  const sorted=[...days].sort((a,b)=>a-b);
+  if(sorted.join()==="1,2,3,4,5")return"평일(월~금)";
+  return sorted.map(d=>DAYS_KR[d]).join("·");
 };
 // 특정 기간(주차)에 리뷰나우가 올린 예상 건수 — 총건수 상한을 넘지 않도록 누적값 차이로 구한다.
 const blogRunInRange=(r,from,to)=>{const a=from?blogRunDone(r,planAddDays(from,-1)):0;const b=blogRunDone(r,to);return Math.max(0,b-a);};
@@ -1048,7 +1082,7 @@ const blogWeeks=(start,end)=>{
   while(cur<=end&&guard++<200){const we=planAddDays(cur,6);out.push({start:cur,end:we>end?end:we,mon:cur});cur=planAddDays(cur,7);}
   return out;
 };
-function BlogReviewPanel({contract,st}){
+function BlogReviewPanel({contract,st,onSummary}){
   const cid=contract.id;
   const[data,setData]=useState(blogNorm(null));
   const[loading,setLoading]=useState(false);
@@ -1074,8 +1108,10 @@ function BlogReviewPanel({contract,st}){
   const lateRun=data.runs.find(r=>{const e=blogRunEnd(r);return e&&contract.endDate&&e>contract.endDate;});
   const shortFall=goal>0&&plannedTotal<goal;
   const weeks=useMemo(()=>blogWeeks(contract.startDate,contract.endDate),[contract.startDate,contract.endDate]);
+  // 주간계획 상단에서도 블로그 진행률을 보여줄 수 있도록 올려보낸다
+  useEffect(()=>{if(onSummary)onSummary({goal,done,runDone,cmsDone,plannedTotal});},[goal,done,runDone,cmsDone,plannedTotal]);
 
-  const addRun=()=>patch(d=>({...d,runs:[...d.runs,{id:uid(),total:"",daily:"",start:todayStr,paused:false,pausedAt:"",actual:"",memo:""}]}));
+  const addRun=()=>patch(d=>({...d,runs:[...d.runs,{id:uid(),total:"",daily:"",start:todayStr,days:[1,2,3,4,5],paused:false,pausedAt:"",actual:"",memo:""}]}));
   const setRun=(id,p)=>patch(d=>({...d,runs:d.runs.map(r=>r.id===id?{...r,...p}:r)}));
   const delRun=id=>{if(!window.confirm("이 리뷰나우 세팅을 삭제할까요?"))return;patch(d=>({...d,runs:d.runs.filter(r=>r.id!==id)}));};
   const togglePause=r=>setRun(r.id,r.paused?{paused:false,pausedAt:""}:{paused:true,pausedAt:todayStr});
@@ -1159,8 +1195,34 @@ function BlogReviewPanel({contract,st}){
                 <input value={r.memo||""} onChange={e=>setRun(r.id,{memo:e.target.value})} style={{...iS,width:"100%"}}/>
               </label>
             </div>
+
+            {/* 올리는 요일 — 매일 / 평일 / 지정 요일 (예: 월·금 하루 2건) */}
+            <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap",marginTop:8}}>
+              <span style={{fontSize:10,color:"#adb5bd",fontWeight:600}}>올리는 요일</span>
+              {[{l:"매일",v:[]},{l:"평일",v:[1,2,3,4,5]}].map(pre=>{
+                const on=blogDaysLabel(r)===(pre.l==="매일"?"매일":"평일(월~금)");
+                return <button key={pre.l} onClick={()=>setRun(r.id,{days:pre.v})}
+                  style={{border:`1.5px solid ${on?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"3px 11px",fontSize:11,
+                    fontWeight:600,cursor:"pointer",background:on?"#f5f3ff":"#fff",color:on?"#8468D3":"#6b7280",
+                    fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{pre.l}</button>;
+              })}
+              <div style={{display:"flex",gap:3}}>
+                {DAYS_KR.map((d,i)=>{
+                  const cur=Array.isArray(r.days)?r.days:[];
+                  const on=cur.includes(i);
+                  return <button key={i} title={d+"요일"}
+                    onClick={()=>setRun(r.id,{days:on?cur.filter(x=>x!==i):[...cur,i].sort((a,b)=>a-b)})}
+                    style={{width:26,height:26,borderRadius:"50%",fontSize:11,fontWeight:600,cursor:"pointer",
+                      border:`1.5px solid ${on?"#8468D3":"#e5e7eb"}`,background:on?"#8468D3":"#fff",
+                      color:on?"#fff":i===0?"#ef4444":i===6?"#0071CE":"#6b7280",
+                      fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{d}</button>;
+                })}
+              </div>
+              <span style={{fontSize:10.5,color:"#8468D3",fontWeight:700}}>{blogDaysLabel(r)}</span>
+            </div>
             <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px dashed #f0f1f3",fontSize:11.5}}>
               <span style={{color:"#6b7280"}}>예상 종료일 <b style={{color:late?"#b91c1c":"#0f1117"}}>{end||"—"}</b></span>
+              <span style={{color:"#6b7280"}}>{blogDaysLabel(r)} · 하루 {intOr(r.daily,0)}건</span>
               <span style={{color:"#6b7280"}}>오늘 기준 진행 <b style={{color:"#8468D3"}}>{dn}건</b>{tot>0?" / "+tot+"건":""}{hasAdj&&<span style={{color:"#b45309",fontWeight:700}}> (보정값 적용)</span>}</span>
             </div>
           </div>);})}
@@ -1209,7 +1271,7 @@ function BlogReviewPanel({contract,st}){
           </tbody></table>
         </div>))}
       <p style={{fontSize:10.5,color:"#adb5bd",margin:"9px 0 0",lineHeight:1.65}}>
-        <b>리뷰나우</b>는 시작일부터 하루 <b>일 건수</b>만큼 자동으로 올라간다고 보고 진행량을 계산합니다(시작일 포함). 실제와 다르면 <b>실제 확인 건수</b>에 숫자를 넣으세요 — 그 값이 우선합니다.<br/>
+        <b>리뷰나우</b>는 <b>올리는 요일</b>에만 하루 <b>일 건수</b>만큼 올라간다고 보고 진행량을 계산합니다(시작일 포함). 매일·평일 버튼을 쓰거나 요일을 직접 골라도 됩니다 (예: 월·금 하루 2건, 총 10건). 실제와 다르면 <b>실제 확인 건수</b>에 숫자를 넣으세요 — 그 값이 우선합니다.<br/>
         <b>CMS</b>는 올린 날짜마다 1건씩 기록하고, 주차별 보기에서 <b>이번 주 예정 건수</b>와 실제 실적을 비교할 수 있습니다.<br/>
         입력 후 오른쪽 위 <b style={{color:"#8468D3"}}>저장</b> 버튼을 눌러야 저장됩니다.
       </p>
@@ -1227,6 +1289,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   const[refData,setRefData]=useState(null);
   const[refLoading,setRefLoading]=useState(false);
   const[goalStep,setGoalStep]=useState("5");
+  const[blogSum,setBlogSum]=useState(null);   // 블로그 리뷰 진행률 (아래 패널이 올려준다)
   const[fillMsg,setFillMsg]=useState("");
 
   const list=useMemo(()=>{
@@ -1241,7 +1304,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   const sel=useMemo(()=>contracts.find(c=>c.id===selId)||null,[contracts,selId]);
 
   useEffect(()=>{
-    setRefData(null);setFillMsg("");
+    setRefData(null);setFillMsg("");setBlogSum(null);
     if(!selId){setRows([]);setDirty(false);return;}
     let alive=true;setLoading(true);
     (async()=>{const d=await st.get("traffic:plan:"+selId);if(!alive)return;setRows(Array.isArray(d)?d:[]);setDirty(false);setLoading(false);})();
@@ -1253,11 +1316,16 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   const kwOptions=useMemo(()=>{if(!sel)return[];const mk=(sel.mainKeywords||[]).filter(Boolean);return[...new Set([...mk,...(sel.keywords||[])])];},[sel]);
 
   // 리워드트래픽 총량 대조 (트래픽 계열 3종 합산) + 저장/알림받기는 배분량만 집계
+  // 프리미엄 트래픽은 단가가 달라 리워드와 총량·진행률을 따로 본다.
   const summary=useMemo(()=>{
     const total=parseInt(sel?.provide?.rewardTraffic)||0;
+    const premiumTotal=parseInt(sel?.provide?.premiumTraffic)||0;
     const byType=PLAN_TYPES.map(t=>({...t,used:rows.filter(r=>r.type===t.k).reduce((s,r)=>s+planQty(r),0)}));
     const trafficUsed=byType.filter(t=>t.pk==="rewardTraffic").reduce((s,t)=>s+t.used,0);
-    return{total,trafficUsed,remain:total-trafficUsed,over:trafficUsed>total,byType};
+    const premiumUsed=byType.filter(t=>t.pk==="premiumTraffic").reduce((s,t)=>s+t.used,0);
+    return{total,trafficUsed,remain:total-trafficUsed,over:trafficUsed>total,
+      premiumTotal,premiumUsed,premiumRemain:premiumTotal-premiumUsed,premiumOver:premiumUsed>premiumTotal,
+      byType};
   },[rows,sel]);
 
   const rankPerf=useMemo(()=>planRankPerf(rows),[rows]);
@@ -1394,6 +1462,38 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
               ))}
             </div>
           </div>
+          {/* 프리미엄 트래픽 — 단가가 달라 리워드와 총량·진행률을 따로 본다 */}
+          {(summary.premiumTotal>0||summary.premiumUsed>0)&&(
+            <div style={{flex:"1 1 260px",background:"#fff",borderRadius:12,border:"1px solid "+(summary.premiumOver?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#b45309",marginBottom:5}}>프리미엄 트래픽</div>
+              {summary.premiumTotal===0?(
+                <div style={{fontSize:12,color:"#92400e",fontWeight:600}}>제공내역 총량 미설정 · 배분 {summary.premiumUsed.toLocaleString()}타</div>
+              ):(<>
+                <div style={{fontSize:12,color:"#374151",fontWeight:600}}>총 {summary.premiumTotal.toLocaleString()}타 중 <b style={{color:"#b45309"}}>{summary.premiumUsed.toLocaleString()}타</b> 배분</div>
+                <div style={{fontSize:12,marginTop:2,fontWeight:700,color:summary.premiumOver?"#ef4444":"#10b981"}}>{summary.premiumOver?"초과 "+Math.abs(summary.premiumRemain).toLocaleString()+"타":"잔여 "+summary.premiumRemain.toLocaleString()+"타"}</div>
+                <div style={{height:6,background:"#f0f1f3",borderRadius:99,marginTop:8,overflow:"hidden"}}><div style={{height:"100%",width:Math.min(100,Math.round(summary.premiumUsed/summary.premiumTotal*100))+"%",background:summary.premiumOver?"#ef4444":"#b45309",borderRadius:99}}/></div>
+              </>)}
+            </div>
+          )}
+
+          {/* 블로그 리뷰 진행률 — 아래 블로그 리뷰 계획에서 올려준 값 */}
+          {blogSum&&(
+            <div style={{flex:"1 1 260px",background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#8468D3",marginBottom:5}}>블로그 리뷰</div>
+              {blogSum.goal===0?(
+                <div style={{fontSize:12,color:"#92400e",fontWeight:600}}>총 목표 미설정 · 완료 {blogSum.done}건</div>
+              ):(<>
+                <div style={{fontSize:12,color:"#374151",fontWeight:600}}>총 {blogSum.goal}건 중 <b style={{color:"#8468D3"}}>{blogSum.done}건</b> 완료</div>
+                <div style={{fontSize:12,marginTop:2,fontWeight:700,color:blogSum.done>=blogSum.goal?"#10b981":"#374151"}}>{blogSum.done>=blogSum.goal?"목표 달성":"남은 "+(blogSum.goal-blogSum.done)+"건"}</div>
+                <div style={{height:6,background:"#f0f1f3",borderRadius:99,marginTop:8,overflow:"hidden"}}><div style={{height:"100%",width:Math.min(100,Math.round(blogSum.done/blogSum.goal*100))+"%",background:blogSum.done>=blogSum.goal?"#10b981":"#8468D3",borderRadius:99}}/></div>
+              </>)}
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px solid #f7f8fa"}}>
+                <span style={{fontSize:11,color:"#8468D3",fontWeight:700}}>리뷰나우 {blogSum.runDone}건</span>
+                <span style={{fontSize:11,color:"#0891b2",fontWeight:700}}>CMS {blogSum.cmsDone}건</span>
+              </div>
+            </div>
+          )}
+
           {summary.byType.filter(t=>!t.pk).map(t=>(
             <div key={t.k} style={{flex:"0 1 150px",background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px"}}>
               <div style={{fontSize:11,fontWeight:700,color:t.color,marginBottom:5}}>{t.label}</div>
@@ -1524,7 +1624,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
           </>)}
         </div>
         {/* 블플이 포함된 계약에만 블로그 리뷰 계획을 붙인다 (provide.blogPlus > 0) */}
-        {blogHasProduct(sel)&&<BlogReviewPanel key={sel.id} contract={sel} st={st}/>}
+        {blogHasProduct(sel)&&<BlogReviewPanel key={sel.id} contract={sel} st={st} onSummary={setBlogSum}/>}
       </>)}
     </div>
   </div>);
@@ -2384,9 +2484,9 @@ function TaskForm({form,setForm,onSubmit,onCancel,isEdit,isAdminUser,projectCate
   </div>);
 }
 function ContractForm({initial,onSubmit,onCancel,allContracts,user}){
-  const blank={name:"",industry:"",phone:"",link:"",products:"",services:"",total:"",amount:"",manager:"",notes:"",isRenewal:false,renewalCount:0,keywords:[],initialRanks:{},source:"",mainKeywords:[],provide:{rewardTraffic:"",receipt:"",blogPlus:"",etc:""}};
+  const blank={name:"",industry:"",phone:"",link:"",products:"",services:"",total:"",amount:"",manager:"",notes:"",isRenewal:false,renewalCount:0,keywords:[],initialRanks:{},source:"",mainKeywords:[],provide:{rewardTraffic:"",premiumTraffic:"",receipt:"",blogPlus:"",etc:""}};
   const[memo,setMemo]=useState("");
-  const[parsed,setParsed]=useState(initial?{name:initial.name,industry:initial.industry||"",phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,amount:initial.amount??(initial.total?parseAmount(initial.total):""),manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,renewalCount:initial.renewalCount||0,keywords:initial.keywords||[],initialRanks:initial.initialRanks||{},source:initial.source||"",mainKeywords:initial.mainKeywords||[],provide:initial.provide||{rewardTraffic:"",receipt:"",blogPlus:"",etc:""}}:blank);
+  const[parsed,setParsed]=useState(initial?{name:initial.name,industry:initial.industry||"",phone:initial.phone,link:initial.link,products:initial.products,services:initial.services,total:initial.total,amount:initial.amount??(initial.total?parseAmount(initial.total):""),manager:initial.manager||"",notes:initial.notes,isRenewal:initial.isRenewal||false,renewalCount:initial.renewalCount||0,keywords:initial.keywords||[],initialRanks:initial.initialRanks||{},source:initial.source||"",mainKeywords:initial.mainKeywords||[],provide:initial.provide||{rewardTraffic:"",premiumTraffic:"",receipt:"",blogPlus:"",etc:""}}:blank);
   const[kwInput,setKwInput]=useState("");
   const addKeyword=()=>{const v=kwInput.trim();if(!v||parsed.keywords.includes(v))return;setParsed(p=>({...p,keywords:[...p.keywords,v]}));setKwInput("");};
   const removeKeyword=kw=>setParsed(p=>({...p,keywords:p.keywords.filter(k=>k!==kw),initialRanks:Object.fromEntries(Object.entries(p.initialRanks||{}).filter(([k])=>k!==kw)),mainKeywords:(p.mainKeywords||[]).filter(k=>k!==kw)}));
@@ -2397,9 +2497,9 @@ function ContractForm({initial,onSubmit,onCancel,allContracts,user}){
   const[showManualLink,setShowManualLink]=useState(false);
   const[autoMatched,setAutoMatched]=useState(null);
   const iS={border:"1px solid #f0f1f3",borderRadius:8,padding:"8px 12px",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Pretendard',-apple-system,sans-serif"};
-  const handleParse=()=>{const r=parseMemo(memo);setParsed(p=>{const mergedKws=[...new Set([...(p.keywords||[]),...(r.keywords||[])])];const next={...p};["name","industry","phone","link","products","services","notes"].forEach(k=>{if(r[k]&&String(r[k]).trim())next[k]=r[k];});if(r.dbType)next.source=r.dbType;if(r.provide){const pv={...(p.provide||{})};["rewardTraffic","blogPlus","receipt","etc"].forEach(k=>{if(r.provide[k]!==""&&r.provide[k]!=null)pv[k]=r.provide[k];});next.provide=pv;}next.keywords=mergedKws;if(r.total&&String(r.total).trim()){next.total=r.total;next.amount=String(parseAmount(r.total));}return next;});const bits=[];if(r.keywords?.length)bits.push(`키워드 ${r.keywords.length}개`);if(r.industry)bits.push("업종");if(r.dbType)bits.push("DB유형");if(r.provide?.rewardTraffic)bits.push("트래픽 총량");if(r.total)bits.push("금액");setParseMsg("파싱 완료!"+(bits.length?` (${bits.join(" · ")})`:""));if(r.name){const matched=allContracts.find(c=>c.name===r.name&&(!initial||c.id!==initial.id));if(matched){setAutoMatched(matched);setLinkedMemoId(matched.id);}else{setAutoMatched(null);}}};
+  const handleParse=()=>{const r=parseMemo(memo);setParsed(p=>{const mergedKws=[...new Set([...(p.keywords||[]),...(r.keywords||[])])];const next={...p};["name","industry","phone","link","products","services","notes"].forEach(k=>{if(r[k]&&String(r[k]).trim())next[k]=r[k];});if(r.dbType)next.source=r.dbType;if(r.provide){const pv={...(p.provide||{})};["rewardTraffic","premiumTraffic","blogPlus","receipt","etc"].forEach(k=>{if(r.provide[k]!==""&&r.provide[k]!=null)pv[k]=r.provide[k];});next.provide=pv;}next.keywords=mergedKws;if(r.total&&String(r.total).trim()){next.total=r.total;next.amount=String(parseAmount(r.total));}return next;});const bits=[];if(r.keywords?.length)bits.push(`키워드 ${r.keywords.length}개`);if(r.industry)bits.push("업종");if(r.dbType)bits.push("DB유형");if(r.provide?.rewardTraffic)bits.push("트래픽 총량");if(r.total)bits.push("금액");setParseMsg("파싱 완료!"+(bits.length?` (${bits.join(" · ")})`:""));if(r.name){const matched=allContracts.find(c=>c.name===r.name&&(!initial||c.id!==initial.id));if(matched){setAutoMatched(matched);setLinkedMemoId(matched.id);}else{setAutoMatched(null);}}};
   const DBTYPES=["재연장","소개건","검색DB","체험단DB"];
-  const PROVIDE=[{k:"rewardTraffic",label:"리워드트래픽",unit:"타"},{k:"receipt",label:"영수증리뷰",unit:"건"},{k:"blogPlus",label:"블플",unit:"건"},{k:"etc",label:"기타/서비스",unit:"",text:true}];
+  const PROVIDE=[{k:"rewardTraffic",label:"리워드트래픽",unit:"타"},{k:"premiumTraffic",label:"프리미엄트래픽",unit:"타"},{k:"receipt",label:"영수증리뷰",unit:"건"},{k:"blogPlus",label:"블플",unit:"건"},{k:"etc",label:"기타/서비스",unit:"",text:true}];
   const amtDisplay=parsed.amount?Number(String(parsed.amount).replace(/[^\d]/g,"")).toLocaleString():"";
   return(<div style={{background:"#fff",borderRadius:14,padding:22,border:"1px solid #f0f1f3",marginBottom:12}}>
     <p style={{margin:"0 0 14px",fontWeight:700,fontSize:15,color:"#0f1117"}}>{initial?.id?"계약 수정":"계약업체 등록"}</p>
@@ -2495,7 +2595,7 @@ function ContractForm({initial,onSubmit,onCancel,allContracts,user}){
         if(startDate>=endDate)return alert("종료일이 시작일보다 늦어야 합니다.");
         const finalInitRanks={};(parsed.keywords||[]).forEach(kw=>{if(parsed.initialRanks?.[kw])finalInitRanks[kw]=parseInt(parsed.initialRanks[kw]);});
         const amt=parseInt(String(parsed.amount||"").replace(/[^\d]/g,""))||0;
-        const provide={rewardTraffic:parseInt(parsed.provide?.rewardTraffic)||0,receipt:parseInt(parsed.provide?.receipt)||0,blogPlus:parseInt(parsed.provide?.blogPlus)||0,etc:(parsed.provide?.etc||"").trim()};
+        const provide={rewardTraffic:parseInt(parsed.provide?.rewardTraffic)||0,premiumTraffic:parseInt(parsed.provide?.premiumTraffic)||0,receipt:parseInt(parsed.provide?.receipt)||0,blogPlus:parseInt(parsed.provide?.blogPlus)||0,etc:(parsed.provide?.etc||"").trim()};
         const mainKeywords=(parsed.mainKeywords||[]).filter(k=>(parsed.keywords||[]).includes(k));
         onSubmit({...parsed,industry:(parsed.industry||"").trim(),source:parsed.source||"",manager:parsed.manager||user?.name||"",provide,mainKeywords,amount:amt,total:amt?String(amt):"",startDate,endDate,id:initial?.id||uid(),linkedMemoId:linkedMemoId||undefined,keywords:parsed.keywords||[],initialRanks:finalInitRanks});
       }} style={{flex:1,background:"#0071CE",color:"#fff",border:"none",borderRadius:9,padding:"11px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{initial?.id?"저장":"등록하기"}</button>
