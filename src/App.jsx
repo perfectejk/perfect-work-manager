@@ -36,6 +36,10 @@ const canEarlyDone=(user,c)=>!!user&&(user.isAdmin||user.role==='manager'||(!!c&
 const requestNotifPerm=async()=>{if(!("Notification"in window))return false;if(Notification.permission==="granted")return true;const r=await Notification.requestPermission();return r==="granted";};
 const parseAmount=str=>{if(!str)return 0;const m=str.match(/(\d+(?:\.\d+)?)\s*만/);if(m)return parseFloat(m[1])*10000;const n=str.match(/(\d[\d,]*(?:\.\d+)?)/);if(n)return parseFloat(n[1].replace(/,/g,""))||0;return 0;};
 const fmtAmount=n=>{if(!n)return"0원";if(n>=10000){const v=n/10000;return`${Number.isInteger(v)?v:v.toFixed(1)}만원`;}return`${n.toLocaleString()}원`;};
+// ===== 파트 D: 목록·캘린더 탭 숨기기 =====
+// 업무관리 탭으로 옮겨간 뒤 화면에서만 감춘다.
+// 코드와 Firestore 데이터(tasks:...)는 그대로 두었고, 이 배열을 비우면 곧바로 되돌아온다.
+const HIDDEN_TABS=["list","calendar"];
 const fkey=k=>k.replace(/\//g,'__').replace(/:/g,'--');
 const st={
   get:async(k)=>{try{const s=await getDoc(doc(db,'kv',fkey(k)));return s.exists()?JSON.parse(s.data().v):null;}catch{return null;}},
@@ -2116,7 +2120,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
     {id:"work",label:"작업관리",icon:"ti-checklist"},
     {id:"keyword",label:"키워드분석",icon:"ti-search"},
   ];
-  const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean).filter(n=>!(user.role==="manager"&&n.id==="report")).filter(n=>!(n.id==="wm"&&!user.isAdmin));
+  const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean).filter(n=>!(user.role==="manager"&&n.id==="report")).filter(n=>!(n.id==="wm"&&!user.isAdmin)).filter(n=>!HIDDEN_TABS.includes(n.id));
 
   // ===== 모바일: 드로어 메뉴 =====
   const[drawerOpen,setDrawerOpen]=useState(false);
@@ -2659,11 +2663,13 @@ function MainApp({user,onLogout}){
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[contractMonth,setContractMonth]=useState("all");const[contractStatus,setContractStatus]=useState("all");
   const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");
+  // 업무관리 일정 — 오늘 알림에 쓰려고 읽어온다 (쓰기는 업무관리 탭에서만 한다)
+  const[wmTasks,setWmTasks]=useState([]);const[wmLoaded,setWmLoaded]=useState(false);
   const[completions,setCompletions]=useState({});const[hiddenCE,setHiddenCE]=useState({});const[showCECleanup,setShowCECleanup]=useState(false);const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[workSubTab,setWorkSubTab]=useState("board");const[planFocus,setPlanFocus]=useState("");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());
   const[calFilter,setCalFilter]=useState("all");const[selectedDay,setSelectedDay]=useState(null);
   const[fOwner,setFOwner]=useState("all");const[fStatus,setFStatus]=useState("all");const[fPriority,setFPriority]=useState("all");const[fProject,setFProject]=useState("all");
-  const[showAllTasks,setShowAllTasks]=useState(false);const[tab,setTab]=useState("list");
+  const[showAllTasks,setShowAllTasks]=useState(false);const[tab,setTab]=useState(user.isAdmin?"wm":"contracts");
   const[projectCategories,setProjectCategories]=useState([]);
   const[timeslots,setTimeslots]=useState([]);const[selTs,setSelTs]=useState("");const[tsReports,setTsReports]=useState([]);
   const[myR,setMyR]=useState({calls:"",callTime:"",materials:"",toss:"",retarget:"",positive:"",negative:"",dailySales:"",connRate:"",rate30s:""});
@@ -2679,7 +2685,7 @@ function MainApp({user,onLogout}){
   const[analysisMonth,setAnalysisMonth]=useState(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
   const[analysisData,setAnalysisData]=useState(null);const[loadingAnalysis,setLoadingAnalysis]=useState(false);
 
-  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadHiddenCE();loadRankData();loadProfiles();loadProjectCategories();loadAccounts();},[]);
+  useEffect(()=>{loadTasks();loadContracts();loadSettings();loadCompletions();loadHiddenCE();loadWmTasks();loadRankData();loadProfiles();loadProjectCategories();loadAccounts();},[]);
   useEffect(()=>{if(selTs)loadReports(selTs);},[selTs]);
   useEffect(()=>{loadDateFinalReports(reportViewDate);},[reportViewDate]);
   useEffect(()=>{
@@ -2690,13 +2696,21 @@ function MainApp({user,onLogout}){
   },[]);
   useEffect(()=>{
     if(dailyAlertItems!=='PENDING')return;
+    // 업무관리 일정과 계약을 다 읽기 전에 계산하면 알림이 빈 채로 닫혀버린다
+    if(!wmLoaded)return;
     const items=[];
-    const myTasks=tasks.filter(t=>t.status!=="done"&&(user.isAdmin||t.owner===user.name));
-    myTasks.forEach(t=>{if(t.deadline===todayStr){const dd=getDDayLabel(t.deadline);items.push({type:"task",title:t.title,sub:`마감 당일 · ${t.project||"프로젝트 없음"}`,dday:dd?.text,urgent:true});}else if(t.deadline&&getDDay(t.deadline)<=3&&getDDay(t.deadline)>0){const dd=getDDayLabel(t.deadline);items.push({type:"task",title:t.title,sub:`마감 임박 · ${t.project||""}`,dday:dd?.text,urgent:true});}});
+    // 업무관리 탭의 일정 기준 (업무관리는 슈퍼관리자 전용이라 그 외 계정엔 표시하지 않는다)
+    if(user.isAdmin){
+      wmTasks.filter(t=>t&&t.status!=="done"&&t.date).forEach(t=>{
+        if(t.date===todayStr)items.push({type:"task",title:t.title,sub:"오늘 할 일 · 업무관리",dday:"D-Day",urgent:true});
+        else if(t.date<todayStr){const d=getDDay(t.date);items.push({type:"task",title:t.title,sub:"지난 일정 · 업무관리",dday:`D+${Math.abs(d)}초과`,urgent:true});}
+        else if(getDDay(t.date)<=3)items.push({type:"task",title:t.title,sub:"곧 할 일 · 업무관리",dday:getDDayLabel(t.date)?.text,urgent:false});
+      });
+    }
     const myContracts=(user.isAdmin||user.role==="manager")?contracts:contracts.filter(c=>c.manager===user.name);
     myContracts.forEach(c=>{if(!showsAutoEvents(c))return;const evts=genEvents(c);evts.forEach(e=>{if(e.date===todayStr&&(e.type==="순위체크"||e.type==="리포트")){const isDone=!!completions[ceKey(e)];if(!isDone){items.push({type:"contract",ceType:e.type,title:c.name,sub:`${c.manager||"담당자 미지정"} · ${c.phone||""}`,urgent:false});}}});});
     if(items.length>0)setDailyAlertItems(items);else setDailyAlertItems(null);
-  },[dailyAlertItems,tasks,contracts,completions]);
+  },[dailyAlertItems,wmTasks,wmLoaded,contracts,completions]);
 
   const loadTasks=async()=>{setLoadingTasks(true);if(user.isAdmin||user.role==="manager"){const keys=await st.list("tasks:");const all=[];for(const k of keys){const items=await st.get(k)||[];items.forEach(t=>all.push({...t,_sk:k}));}setTasks(all);}else{const mine=await st.get(`tasks:${user.name}`)||[];const pub=await st.get("tasks:_pub")||[];setTasks([...mine.map(t=>({...t,_sk:`tasks:${user.name}`})),...pub.map(t=>({...t,_sk:"tasks:_pub"}))]);}setLoadingTasks(false);};
   const skForVis=v=>user.isAdmin?(v==="public"?"tasks:_pub":"tasks:_prv"):`tasks:${user.name}`;
@@ -2714,6 +2728,7 @@ function MainApp({user,onLogout}){
   const saveContract=async c=>{const list=await st.get("contracts:all")||[];const idx=list.findIndex(x=>x.id===c.id);if(idx>=0)list[idx]={...c,calendarOff:list[idx].calendarOff};else list.push({...c,calendarOff:true});await st.set("contracts:all",list);setContracts([...list]);setShowCF(false);setEditContract(null);};
   const deleteContract=async id=>{const list=(await st.get("contracts:all")||[]).filter(c=>c.id!==id);await st.set("contracts:all",list);setContracts(list);};
   const loadCompletions=async()=>{const c=await st.get("ce:completions")||{};setCompletions(c);};
+  const loadWmTasks=async()=>{const t=await st.get("wm:tasks");setWmTasks(Array.isArray(t)?t:[]);setWmLoaded(true);};
   // 사용자가 캘린더에서 지운 계약 자동 일정 목록. 일정 자체는 genEvents 가 계약에서 계산해
   // 만들어내므로 "삭제"는 이 목록에 키를 남겨 다시 그리지 않는 방식으로 처리한다.
   // 계약·순위·매출 데이터는 건드리지 않는다.
@@ -2888,7 +2903,6 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
   const tasksByDay=useMemo(()=>{const m={};if(calFilter!=="contracts")calTasksExp.forEach(t=>{if(t.due){const d=parseInt(t.due.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].t.push(t);}});if(calFilter!=="tasks")calCE.forEach(e=>{const d=parseInt(e.date.slice(8));if(!m[d])m[d]={t:[],e:[]};m[d].e.push(e);});return m;},[calTasksExp,calCE,calFilter]);
   const selDayTasks=useMemo(()=>calTasksExp.filter(t=>t.due===selectedDay),[calTasksExp,selectedDay]);
   const selDayCE=useMemo(()=>calCE.filter(e=>e.date===selectedDay),[calCE,selectedDay]);
-  const done=tasks.filter(t=>t.status==="done").length;const pct=tasks.length?Math.round(done/tasks.length*100):0;
   const firstDay=new Date(calY,calM,1).getDay();const dim=new Date(calY,calM+1,0).getDate();
   const cells=[...Array(firstDay).fill(null),...Array.from({length:dim},(_,i)=>i+1)];while(cells.length%7)cells.push(null);
   const resetFilters=()=>{setFOwner("all");setFStatus("all");setFPriority("all");setFProject("all");};
