@@ -15,7 +15,7 @@ export const urgency = (n) => {
 };
 
 export const Panel = ({ title, count, hint, action, children }) => (
-  <div style={card({ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" })}>
+  <div style={card({ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" })}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 15px",
       borderBottom: `1px solid ${C.line}`, flexWrap: "wrap" }}>
       <span style={{ fontSize: 13, fontWeight: 800, color: C.title }}>{title}</span>
@@ -99,13 +99,16 @@ export function MiniCalendar({ today, month, onMonth, hset, tasksByDate, onOpenC
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6,
+        maxWidth: 300, margin: "0 auto 6px", width: "100%" }}>
         <button onClick={() => move(-1)} style={btn("ghost", { padding: "2px 9px", fontSize: 13 })}>‹</button>
         <b style={{ fontSize: 12, color: C.text }}>{y}년 {m + 1}월</b>
         <button onClick={() => move(1)} style={btn("ghost", { padding: "2px 9px", fontSize: 13 })}>›</button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
+      {/* 카드가 넓어져도 날짜 칸이 지나치게 커지지 않게 폭을 묶어 둔다 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2,
+        maxWidth: 300, margin: "0 auto", width: "100%" }}>
         {[...WD].map((d, i) => (
           <div key={d} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, padding: "2px 0",
             color: i === 0 ? C.red : i === 6 ? C.main : C.faint }}>{d}</div>

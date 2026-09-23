@@ -4,6 +4,7 @@ import{doc,getDoc,setDoc,deleteDoc,getDocs,collection,query,where}from'firebase/
 import{db}from'./firebase';
 import WorkManagerTab from'./workmanager/WorkManagerTab';
 import DashboardTab from'./dashboard/DashboardTab';
+import{SHORTCUTS,Favicon,openSite}from'./shared/Shortcuts';
 const METRICS=[{key:"calls",label:"콜수",unit:"콜"},{key:"callTime",label:"콜시간",unit:"분"},{key:"materials",label:"자료수",unit:"개"},{key:"toss",label:"토스",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"},{key:"positive",label:"긍정백톡",unit:"개"},{key:"negative",label:"부정백톡",unit:"개"}];
 const FINAL_METRICS=[{key:"dailySales",label:"일매출",unit:"원"},{key:"connRate",label:"도입률-연결",unit:""},{key:"rate30s",label:"도입률-30초이상",unit:""}];
 const DEF_TARGETS={calls:200,materials:25,retarget:4};
@@ -2243,6 +2244,16 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
                 {n.badge&&<span style={{background:"#8468D3",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{n.badge}</span>}
               </button>
             ))}
+            {/* 자주 쓰는 사이트 — 누르면 새 탭에서 열린다 */}
+            <div style={{fontSize:9,fontWeight:700,color:"#c1c7d0",letterSpacing:"1.2px",textTransform:"uppercase",padding:"0 14px",margin:"14px 0 4px"}}>바로가기</div>
+            {SHORTCUTS.map(sc=>(
+              <button key={sc.n} onClick={()=>{openSite(sc.url);setDrawerOpen(false);}} title={sc.url}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:10,border:"none",background:"transparent",cursor:"pointer",textAlign:"left",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+                <Favicon url={sc.url} name={sc.n} size={20}/>
+                <span style={{fontSize:13,fontWeight:500,color:"#6b7280",flex:1}}>{sc.n}</span>
+                <i className="ti ti-external-link" style={{fontSize:14,color:"#c1c7d0"}}/>
+              </button>
+            ))}
             {user.isAdmin&&(
               <button onClick={()=>{setTab("admin");setDrawerOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:10,border:"none",background:tab==="admin"?"#fffbeb":"transparent",cursor:"pointer",textAlign:"left",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
                 <i className="ti ti-lock" style={{fontSize:20,color:tab==="admin"?"#d97706":"#c1c7d0",flexShrink:0}}/>
@@ -2306,6 +2317,16 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
             <i className={`ti ${n.icon}`} style={{fontSize:15,color:tab===n.id?"#0071CE":"#c1c7d0",flexShrink:0}}/>
             <span style={{fontSize:12,fontWeight:tab===n.id?600:500,color:tab===n.id?"#0071CE":"#6b7280",flex:1}}>{n.label}</span>
             {n.badge&&<span style={{background:"#8468D3",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{n.badge}</span>}
+          </button>
+        ))}
+        {/* 자주 쓰는 사이트 — 누르면 새 탭에서 열린다 */}
+        <div style={{fontSize:9,fontWeight:700,color:"#c1c7d0",letterSpacing:"1.2px",textTransform:"uppercase",padding:"0 8px",margin:"14px 0 6px"}}>바로가기</div>
+        {SHORTCUTS.map(sc=>(
+          <button key={sc.n} onClick={()=>openSite(sc.url)} title={sc.url}
+            style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",textAlign:"left",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>
+            <Favicon url={sc.url} name={sc.n} size={16}/>
+            <span style={{fontSize:12,fontWeight:500,color:"#6b7280",flex:1}}>{sc.n}</span>
+            <i className="ti ti-external-link" style={{fontSize:12,color:"#c1c7d0"}}/>
           </button>
         ))}
         {user.isAdmin&&(

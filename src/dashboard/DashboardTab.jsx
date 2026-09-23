@@ -14,7 +14,9 @@ export const WIDGETS = [
   { k: "plan", n: "작업 만료 D-3", desc: "주간계획에 세팅된 작업이 3일 안에 끝나는 업체" },
   { k: "calendar", n: "오늘 · 미니 캘린더", desc: "이번 달 달력과 오늘 날짜" },
 ];
-const DEFAULT_LAYOUT = WIDGETS.map((w) => ({ k: w.k, on: true }));
+// w = 가로로 몇 칸을 차지할지 (1~3). 없으면 1칸.
+const DEFAULT_LAYOUT = WIDGETS.map((w) => ({ k: w.k, on: true, w: 1 }));
+const MAX_W = 3;
 
 export default function DashboardTab({ st, today, contracts = [], onOpenWorkManager, onOpenContract, onOpenPlan }) {
   const TD = today || YMD(new Date());
@@ -27,6 +29,7 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
   const [editMode, setEditMode] = useState(false);
   const [dragK, setDragK] = useState("");      // 끌고 있는 위젯
   const [overK, setOverK] = useState("");      // 올려놓을 자리
+  const [overAfter, setOverAfter] = useState(false);   // 그 카드의 뒤쪽인지
   const [calMonth, setCalMonth] = useState(() => { const d = parseYMD(TD); return { y: d.getFullYear(), m: d.getMonth() }; });
 
   const hset = useMemo(() => holidaySet(holidays), [holidays]);
@@ -43,7 +46,7 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
       // 저장된 배치에 없는 위젯은 뒤에 붙여 준다 (나중에 위젯이 늘어도 안전)
       if (Array.isArray(l) && l.length) {
         const known = l.filter((x) => WIDGETS.some((w) => w.k === x.k));
-        WIDGETS.forEach((w) => { if (!known.some((x) => x.k === w.k)) known.push({ k: w.k, on: true }); });
+        WIDGETS.forEach((w) => { if (!known.some((x) => x.k === w.k)) known.push({ k: w.k, on: true, w: 1 }); });
         setLayout(known);
       }
       setLoading(false);
@@ -113,18 +116,28 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
 
   const goWm = (sub) => () => onOpenWorkManager && onOpenWorkManager(sub);
 
-  // 끌어다 놓은 자리로 위젯을 옮긴다
-  const dropOn = (targetK) => {
-    if (!dragK || dragK === targetK) { setDragK(""); setOverK(""); return; }
+  // 카드 위쪽에 놓으면 그 앞, 아래쪽(또는 오른쪽 절반)에 놓으면 그 뒤에 넣는다
+  const hoverSide = (e, el) => {
+    const r = el.getBoundingClientRect();
+    return (e.clientY - r.top) > r.height / 2;
+  };
+  const clearDrag = () => { setDragK(""); setOverK(""); setOverAfter(false); };
+
+  const dropOn = (targetK, after) => {
+    if (!dragK || dragK === targetK) { clearDrag(); return; }
     const next = [...layout];
     const from = next.findIndex((x) => x.k === dragK);
-    const to = next.findIndex((x) => x.k === targetK);
-    if (from < 0 || to < 0) return;
-    next.splice(to, 0, next.splice(from, 1)[0]);
-    setDragK(""); setOverK("");
+    if (from < 0) return;
+    const [moved] = next.splice(from, 1);
+    let to = targetK === "__end__" ? next.length : next.findIndex((x) => x.k === targetK);
+    if (to < 0) to = next.length;
+    else if (after) to += 1;
+    next.splice(to, 0, moved);
+    clearDrag();
     saveLayout(next);
   };
   const setOn = (k, on) => saveLayout(layout.map((x) => (x.k === k ? { ...x, on } : x)));
+  const setW = (k, w) => saveLayout(layout.map((x) => (x.k === k ? { ...x, w } : x)));
 
   const widgetBody = (k) => {
     if (k === "today") return (
@@ -174,6 +187,7 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
 
   const shown = layout.filter((x) => x.on);
   const hidden = layout.filter((x) => !x.on);
+  const cols = window.innerWidth <= 900 ? 1 : window.innerWidth <= 1400 ? 2 : 3;
   const urgent = todayList.length + contractList.length + planList.length;
 
   return (
@@ -196,8 +210,9 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
       {editMode && (
         <div style={{ background: C.mainBg, border: "1px solid #bfd7f5", borderRadius: 10,
           padding: "10px 13px", fontSize: 11.5, color: C.text, lineHeight: 1.6, marginBottom: 12 }}>
-          카드를 <b>끌어서</b> 원하는 자리에 놓으면 순서가 바뀝니다. 카드 오른쪽 위 <b>✕</b> 로 숨길 수 있고,
-          숨긴 위젯은 아래에서 다시 꺼낼 수 있습니다. 바뀐 배치는 바로 저장됩니다.
+          카드를 <b>끌어서</b> 놓으면 순서가 바뀝니다 — 카드의 <b>위쪽</b>에 놓으면 그 앞, <b>아래쪽</b>에 놓으면 그 뒤로 갑니다.<br />
+          오른쪽 위 <b>1 2 3</b> 으로 카드 너비(칸 수)를 정하고, <b>✕</b> 로 숨깁니다. 숨긴 위젯은 아래에서 다시 꺼낼 수 있습니다.
+          바뀐 배치는 바로 저장됩니다.
         </div>
       )}
 
@@ -206,36 +221,63 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
           표시할 위젯이 없습니다. 오른쪽 위 [위젯 편집]에서 꺼내 주세요.
         </div>
       ) : (
-        /* 카드 높이가 제각각이라 격자로 두면 아래에 빈 칸이 생긴다.
-           단(column)으로 쌓으면 위에서부터 빈틈없이 채워진다. */
-        <div style={{ columnCount: window.innerWidth <= 900 ? 1 : window.innerWidth <= 1400 ? 2 : 3,
-          columnGap: 12 }}>
-          {shown.map((x) => (
-            <div key={x.k}
-              draggable={editMode}
-              onDragStart={() => setDragK(x.k)}
-              onDragEnd={() => { setDragK(""); setOverK(""); }}
-              onDragOver={(e) => { if (!editMode || !dragK) return; e.preventDefault(); setOverK(x.k); }}
-              onDragLeave={() => setOverK((v) => (v === x.k ? "" : v))}
-              onDrop={(e) => { e.preventDefault(); dropOn(x.k); }}
-              style={{ breakInside: "avoid", WebkitColumnBreakInside: "avoid", marginBottom: 12,
-                position: "relative", cursor: editMode ? "grab" : "default",
-                opacity: dragK === x.k ? 0.45 : 1,
-                outline: overK === x.k && dragK !== x.k ? `2px dashed ${C.main}` : "none",
-                outlineOffset: 3, borderRadius: 14 }}>
-              {editMode && (
-                <div style={{ position: "absolute", top: 8, right: 8, zIndex: 3, display: "flex", gap: 4 }}>
-                  <span style={{ ...badge(C.muted, C.soft), fontSize: 10 }}>끌어서 이동</span>
-                  <button onClick={() => setOn(x.k, false)} title="숨기기"
-                    style={{ border: `1px solid ${C.line}`, background: C.white, borderRadius: 6, width: 20, height: 20,
-                      cursor: "pointer", color: C.faint, fontSize: 11, lineHeight: 1, padding: 0 }}>✕</button>
-                </div>
-              )}
-              {/* 편집 중에는 카드 안을 클릭해도 반응하지 않게 덮어 둔다 */}
-              {editMode && <div style={{ position: "absolute", inset: 0, zIndex: 2, borderRadius: 14 }} />}
-              {widgetBody(x.k)}
+        /* 칸(열)에 맞춰 놓되, 카드를 세로로 늘려 같은 줄에 빈 공간이 보이지 않게 한다.
+           위젯마다 몇 칸을 쓸지(w) 정할 수 있다. */
+        <div style={{ display: "grid", gap: 12, alignItems: "stretch",
+          gridTemplateColumns: `repeat(${cols},minmax(0,1fr))` }}>
+          {shown.map((x) => {
+            const span = Math.min(x.w || 1, cols);
+            const isOver = overK === x.k && dragK && dragK !== x.k;
+            return (
+              <div key={x.k}
+                draggable={editMode}
+                onDragStart={() => setDragK(x.k)}
+                onDragEnd={clearDrag}
+                onDragOver={(e) => { if (!editMode || !dragK) return; e.preventDefault();
+                  setOverK(x.k); setOverAfter(hoverSide(e, e.currentTarget)); }}
+                onDragLeave={() => setOverK((v) => (v === x.k ? "" : v))}
+                onDrop={(e) => { e.preventDefault(); dropOn(x.k, hoverSide(e, e.currentTarget)); }}
+                style={{ gridColumn: `span ${span}`, position: "relative", borderRadius: 14,
+                  cursor: editMode ? "grab" : "default", opacity: dragK === x.k ? 0.45 : 1,
+                  display: "flex", flexDirection: "column",
+                  boxShadow: isOver ? (overAfter ? `0 4px 0 -1px ${C.main}` : `0 -4px 0 -1px ${C.main}`) : "none" }}>
+                {editMode && (
+                  <div style={{ position: "absolute", top: 8, right: 8, zIndex: 3, display: "flex", gap: 4, alignItems: "center" }}>
+                    <span style={{ ...badge(C.muted, C.soft), fontSize: 10 }}>끌어서 이동</span>
+                    <div style={{ display: "flex", gap: 2, background: C.white, border: `1px solid ${C.line}`,
+                      borderRadius: 6, padding: 1 }}>
+                      {Array.from({ length: MAX_W }, (_, i) => i + 1).map((n) => (
+                        <button key={n} onClick={() => setW(x.k, n)} title={`${n}칸 너비`}
+                          style={{ border: "none", borderRadius: 4, width: 18, height: 18, cursor: "pointer",
+                            fontSize: 10, fontWeight: 700, lineHeight: 1, padding: 0,
+                            background: (x.w || 1) === n ? C.main : "transparent",
+                            color: (x.w || 1) === n ? C.white : C.faint }}>{n}</button>
+                      ))}
+                    </div>
+                    <button onClick={() => setOn(x.k, false)} title="숨기기"
+                      style={{ border: `1px solid ${C.line}`, background: C.white, borderRadius: 6, width: 20, height: 20,
+                        cursor: "pointer", color: C.faint, fontSize: 11, lineHeight: 1, padding: 0 }}>✕</button>
+                  </div>
+                )}
+                {/* 편집 중에는 카드 안을 클릭해도 반응하지 않게 덮어 둔다 */}
+                {editMode && <div style={{ position: "absolute", inset: 0, zIndex: 2, borderRadius: 14 }} />}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>{widgetBody(x.k)}</div>
+              </div>
+            );
+          })}
+
+          {/* 맨 뒤로 보내려고 빈 곳에 놓을 자리 */}
+          {editMode && dragK && (
+            <div onDragOver={(e) => { e.preventDefault(); setOverK("__end__"); setOverAfter(true); }}
+              onDrop={(e) => { e.preventDefault(); dropOn("__end__", true); }}
+              style={{ gridColumn: "span 1", minHeight: 90, borderRadius: 14,
+                border: `2px dashed ${overK === "__end__" ? C.main : C.line}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 11.5, color: overK === "__end__" ? C.main : C.faint,
+                background: overK === "__end__" ? C.mainBg : "transparent" }}>
+              여기에 놓으면 맨 뒤로
             </div>
-          ))}
+          )}
         </div>
       )}
 
