@@ -2831,10 +2831,9 @@ function MainApp({user,onLogout}){
         else if(getDDay(t.date)<=3)items.push({type:"task",title:t.title,sub:"곧 할 일 · 업무관리",dday:getDDayLabel(t.date)?.text,urgent:false});
       });
     }
-    const myContracts=(user.isAdmin||user.role==="manager")?contracts:contracts.filter(c=>c.manager===user.name);
-    myContracts.forEach(c=>{if(!showsAutoEvents(c))return;const evts=genEvents(c);evts.forEach(e=>{if(e.date===todayStr&&(e.type==="순위체크"||e.type==="리포트")){const isDone=!!completions[ceKey(e)];if(!isDone){items.push({type:"contract",ceType:e.type,title:c.name,sub:`${c.manager||"담당자 미지정"} · ${c.phone||""}`,urgent:false});}}});});
+    // 계약에서 자동으로 만들어지는 순위체크·리포트 일정은 팝업에 띄우지 않는다 (업무관리 일정만 알린다)
     if(items.length>0)setDailyAlertItems(items);else setDailyAlertItems(null);
-  },[dailyAlertItems,wmTasks,wmLoaded,contracts,completions]);
+  },[dailyAlertItems,wmTasks,wmLoaded]);
 
   const loadTasks=async()=>{setLoadingTasks(true);if(user.isAdmin||user.role==="manager"){const keys=await st.list("tasks:");const all=[];for(const k of keys){const items=await st.get(k)||[];items.forEach(t=>all.push({...t,_sk:k}));}setTasks(all);}else{const mine=await st.get(`tasks:${user.name}`)||[];const pub=await st.get("tasks:_pub")||[];setTasks([...mine.map(t=>({...t,_sk:`tasks:${user.name}`})),...pub.map(t=>({...t,_sk:"tasks:_pub"}))]);}setLoadingTasks(false);};
   const skForVis=v=>user.isAdmin?(v==="public"?"tasks:_pub":"tasks:_prv"):`tasks:${user.name}`;
