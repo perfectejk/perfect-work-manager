@@ -3,6 +3,7 @@ import*as XLSX from"xlsx";
 import{doc,getDoc,setDoc,deleteDoc,getDocs,collection,query,where}from'firebase/firestore';
 import{db}from'./firebase';
 import WorkManagerTab from'./workmanager/WorkManagerTab';
+import DashboardTab from'./dashboard/DashboardTab';
 const METRICS=[{key:"calls",label:"콜수",unit:"콜"},{key:"callTime",label:"콜시간",unit:"분"},{key:"materials",label:"자료수",unit:"개"},{key:"toss",label:"토스",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"},{key:"positive",label:"긍정백톡",unit:"개"},{key:"negative",label:"부정백톡",unit:"개"}];
 const FINAL_METRICS=[{key:"dailySales",label:"일매출",unit:"원"},{key:"connRate",label:"도입률-연결",unit:""},{key:"rate30s",label:"도입률-30초이상",unit:""}];
 const DEF_TARGETS={calls:200,materials:25,retarget:4};
@@ -2212,6 +2213,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
   },[]);
   const myCount=(user.isAdmin||user.role==="manager")?contracts.length:contracts.filter(c=>c.manager===user.name).length;
   const NAV=[
+    {id:"dash",label:"대시보드",icon:"ti-layout-dashboard"},
     {id:"wm",label:"업무관리",icon:"ti-briefcase"},
     {id:"list",label:"목록",icon:"ti-layout-list"},
     {id:"calendar",label:"캘린더",icon:"ti-calendar"},
@@ -2220,7 +2222,7 @@ function Sidebar({tab,setTab,user,onLogout,contracts,profiles,onOpenProfile,navO
     {id:"work",label:"작업관리",icon:"ti-checklist"},
     {id:"keyword",label:"키워드분석",icon:"ti-search"},
   ];
-  const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean).filter(n=>!(user.role==="manager"&&n.id==="report")).filter(n=>!(n.id==="wm"&&!user.isAdmin)).filter(n=>!HIDDEN_TABS.includes(n.id));
+  const sortedNav=navOrder.map(id=>NAV.find(n=>n.id===id)).filter(Boolean).filter(n=>!(user.role==="manager"&&n.id==="report")).filter(n=>!((n.id==="wm"||n.id==="dash")&&!user.isAdmin)).filter(n=>!HIDDEN_TABS.includes(n.id));
 
   // ===== 모바일: 드로어 메뉴 =====
   const[drawerOpen,setDrawerOpen]=useState(false);
@@ -2757,19 +2759,20 @@ function AdminTab({projectCategories,setProjectCategories,targets,setTargets,acc
 
 function MainApp({user,onLogout}){
   const[tasks,setTasks]=useState([]);const[loadingTasks,setLoadingTasks]=useState(true);
-  const[navOrder,setNavOrder]=useState(["wm","list","calendar","revenue","contracts","work","keyword"]);
+  const[navOrder,setNavOrder]=useState(["dash","wm","list","calendar","revenue","contracts","work","keyword"]);
   const[editTaskData,setEditTaskData]=useState(null);const[form,setForm]=useState(EF(user.isAdmin));const[showForm,setShowForm]=useState(false);
   const[contracts,setContracts]=useState([]);const[showCF,setShowCF]=useState(false);const[editContract,setEditContract]=useState(null);
   const[contractPage,setContractPage]=useState(1);const[contractManager,setContractManager]=useState("all");
   const[contractMonth,setContractMonth]=useState("all");const[contractStatus,setContractStatus]=useState("all");
   const[memoContract,setMemoContract]=useState(null);const[contractSearch,setContractSearch]=useState("");
   // 업무관리 일정 — 오늘 알림에 쓰려고 읽어온다 (쓰기는 업무관리 탭에서만 한다)
+  const[wmSub,setWmSub]=useState("");   // 대시보드에서 업무관리 하위탭으로 보낼 때
   const[wmTasks,setWmTasks]=useState([]);const[wmLoaded,setWmLoaded]=useState(false);
   const[completions,setCompletions]=useState({});const[hiddenCE,setHiddenCE]=useState({});const[showCECleanup,setShowCECleanup]=useState(false);const[rankDataMap,setRankDataMap]=useState({});const[rankModalEvent,setRankModalEvent]=useState(null);const[rankModalContract,setRankModalContract]=useState(null);const[contractSubTab,setContractSubTab]=useState("list");const[workSubTab,setWorkSubTab]=useState("board");const[planFocus,setPlanFocus]=useState("");const[profiles,setProfiles]=useState({});const[showProfile,setShowProfile]=useState(false);
   const[calY,setCalY]=useState(new Date().getFullYear());const[calM,setCalM]=useState(new Date().getMonth());
   const[calFilter,setCalFilter]=useState("all");const[selectedDay,setSelectedDay]=useState(null);
   const[fOwner,setFOwner]=useState("all");const[fStatus,setFStatus]=useState("all");const[fPriority,setFPriority]=useState("all");const[fProject,setFProject]=useState("all");
-  const[showAllTasks,setShowAllTasks]=useState(false);const[tab,setTab]=useState(user.isAdmin?"wm":"contracts");
+  const[showAllTasks,setShowAllTasks]=useState(false);const[tab,setTab]=useState(user.isAdmin?"dash":"contracts");
   const[projectCategories,setProjectCategories]=useState([]);
   const[timeslots,setTimeslots]=useState([]);const[selTs,setSelTs]=useState("");const[tsReports,setTsReports]=useState([]);
   const[myR,setMyR]=useState({calls:"",callTime:"",materials:"",toss:"",retarget:"",positive:"",negative:"",dailySales:"",connRate:"",rate30s:""});
@@ -2966,6 +2969,7 @@ function MainApp({user,onLogout}){
   const loadAccounts=async()=>{const a=await st.get("accounts:all")||[];setAccounts(a);};
   const loadSettings=async()=>{const t=await st.get("wt:targets");if(t)setTargets(t);const w=await st.get("wt:webhook");if(w)setWebhookUrl(w);const rw=await st.get("wt:rankWebhook");if(rw)setRankWebhookUrl(rw);const no=await st.get("config:navOrder");if(no){if(!no.includes("keyword")){no.push("keyword");await st.set("config:navOrder",no);}
 if(!no.includes("wm")){no.unshift("wm");await st.set("config:navOrder",no);}
+if(!no.includes("dash")){no.unshift("dash");await st.set("config:navOrder",no);}
 if(!no.includes("work")){const wi=no.indexOf("contracts");if(wi>=0)no.splice(wi+1,0,"work");else no.push("work");await st.set("config:navOrder",no);}
 // 업무보고·매출랭킹 메뉴 제거 — 저장된 순서에 남아 있으면 걷어냄
 if(no.includes("report")||no.includes("ranking")){const cleaned=no.filter(x=>x!=="report"&&x!=="ranking");no.length=0;no.push(...cleaned);await st.set("config:navOrder",no);}
@@ -3224,7 +3228,11 @@ if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no
               />
             </div>
           )}
-          {tab==="wm"&&user.isAdmin&&(<WorkManagerTab st={st} today={todayStr} contracts={visibleContracts} onOpenContract={id=>{const c=contracts.find(x=>x.id===id);if(c)setMemoContract(c);}}/>)}
+          {tab==="dash"&&user.isAdmin&&(<DashboardTab st={st} today={todayStr} user={user} contracts={visibleContracts}
+            onOpenWorkManager={sub=>{setWmSub(sub||"list");setTab("wm");}}
+            onOpenContract={id=>{const c=contracts.find(x=>x.id===id);if(c)setMemoContract(c);}}
+            onOpenPlan={id=>{setPlanFocus(id+"#"+Date.now());setWorkSubTab("plan");setTab("work");}}/>)}
+          {tab==="wm"&&user.isAdmin&&(<WorkManagerTab st={st} today={todayStr} contracts={visibleContracts} focusSub={wmSub} onFocusUsed={()=>setWmSub("")} onOpenContract={id=>{const c=contracts.find(x=>x.id===id);if(c)setMemoContract(c);}}/>)}
           {tab==="admin"&&user.isAdmin&&(<AdminTab projectCategories={projectCategories} setProjectCategories={setProjectCategories} targets={targets} setTargets={setTargets} accounts={accounts} setAccounts={setAccounts} webhookUrl={webhookUrl} setWebhookUrl={setWebhookUrl} rankWebhookUrl={rankWebhookUrl} setRankWebhookUrl={setRankWebhookUrl} allData={allData} loadAllData={loadAllData} loadingAll={loadingAll} contracts={contracts} navOrder={navOrder} setNavOrder={setNavOrder}/>)}
         </div>
       </div>

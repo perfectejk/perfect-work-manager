@@ -28,7 +28,7 @@ const SUB_TABS = [
   { id: "cal", label: "캘린더" },
 ];
 
-export default function WorkManagerTab({ st, today, contracts = [], onOpenContract }) {
+export default function WorkManagerTab({ st, today, contracts = [], onOpenContract, focusSub, onFocusUsed }) {
   const TD = today || YMD(new Date());
   const [sub, setSub] = useState("list");
   const [loading, setLoading] = useState(true);
@@ -64,6 +64,13 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     })();
     return () => { alive = false; };
   }, [st]);
+
+  // 대시보드에서 "날짜 상세보기" 등으로 넘어오면 해당 하위탭을 연다
+  useEffect(() => {
+    if (!focusSub) return;
+    if (SUB_TABS.some((t) => t.id === focusSub)) setSub(focusSub);
+    if (onFocusUsed) onFocusUsed();
+  }, [focusSub]);
 
   const typeOf = useCallback(
     (k) => types.find((t) => t.k === k) || types.find((t) => t.k === "etc") || { k: "etc", n: "기타", c: C.muted },
