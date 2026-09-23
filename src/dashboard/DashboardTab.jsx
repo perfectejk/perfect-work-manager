@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { C, FONT, card, btn, badge, YMD, fmtDate, parseYMD } from "../shared/ui";
 import { DEFAULT_HOLIDAYS, holidaySet, addBizDays, bizDaysUntil, daysUntil } from "./holidays";
+import { ROW_H, GAP, resolveLayout, totalRows, cellFromPoint, hits, mark } from "./layout";
 import { urgency, Panel, Empty, Row, MiniCalendar } from "./parts";
 import DashboardSettings from "./DashboardSettings";
 
 // ===== 대시보드 (슈퍼관리자 전용) =====
 // 업무관리와 작업관리에서 "오늘 챙겨야 할 것"만 모아 보여준다.
-// 어떤 위젯을 볼지·순서는 화면에서 직접 바꿀 수 있고 wm:dashboard 에 저장된다.
+// 위젯은 화면 어디에든 자유롭게 놓고 크기를 조절할 수 있으며 wm:dashboard 에 저장된다.
 export const WIDGETS = [
   { k: "today", n: "오늘까지 끝낼 업무", desc: "업무관리에서 오늘이 마감이거나 이미 지난 일" },
   { k: "soon", n: "마감 임박 업무 (영업일 D-3)", desc: "주말·공휴일을 뺀 3영업일 안에 마감인 일" },
@@ -14,14 +15,16 @@ export const WIDGETS = [
   { k: "plan", n: "작업 만료 D-3", desc: "주간계획에 세팅된 작업이 3일 안에 끝나는 업체" },
   { k: "calendar", n: "오늘 · 미니 캘린더", desc: "이번 달 달력과 오늘 날짜" },
 ];
-// 카드 크기는 칸 단위로 잡는다. w = 가로 칸 수, h = 세로 칸 수.
-// 세로 한 칸은 ROW_H 픽셀이고, 칸 사이 간격(GAP)만큼 더해져 실제 높이가 된다.
-const ROW_H = 30;
-const GAP = 12;
 const MAX_COLS = 4;
-// 지금 보이는 크기와 비슷하게 기본값을 준다 (목록형은 낮게, 캘린더는 높게)
 const DEFAULT_SIZE = { today: 6, soon: 6, contract: 6, plan: 6, calendar: 11 };
-const DEFAULT_LAYOUT = WIDGETS.map((w) => ({ k: w.k, on: true, w: 1, h: DEFAULT_SIZE[w.k] || 6 }));
+// 기본 배치 — 3칸 화면 기준
+const DEFAULT_LAYOUT = [
+  { k: "today", on: true, x: 0, y: 0, w: 1, h: 6 },
+  { k: "soon", on: true, x: 1, y: 0, w: 1, h: 6 },
+  { k: "contract", on: true, x: 2, y: 0, w: 1, h: 6 },
+  { k: "plan", on: true, x: 0, y: 6, w: 1, h: 6 },
+  { k: "calendar", on: true, x: 1, y: 6, w: 1, h: 11 },
+];
 
 export default function DashboardTab({ st, today, contracts = [], onOpenWorkManager, onOpenContract, onOpenPlan }) {
   const TD = today || YMD(new Date());
@@ -32,18 +35,15 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
   const [layout, setLayout] = useState(DEFAULT_LAYOUT);
   const [showSettings, setShowSettings] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [dragK, setDragK] = useState("");      // 끌고 있는 위젯
-  const [overK, setOverK] = useState("");      // 올려놓을 자리
-  const [overAfter, setOverAfter] = useState(false);   // 그 카드의 뒤쪽인지
-  const [resizeK, setResizeK] = useState("");          // 크기 조절 중인 위젯
-  const [preview, setPreview] = useState(null);        // 조절 중 미리보기 {k,w,h}
+  const [ghost, setGhost] = useState(null);        // 옮기거나 크기 바꾸는 중 {k,x,y,w,h,bad}
   const [vw, setVw] = useState(() => window.innerWidth);
   const gridRef = useRef(null);
   const [calMonth, setCalMonth] = useState(() => { const d = parseYMD(TD); return { y: d.getFullYear(), m: d.getMonth() }; });
 
   const hset = useMemo(() => holidaySet(holidays), [holidays]);
+  const cols = vw <= 700 ? 1 : vw <= 1100 ? 2 : vw <= 1700 ? 3 : MAX_COLS;
 
-  // 창 크기가 바뀌면 칸 수를 다시 센다 (예전엔 첫 렌더 값으로 굳어 있었다)
+  // 창 크기가 바뀌면 칸 수를 다시 센다
   useEffect(() => {
     const onResize = () => setVw(window.innerWidth);
     window.addEventListener("resize", onResize);
@@ -59,12 +59,13 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
       if (!alive) return;
       setTasks(Array.isArray(t) ? t : []);
       if (Array.isArray(h) && h.length) setHolidays(h);
-      // 저장된 배치에 없는 위젯은 뒤에 붙여 준다 (나중에 위젯이 늘어도 안전)
       if (Array.isArray(l) && l.length) {
-        // 예전에 저장된 배치에는 크기 값이 없을 수 있으므로 기본값을 채워 준다
+        // 예전 배치에는 자리·크기 값이 없을 수 있으므로 기본값을 채운다
         const known = l.filter((x) => WIDGETS.some((w) => w.k === x.k))
           .map((x) => ({ ...x, w: x.w || 1, h: x.h || DEFAULT_SIZE[x.k] || 6 }));
-        WIDGETS.forEach((w) => { if (!known.some((x) => x.k === w.k)) known.push({ k: w.k, on: true, w: 1, h: DEFAULT_SIZE[w.k] || 6 }); });
+        WIDGETS.forEach((w) => {
+          if (!known.some((x) => x.k === w.k)) known.push({ k: w.k, on: true, w: 1, h: DEFAULT_SIZE[w.k] || 6 });
+        });
         setLayout(known);
       }
       setLoading(false);
@@ -103,25 +104,18 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
   // ---- 위젯별 데이터 ----
   const open = useMemo(() => tasks.filter((t) => t && t.status !== "done" && t.date), [tasks]);
   const todayList = useMemo(
-    () => open.filter((t) => t.date <= TD).sort((a, b) => a.date.localeCompare(b.date)),
-    [open, TD]
-  );
+    () => open.filter((t) => t.date <= TD).sort((a, b) => a.date.localeCompare(b.date)), [open, TD]);
   const soonCut = useMemo(() => addBizDays(TD, 3, hset), [TD, hset]);
   const soonList = useMemo(
     () => open.filter((t) => t.date > TD && t.date <= soonCut).sort((a, b) => a.date.localeCompare(b.date)),
-    [open, TD, soonCut]
-  );
+    [open, TD, soonCut]);
   const contractList = useMemo(
     () => running.filter((c) => { const d = daysUntil(TD, c.endDate); return d != null && d <= 7; })
-      .sort((a, b) => String(a.endDate).localeCompare(String(b.endDate))),
-    [running, TD]
-  );
+      .sort((a, b) => String(a.endDate).localeCompare(String(b.endDate))), [running, TD]);
   const planList = useMemo(
     () => running.map((c) => ({ c, last: plans[c.id] }))
       .filter((x) => { if (!x.last) return false; const d = daysUntil(TD, x.last); return d != null && d <= 3; })
-      .sort((a, b) => a.last.localeCompare(b.last)),
-    [running, plans, TD]
-  );
+      .sort((a, b) => a.last.localeCompare(b.last)), [running, plans, TD]);
   // 날짜별 일정 (완료된 것도 호버창에는 보여준다)
   const tasksByDate = useMemo(() => {
     const m = new Map();
@@ -133,54 +127,77 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
   }, [tasks]);
 
   const goWm = (sub) => () => onOpenWorkManager && onOpenWorkManager(sub);
-
-  // 카드 위쪽에 놓으면 그 앞, 아래쪽(또는 오른쪽 절반)에 놓으면 그 뒤에 넣는다
-  const hoverSide = (e, el) => {
-    const r = el.getBoundingClientRect();
-    return (e.clientY - r.top) > r.height / 2;
-  };
-  const clearDrag = () => { setDragK(""); setOverK(""); setOverAfter(false); };
-
-  const dropOn = (targetK, after) => {
-    if (!dragK || dragK === targetK) { clearDrag(); return; }
-    const next = [...layout];
-    const from = next.findIndex((x) => x.k === dragK);
-    if (from < 0) return;
-    const [moved] = next.splice(from, 1);
-    let to = targetK === "__end__" ? next.length : next.findIndex((x) => x.k === targetK);
-    if (to < 0) to = next.length;
-    else if (after) to += 1;
-    next.splice(to, 0, moved);
-    clearDrag();
-    saveLayout(next);
-  };
   const setOn = (k, on) => saveLayout(layout.map((x) => (x.k === k ? { ...x, on } : x)));
+  const commit = (k, patch) => saveLayout(layout.map((x) => (x.k === k ? { ...x, ...patch } : x)));
 
-  // 오른쪽 아래 모서리를 끌어 가로·세로를 함께 조절한다
-  const startResize = (e, item) => {
+  // ---- 실제로 그릴 자리 ----
+  const shownRaw = useMemo(() => layout.filter((x) => x.on), [layout]);
+  const placed = useMemo(() => resolveLayout(shownRaw, cols), [shownRaw, cols]);
+  const hidden = layout.filter((x) => !x.on);
+  const rowsTotal = totalRows(placed, editMode ? 8 : 0);
+
+  // 그 자리에 놓을 수 있는지 (자기 자신은 빼고 본다)
+  const canPlace = (k, x, y, w, h) => {
+    if (x < 0 || y < 0 || x + w > cols) return false;
+    const occ = new Set();
+    placed.forEach((p) => { if (p.k !== k) mark(occ, p.x, p.y, p.w, p.h); });
+    return !hits(occ, x, y, w, h);
+  };
+
+  // ---- 카드 옮기기 (자유 배치) ----
+  const startMove = (e, p) => {
+    if (!editMode || e.button !== 0) return;
+    e.preventDefault();
+    const grid = gridRef.current;
+    if (!grid) return;
+    const start = cellFromPoint(grid, e.clientX, e.clientY, cols);
+    const offX = start.x - p.x, offY = start.y - p.y;
+    let last = { x: p.x, y: p.y };
+    setGhost({ k: p.k, x: p.x, y: p.y, w: p.w, h: p.h, bad: false });
+
+    const onMove = (ev) => {
+      const c = cellFromPoint(grid, ev.clientX, ev.clientY, cols);
+      const x = Math.max(0, Math.min(cols - p.w, c.x - offX));
+      const y = Math.max(0, c.y - offY);
+      last = { x, y };
+      setGhost({ k: p.k, x, y, w: p.w, h: p.h, bad: !canPlace(p.k, x, y, p.w, p.h) });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setGhost(null);
+      if ((last.x !== p.x || last.y !== p.y) && canPlace(p.k, last.x, last.y, p.w, p.h)) {
+        commit(p.k, { x: last.x, y: last.y });
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  // ---- 크기 조절 (오른쪽 아래 모서리) ----
+  const startResize = (e, p) => {
+    if (!editMode || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const grid = gridRef.current;
     if (!grid) return;
     const cellW = (grid.clientWidth - GAP * (cols - 1)) / cols;
-    const startX = e.clientX, startY = e.clientY;
-    const w0 = Math.min(item.w || 1, cols), h0 = item.h || 6;
-    let last = { w: w0, h: h0 };
-    setResizeK(item.k);
+    const sx = e.clientX, sy = e.clientY;
+    let last = { w: p.w, h: p.h };
+    setGhost({ k: p.k, x: p.x, y: p.y, w: p.w, h: p.h, bad: false });
 
     const onMove = (ev) => {
-      const dw = Math.round((ev.clientX - startX) / (cellW + GAP));
-      const dh = Math.round((ev.clientY - startY) / (ROW_H + GAP));
-      const w = Math.max(1, Math.min(cols, w0 + dw));
-      const h = Math.max(3, Math.min(40, h0 + dh));
-      if (w !== last.w || h !== last.h) { last = { w, h }; setPreview({ k: item.k, w, h }); }
+      const w = Math.max(1, Math.min(cols - p.x, p.w + Math.round((ev.clientX - sx) / (cellW + GAP))));
+      const h = Math.max(3, Math.min(40, p.h + Math.round((ev.clientY - sy) / (ROW_H + GAP))));
+      last = { w, h };
+      setGhost({ k: p.k, x: p.x, y: p.y, w, h, bad: !canPlace(p.k, p.x, p.y, w, h) });
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      setResizeK(""); setPreview(null);
-      if (last.w !== w0 || last.h !== h0) {
-        saveLayout(layout.map((x) => (x.k === item.k ? { ...x, w: last.w, h: last.h } : x)));
+      setGhost(null);
+      if ((last.w !== p.w || last.h !== p.h) && canPlace(p.k, p.x, p.y, last.w, last.h)) {
+        commit(p.k, { w: last.w, h: last.h });
       }
     };
     window.addEventListener("mousemove", onMove);
@@ -209,8 +226,7 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
     if (k === "contract") return (
       <Panel title="계약 만료 D-7" count={contractList.length} hint="진행중 계약">
         {contractList.length === 0 ? <Empty>7일 안에 끝나는 계약이 없습니다</Empty> : contractList.map((c) => (
-          <Row key={c.id} tone={urgency(daysUntil(TD, c.endDate))}
-            onClick={() => onOpenContract && onOpenContract(c.id)}
+          <Row key={c.id} tone={urgency(daysUntil(TD, c.endDate))} onClick={() => onOpenContract && onOpenContract(c.id)}
             title={c.name} sub={`${c.startDate} ~ ${c.endDate}${c.manager ? " · " + c.manager : ""}`} />
         ))}
       </Panel>
@@ -218,8 +234,7 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
     if (k === "plan") return (
       <Panel title="작업 만료 D-3" count={planList.length} hint="주간계획 마지막 주차 기준">
         {planList.length === 0 ? <Empty>3일 안에 작업이 끝나는 업체가 없습니다</Empty> : planList.map(({ c, last }) => (
-          <Row key={c.id} tone={urgency(daysUntil(TD, last))}
-            onClick={() => onOpenPlan && onOpenPlan(c.id)}
+          <Row key={c.id} tone={urgency(daysUntil(TD, last))} onClick={() => onOpenPlan && onOpenPlan(c.id)}
             title={c.name} sub={`작업 종료 ${last}${c.endDate ? " · 계약 ~" + c.endDate : ""}`} />
         ))}
       </Panel>
@@ -233,9 +248,6 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
 
   if (loading) return <div style={card({ padding: "60px 20px", textAlign: "center", color: C.faint, fontSize: 13 })}>불러오는 중…</div>;
 
-  const shown = layout.filter((x) => x.on);
-  const hidden = layout.filter((x) => !x.on);
-  const cols = vw <= 700 ? 1 : vw <= 1100 ? 2 : vw <= 1700 ? 3 : MAX_COLS;
   const urgent = todayList.length + contractList.length + planList.length;
 
   return (
@@ -262,59 +274,64 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
       {editMode && (
         <div style={{ background: C.mainBg, border: "1px solid #bfd7f5", borderRadius: 10,
           padding: "10px 13px", fontSize: 11.5, color: C.text, lineHeight: 1.6, marginBottom: 12 }}>
-          카드를 <b>끌어서</b> 놓으면 순서가 바뀝니다 — 카드의 <b>위쪽</b>에 놓으면 그 앞, <b>아래쪽</b>에 놓으면 그 뒤로 갑니다.<br />
-          카드 <b>오른쪽 아래 모서리</b>를 끌면 가로·세로 크기를 함께 바꿀 수 있습니다 (직사각형 → 정사각형도 가능).
+          카드를 <b>끌어서 원하는 칸</b>에 놓으세요. 가운데를 비워 두고 오른쪽 아래에만 두는 것도 됩니다.<br />
+          카드 <b>오른쪽 아래 모서리</b>를 끌면 가로·세로 크기가 함께 바뀝니다 (정사각형도 가능).
+          다른 카드와 겹치는 자리는 <b style={{ color: C.red }}>빨갛게</b> 표시되고 놓이지 않습니다.
           <b>✕</b> 로 숨기고, 숨긴 위젯은 아래에서 다시 꺼냅니다. 바뀐 배치는 바로 저장됩니다.
         </div>
       )}
 
-      {shown.length === 0 ? (
+      {placed.length === 0 ? (
         <div style={card({ padding: "50px 20px", textAlign: "center", color: C.faint, fontSize: 13 })}>
           표시할 위젯이 없습니다. 오른쪽 위 [위젯 편집]에서 꺼내 주세요.
         </div>
       ) : (
-        /* 칸(열)에 맞춰 놓되, 카드를 세로로 늘려 같은 줄에 빈 공간이 보이지 않게 한다.
-           위젯마다 몇 칸을 쓸지(w) 정할 수 있다. */
-        <div ref={gridRef} style={{ display: "grid", gap: GAP, alignItems: "stretch",
-          gridTemplateColumns: `repeat(${cols},minmax(0,1fr))`, gridAutoRows: `${ROW_H}px` }}>
-          {shown.map((x) => {
-            const live = preview && preview.k === x.k ? preview : x;
-            const span = Math.min(live.w || 1, cols);
-            const rows = Math.max(3, live.h || 6);
-            const isOver = overK === x.k && dragK && dragK !== x.k;
+        <div ref={gridRef} style={{ display: "grid", gap: GAP, position: "relative",
+          gridTemplateColumns: `repeat(${cols},minmax(0,1fr))`,
+          gridTemplateRows: `repeat(${rowsTotal},${ROW_H}px)` }}>
+
+          {/* 편집 중에는 놓을 수 있는 칸을 옅게 보여 준다 */}
+          {editMode && Array.from({ length: cols * rowsTotal }, (_, i) => (
+            <div key={"c" + i} style={{ gridColumn: (i % cols) + 1, gridRow: Math.floor(i / cols) + 1,
+              border: `1px dashed ${C.line}`, borderRadius: 4, pointerEvents: "none" }} />
+          ))}
+
+          {/* 옮기거나 크기를 바꾸는 중일 때 놓일 자리 */}
+          {ghost && (
+            <div style={{ gridColumn: `${ghost.x + 1} / span ${ghost.w}`, gridRow: `${ghost.y + 1} / span ${ghost.h}`,
+              borderRadius: 14, pointerEvents: "none", zIndex: 1,
+              border: `2px dashed ${ghost.bad ? C.red : C.main}`,
+              background: ghost.bad ? C.redBg : C.mainBg }} />
+          )}
+
+          {placed.map((p) => {
+            const isGhost = ghost && ghost.k === p.k;
+            const g = isGhost ? ghost : p;
             return (
-              <div key={x.k}
-                draggable={editMode && !resizeK}
-                onDragStart={() => setDragK(x.k)}
-                onDragEnd={clearDrag}
-                onDragOver={(e) => { if (!editMode || !dragK) return; e.preventDefault();
-                  setOverK(x.k); setOverAfter(hoverSide(e, e.currentTarget)); }}
-                onDragLeave={() => setOverK((v) => (v === x.k ? "" : v))}
-                onDrop={(e) => { e.preventDefault(); dropOn(x.k, hoverSide(e, e.currentTarget)); }}
-                style={{ gridColumn: `span ${span}`, gridRow: `span ${rows}`,
-                  position: "relative", borderRadius: 14, minHeight: 0,
-                  cursor: editMode && !resizeK ? "grab" : "default", opacity: dragK === x.k ? 0.45 : 1,
-                  outline: resizeK === x.k ? `2px solid ${C.main}` : "none", outlineOffset: 2,
-                  display: "flex", flexDirection: "column",
-                  boxShadow: isOver ? (overAfter ? `0 4px 0 -1px ${C.main}` : `0 -4px 0 -1px ${C.main}`) : "none" }}>
+              <div key={p.k}
+                onMouseDown={(e) => startMove(e, p)}
+                style={{ gridColumn: `${p.x + 1} / span ${p.w}`, gridRow: `${p.y + 1} / span ${p.h}`,
+                  position: "relative", borderRadius: 14, minHeight: 0, zIndex: isGhost ? 3 : 2,
+                  cursor: editMode ? "grab" : "default", opacity: isGhost ? 0.55 : 1,
+                  display: "flex", flexDirection: "column" }}>
                 {editMode && (
-                  <div style={{ position: "absolute", top: 8, right: 8, zIndex: 3, display: "flex", gap: 4, alignItems: "center" }}>
+                  <div style={{ position: "absolute", top: 8, right: 8, zIndex: 5, display: "flex", gap: 4, alignItems: "center" }}>
                     <span style={{ ...badge(C.muted, C.soft), fontSize: 10 }}>
-                      {resizeK === x.k ? `${span}칸 × ${rows}` : "끌어서 이동"}
+                      {isGhost ? `${g.w}칸 × ${g.h}` : "끌어서 이동"}
                     </span>
-                    <button onClick={() => setOn(x.k, false)} title="숨기기"
+                    <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setOn(p.k, false)} title="숨기기"
                       style={{ border: `1px solid ${C.line}`, background: C.white, borderRadius: 6, width: 20, height: 20,
                         cursor: "pointer", color: C.faint, fontSize: 11, lineHeight: 1, padding: 0 }}>✕</button>
                   </div>
                 )}
                 {/* 편집 중에는 카드 안을 클릭해도 반응하지 않게 덮어 둔다 */}
-                {editMode && <div style={{ position: "absolute", inset: 0, zIndex: 2, borderRadius: 14 }} />}
-                <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{widgetBody(x.k)}</div>
+                {editMode && <div style={{ position: "absolute", inset: 0, zIndex: 4, borderRadius: 14 }} />}
+                <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{widgetBody(p.k)}</div>
 
                 {/* 오른쪽 아래 모서리 — 끌어서 가로·세로 조절 */}
                 {editMode && (
-                  <div onMouseDown={(e) => startResize(e, x)} title="끌어서 크기 조절"
-                    style={{ position: "absolute", right: 2, bottom: 2, width: 18, height: 18, zIndex: 4,
+                  <div onMouseDown={(e) => startResize(e, p)} title="끌어서 크기 조절"
+                    style={{ position: "absolute", right: 2, bottom: 2, width: 18, height: 18, zIndex: 6,
                       cursor: "nwse-resize", display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }}>
                     <svg width="14" height="14" viewBox="0 0 14 14" style={{ display: "block" }}>
                       <path d="M13 5 L5 13 M13 9 L9 13" stroke={C.main} strokeWidth="1.6" strokeLinecap="round" fill="none" />
@@ -324,24 +341,11 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
               </div>
             );
           })}
-
-          {/* 맨 뒤로 보내려고 빈 곳에 놓을 자리 */}
-          {editMode && dragK && (
-            <div onDragOver={(e) => { e.preventDefault(); setOverK("__end__"); setOverAfter(true); }}
-              onDrop={(e) => { e.preventDefault(); dropOn("__end__", true); }}
-              style={{ gridColumn: "span 1", gridRow: "span 4", borderRadius: 14,
-                border: `2px dashed ${overK === "__end__" ? C.main : C.line}`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11.5, color: overK === "__end__" ? C.main : C.faint,
-                background: overK === "__end__" ? C.mainBg : "transparent" }}>
-              여기에 놓으면 맨 뒤로
-            </div>
-          )}
         </div>
       )}
 
       {editMode && hidden.length > 0 && (
-        <div style={card({ padding: "12px 14px", marginTop: 4 })}>
+        <div style={card({ padding: "12px 14px", marginTop: 12 })}>
           <div style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, marginBottom: 8 }}>숨긴 위젯</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {hidden.map((x) => {
