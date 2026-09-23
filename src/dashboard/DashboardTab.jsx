@@ -24,6 +24,9 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
   const [holidays, setHolidays] = useState(DEFAULT_HOLIDAYS);
   const [layout, setLayout] = useState(DEFAULT_LAYOUT);
   const [showSettings, setShowSettings] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [dragK, setDragK] = useState("");      // 끌고 있는 위젯
+  const [overK, setOverK] = useState("");      // 올려놓을 자리
   const [calMonth, setCalMonth] = useState(() => { const d = parseYMD(TD); return { y: d.getFullYear(), m: d.getMonth() }; });
 
   const hset = useMemo(() => holidaySet(holidays), [holidays]);
@@ -98,9 +101,30 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
       .sort((a, b) => a.last.localeCompare(b.last)),
     [running, plans, TD]
   );
-  const markDates = useMemo(() => new Set(open.map((t) => t.date)), [open]);
+  // 날짜별 일정 (완료된 것도 호버창에는 보여준다)
+  const tasksByDate = useMemo(() => {
+    const m = new Map();
+    tasks.filter((t) => t && t.date).forEach((t) => {
+      if (!m.has(t.date)) m.set(t.date, []);
+      m.get(t.date).push({ title: t.title, done: t.status === "done" });
+    });
+    return m;
+  }, [tasks]);
 
   const goWm = (sub) => () => onOpenWorkManager && onOpenWorkManager(sub);
+
+  // 끌어다 놓은 자리로 위젯을 옮긴다
+  const dropOn = (targetK) => {
+    if (!dragK || dragK === targetK) { setDragK(""); setOverK(""); return; }
+    const next = [...layout];
+    const from = next.findIndex((x) => x.k === dragK);
+    const to = next.findIndex((x) => x.k === targetK);
+    if (from < 0 || to < 0) return;
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    setDragK(""); setOverK("");
+    saveLayout(next);
+  };
+  const setOn = (k, on) => saveLayout(layout.map((x) => (x.k === k ? { ...x, on } : x)));
 
   const widgetBody = (k) => {
     if (k === "today") return (
@@ -141,7 +165,7 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
     );
     if (k === "calendar") return (
       <MiniCalendar today={TD} month={calMonth} onMonth={setCalMonth} hset={hset}
-        markDates={markDates} onOpenCalendar={goWm("cal")} />
+        tasksByDate={tasksByDate} onOpenCalendar={goWm("cal")} />
     );
     return null;
   };
@@ -149,6 +173,7 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
   if (loading) return <div style={card({ padding: "60px 20px", textAlign: "center", color: C.faint, fontSize: 13 })}>불러오는 중…</div>;
 
   const shown = layout.filter((x) => x.on);
+  const hidden = layout.filter((x) => !x.on);
   const urgent = todayList.length + contractList.length + planList.length;
 
   return (
@@ -159,24 +184,78 @@ export default function DashboardTab({ st, today, contracts = [], onOpenWorkMana
           {urgent > 0 ? `급한 일 ${urgent}건` : "급한 일 없음"}
         </span>
         <div style={{ flex: 1 }} />
-        <button onClick={() => setShowSettings(true)} style={btn("ghost", { padding: "7px 13px", fontSize: 12 })}>위젯 편집</button>
+        {editMode && (
+          <button onClick={() => setShowSettings(true)} style={btn("ghost", { padding: "7px 13px", fontSize: 12 })}>공휴일 설정</button>
+        )}
+        <button onClick={() => setEditMode((v) => !v)}
+          style={btn(editMode ? "primary" : "ghost", { padding: "7px 13px", fontSize: 12 })}>
+          {editMode ? "편집 끝내기" : "위젯 편집"}
+        </button>
       </div>
+
+      {editMode && (
+        <div style={{ background: C.mainBg, border: "1px solid #bfd7f5", borderRadius: 10,
+          padding: "10px 13px", fontSize: 11.5, color: C.text, lineHeight: 1.6, marginBottom: 12 }}>
+          카드를 <b>끌어서</b> 원하는 자리에 놓으면 순서가 바뀝니다. 카드 오른쪽 위 <b>✕</b> 로 숨길 수 있고,
+          숨긴 위젯은 아래에서 다시 꺼낼 수 있습니다. 바뀐 배치는 바로 저장됩니다.
+        </div>
+      )}
 
       {shown.length === 0 ? (
         <div style={card({ padding: "50px 20px", textAlign: "center", color: C.faint, fontSize: 13 })}>
-          표시할 위젯이 없습니다. 오른쪽 위 [위젯 편집]에서 켜주세요.
+          표시할 위젯이 없습니다. 오른쪽 위 [위젯 편집]에서 꺼내 주세요.
         </div>
       ) : (
-        <div style={{ display: "grid", gap: 12,
-          gridTemplateColumns: window.innerWidth <= 900 ? "1fr" : "repeat(auto-fit,minmax(320px,1fr))",
-          alignItems: "start" }}>
-          {shown.map((x) => <div key={x.k}>{widgetBody(x.k)}</div>)}
+        /* 카드 높이가 제각각이라 격자로 두면 아래에 빈 칸이 생긴다.
+           단(column)으로 쌓으면 위에서부터 빈틈없이 채워진다. */
+        <div style={{ columnCount: window.innerWidth <= 900 ? 1 : window.innerWidth <= 1400 ? 2 : 3,
+          columnGap: 12 }}>
+          {shown.map((x) => (
+            <div key={x.k}
+              draggable={editMode}
+              onDragStart={() => setDragK(x.k)}
+              onDragEnd={() => { setDragK(""); setOverK(""); }}
+              onDragOver={(e) => { if (!editMode || !dragK) return; e.preventDefault(); setOverK(x.k); }}
+              onDragLeave={() => setOverK((v) => (v === x.k ? "" : v))}
+              onDrop={(e) => { e.preventDefault(); dropOn(x.k); }}
+              style={{ breakInside: "avoid", WebkitColumnBreakInside: "avoid", marginBottom: 12,
+                position: "relative", cursor: editMode ? "grab" : "default",
+                opacity: dragK === x.k ? 0.45 : 1,
+                outline: overK === x.k && dragK !== x.k ? `2px dashed ${C.main}` : "none",
+                outlineOffset: 3, borderRadius: 14 }}>
+              {editMode && (
+                <div style={{ position: "absolute", top: 8, right: 8, zIndex: 3, display: "flex", gap: 4 }}>
+                  <span style={{ ...badge(C.muted, C.soft), fontSize: 10 }}>끌어서 이동</span>
+                  <button onClick={() => setOn(x.k, false)} title="숨기기"
+                    style={{ border: `1px solid ${C.line}`, background: C.white, borderRadius: 6, width: 20, height: 20,
+                      cursor: "pointer", color: C.faint, fontSize: 11, lineHeight: 1, padding: 0 }}>✕</button>
+                </div>
+              )}
+              {/* 편집 중에는 카드 안을 클릭해도 반응하지 않게 덮어 둔다 */}
+              {editMode && <div style={{ position: "absolute", inset: 0, zIndex: 2, borderRadius: 14 }} />}
+              {widgetBody(x.k)}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editMode && hidden.length > 0 && (
+        <div style={card({ padding: "12px 14px", marginTop: 4 })}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, marginBottom: 8 }}>숨긴 위젯</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {hidden.map((x) => {
+              const w = WIDGETS.find((y) => y.k === x.k) || { n: x.k };
+              return (
+                <button key={x.k} onClick={() => setOn(x.k, true)}
+                  style={btn("ghost", { padding: "6px 12px", fontSize: 11.5 })}>+ {w.n}</button>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {showSettings && (
-        <DashboardSettings layout={layout} holidays={holidays}
-          onSaveLayout={saveLayout} onSaveHolidays={saveHolidays} onClose={() => setShowSettings(false)} />
+        <DashboardSettings holidays={holidays} onSaveHolidays={saveHolidays} onClose={() => setShowSettings(false)} />
       )}
     </div>
   );

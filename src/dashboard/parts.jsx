@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { C, FONT, card, btn, badge, YMD, fmtDate, WD, parseYMD } from "../shared/ui";
 import { isOffDay } from "./holidays";
 
@@ -52,8 +52,34 @@ export const Row = ({ onClick, tone, title, sub }) => (
   </div>
 );
 
+// 날짜에 마우스를 올렸을 때 뜨는 그날 일정 목록
+function DayTip({ ds, x, y, list }) {
+  const W = 220;
+  const left = Math.min(Math.max(8, x - W / 2), window.innerWidth - W - 8);
+  const flipUp = y + 150 > window.innerHeight;
+  return (
+    <div style={{ position: "fixed", left, top: flipUp ? undefined : y + 6, bottom: flipUp ? window.innerHeight - y + 28 : undefined,
+      width: W, zIndex: 1400, background: C.white, border: `1px solid ${C.line}`, borderRadius: 10,
+      boxShadow: "0 8px 24px rgba(20,30,50,0.14)", padding: "9px 11px", pointerEvents: "none", fontFamily: FONT }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: C.title, marginBottom: 6 }}>
+        {fmtDate(ds)} · {list.length}건
+      </div>
+      {list.slice(0, 6).map((t, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11, padding: "2px 0",
+          color: t.done ? C.faint : C.text, textDecoration: t.done ? "line-through" : "none" }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: t.color || C.sub }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
+        </div>
+      ))}
+      {list.length > 6 && <div style={{ fontSize: 10, color: C.faint, marginTop: 3 }}>외 {list.length - 6}건</div>}
+    </div>
+  );
+}
+
 // 오늘 날짜 + 정사각형 미니 캘린더
-export function MiniCalendar({ today, month, onMonth, hset, markDates, onOpenCalendar }) {
+export function MiniCalendar({ today, month, onMonth, hset, tasksByDate, onOpenCalendar }) {
+  // 날짜에 마우스를 올리면 그날 일정을 띄운다. 카드에 잘리지 않도록 화면 기준으로 띄운다.
+  const [hover, setHover] = useState(null);   // {ds, x, y}
   const { y, m } = month;
   const first = new Date(y, m, 1);
   const start = new Date(y, m, 1 - first.getDay());
@@ -86,15 +112,21 @@ export function MiniCalendar({ today, month, onMonth, hset, markDates, onOpenCal
         ))}
         {cells.map((d, i) => {
           const ds = YMD(d), inMonth = d.getMonth() === m, isToday = ds === today, off = isOffDay(ds, hset);
+          const list = tasksByDate.get(ds) || [];
+          const on = hover && hover.ds === ds;
           return (
             <div key={i} onClick={onOpenCalendar}
+              onMouseEnter={(e) => { if (list.length) { const r = e.currentTarget.getBoundingClientRect(); setHover({ ds, x: r.left + r.width / 2, y: r.bottom }); } }}
+              onMouseLeave={() => setHover(null)}
+              title={list.length ? "" : undefined}
               style={{ position: "relative", aspectRatio: "1 / 1", display: "flex", alignItems: "center",
                 justifyContent: "center", borderRadius: 6, cursor: "pointer",
                 fontSize: 11, fontWeight: isToday ? 800 : 500,
-                background: isToday ? C.main : "transparent",
+                background: isToday ? C.main : on ? C.mainBg : "transparent",
+                outline: on && !isToday ? `1px solid ${C.main}` : "none",
                 color: isToday ? C.white : !inMonth ? "#d5dae2" : off ? C.red : C.text }}>
               {d.getDate()}
-              {markDates.has(ds) && (
+              {list.some((t) => !t.done) && (
                 <span style={{ position: "absolute", bottom: 3, width: 4, height: 4, borderRadius: "50%",
                   background: isToday ? C.white : C.sub }} />
               )}
@@ -103,8 +135,10 @@ export function MiniCalendar({ today, month, onMonth, hset, markDates, onOpenCal
         })}
       </div>
       <div style={{ fontSize: 10, color: C.faint, textAlign: "center", marginTop: 7, fontFamily: FONT }}>
-        점이 있는 날은 업무관리 일정이 있는 날입니다
+        점이 있는 날에 일정이 있습니다. 날짜에 마우스를 올리면 내용이 보이고, 누르면 캘린더로 갑니다.
       </div>
+
+      {hover && <DayTip ds={hover.ds} x={hover.x} y={hover.y} list={tasksByDate.get(hover.ds) || []} />}
     </Panel>
   );
 }

@@ -1,26 +1,13 @@
 import React, { useState } from "react";
 import { C, FONT, input, btn, badge, modalBg, modalCard, parseYMD, WD } from "../shared/ui";
-import { WIDGETS } from "./DashboardTab";
 import { DEFAULT_HOLIDAYS } from "./holidays";
 
 // ===== 대시보드 설정 =====
 // 위젯을 켜고 끄거나 순서를 바꾸고, 영업일 계산에 쓰는 공휴일을 고친다.
-export default function DashboardSettings({ layout, holidays, today, onSaveLayout, onSaveHolidays, onClose }) {
-  const [rows, setRows] = useState(layout);
+export default function DashboardSettings({ holidays, onSaveHolidays, onClose }) {
   const [hs, setHs] = useState(holidays.map((h) => (typeof h === "string" ? { d: h, n: "" } : h)));
   const [nd, setNd] = useState("");
   const [nn, setNn] = useState("");
-  const [tab, setTab] = useState("widget");
-
-  const info = (k) => WIDGETS.find((w) => w.k === k) || { n: k, desc: "" };
-  const toggle = (i) => setRows(rows.map((r, j) => (j === i ? { ...r, on: !r.on } : r)));
-  const move = (i, d) => {
-    const j = i + d;
-    if (j < 0 || j >= rows.length) return;
-    const next = [...rows];
-    [next[i], next[j]] = [next[j], next[i]];
-    setRows(next);
-  };
 
   const addHoliday = () => {
     const d = nd.trim();
@@ -36,61 +23,21 @@ export default function DashboardSettings({ layout, holidays, today, onSaveLayou
   };
 
   const save = async () => {
-    await onSaveLayout(rows);
     await onSaveHolidays(hs);
     onClose();
   };
 
   const dow = (d) => { try { return WD[parseYMD(d).getDay()]; } catch { return "?"; } };
-  const tabBtn = (k, label) => (
-    <button onClick={() => setTab(k)}
-      style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", fontSize: 12.5, cursor: "pointer",
-        fontWeight: tab === k ? 700 : 500, background: tab === k ? C.main : "transparent",
-        color: tab === k ? C.white : C.muted, fontFamily: FONT }}>{label}</button>
-  );
-
   return (
     <div style={modalBg(1300)} onClick={onClose}>
       <div style={modalCard(520)} onClick={(e) => e.stopPropagation()}>
         <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${C.line}` }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.title, marginBottom: 10 }}>대시보드 설정</div>
-          <div style={{ display: "flex", background: C.soft, borderRadius: 10, padding: 3, gap: 3 }}>
-            {tabBtn("widget", "위젯")}{tabBtn("holiday", "공휴일")}
-          </div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.title }}>공휴일 설정</div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>마감 D-3 을 셀 때 건너뛸 날입니다.</div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "14px 20px" }}>
-          {tab === "widget" && (<>
-            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, marginBottom: 12 }}>
-              켜고 끄거나 순서를 바꿀 수 있습니다. 나중에 위젯이 늘어나면 여기에 자동으로 나타납니다.
-            </div>
-            {rows.map((r, i) => {
-              const w = info(r.k);
-              return (
-                <div key={r.k} style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 11px",
-                  border: `1px solid ${C.line}`, borderRadius: 9, marginBottom: 7, background: r.on ? C.white : "#fafbfc" }}>
-                  <button onClick={() => toggle(i)}
-                    style={{ width: 38, height: 22, borderRadius: 99, border: "none", cursor: "pointer", flexShrink: 0,
-                      background: r.on ? C.main : "#d5dae2", position: "relative", transition: "background .15s" }}>
-                    <span style={{ position: "absolute", top: 3, left: r.on ? 19 : 3, width: 16, height: 16,
-                      borderRadius: "50%", background: C.white, transition: "left .15s" }} />
-                  </button>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: r.on ? C.title : C.faint }}>{w.n}</div>
-                    <div style={{ fontSize: 10.5, color: C.faint, marginTop: 2 }}>{w.desc}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                    <button onClick={() => move(i, -1)} disabled={i === 0}
-                      style={btn("ghost", { padding: "3px 8px", fontSize: 12, opacity: i === 0 ? 0.35 : 1 })}>↑</button>
-                    <button onClick={() => move(i, 1)} disabled={i === rows.length - 1}
-                      style={btn("ghost", { padding: "3px 8px", fontSize: 12, opacity: i === rows.length - 1 ? 0.35 : 1 })}>↓</button>
-                  </div>
-                </div>
-              );
-            })}
-          </>)}
-
-          {tab === "holiday" && (<>
+          {(<>
             <div style={{ background: C.amberBg, border: "1px solid #fde68a", borderRadius: 9,
               padding: "10px 12px", fontSize: 11.5, color: "#8a5a12", lineHeight: 1.6, marginBottom: 12 }}>
               마감 D-3 을 셀 때 토·일과 함께 건너뛰는 날입니다.<br />
