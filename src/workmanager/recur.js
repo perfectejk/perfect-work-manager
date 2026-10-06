@@ -16,6 +16,7 @@ const lastDayOf = (y, m) => new Date(y, m + 1, 0).getDate();
 
 export function genDates(startStr, rule, count) {
   if (!startStr || !count) return [];
+  if (rule === "once") return [startStr];   // 1회 교육 (오리엔테이션 등) — 반복 없음
   const s = parseYMD(startStr);
   const out = [];
   for (let i = 0; i < count; i++) {
@@ -43,6 +44,7 @@ export function genDates(startStr, rule, count) {
 }
 
 export function ruleLabel(rule, startStr) {
+  if (rule === "once") return "1회 교육";
   if (!startStr) return RULES.find((r) => r.k === rule)?.label || "";
   const s = parseYMD(startStr), w = WD[s.getDay()];
   return {
@@ -57,7 +59,10 @@ export function ruleLabel(rule, startStr) {
 export function sessionTitle(sess, prog, round) {
   const t = ((sess && sess.title) || "").trim();
   if (t) return t;
-  return `${(prog && prog.name) || "(삭제된 과정)"} - ${round}회차`;
+  const name = (prog && prog.name) || "(삭제된 과정)";
+  // 1회 교육은 회차 번호 없이 교육명만 쓴다
+  if (prog && prog.rule === "once" && round === 1) return name;
+  return `${name} - ${round}회차`;
 }
 
 // 빈 회차 한 건

@@ -12,15 +12,17 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
   const [members, setMembers] = useState([]);
   const [start, setStart] = useState(addDays(TD, 7));
   const [time, setTime] = useState("10:00");
+  const [once, setOnce] = useState(false);   // 1회 교육 (오리엔테이션 등)
   const [rule, setRule] = useState("w2");
   const [count, setCount] = useState(6);
   const [off, setOff] = useState({});      // 체크 해제한 날짜
   const [titles, setTitles] = useState({}); // 날짜별 회차 제목 (비워두면 "교육명 - n회차")
   const [busy, setBusy] = useState(false);
 
+  const useRule = once ? "once" : rule;
   const dates = useMemo(
-    () => genDates(start, rule, Math.max(1, Math.min(52, parseInt(count) || 1))),
-    [start, rule, count]
+    () => genDates(start, useRule, Math.max(1, Math.min(52, parseInt(count) || 1))),
+    [start, useRule, count]
   );
   const picked = dates.filter((d) => !off[d]);
 
@@ -29,7 +31,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
     if (!start) { alert("첫 교육일을 선택해주세요."); return; }
     if (picked.length === 0) { alert("교육일을 최소 1개는 남겨주세요."); return; }
     setBusy(true);
-    await onCreate({ name: name.trim(), target: target.trim(), members, rule, start, time, dates: picked,
+    await onCreate({ name: name.trim(), target: target.trim(), members, rule: useRule, start, time, dates: picked,
       titles: picked.map((d) => (titles[d] || "").trim()) });
     setBusy(false);
     onClose();
@@ -48,6 +50,18 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "0 20px" }}>
+          {/* 반복 교육 / 1회 교육 */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            {[[false, "반복 교육", "정해진 주기로 여러 번"], [true, "1회 교육", "오리엔테이션처럼 한 번만"]].map(([v, t, d]) => (
+              <button key={t} type="button" onClick={() => { setOnce(v); setOff({}); }}
+                style={{ flex: 1, padding: "9px 10px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                  border: `1.5px solid ${once === v ? C.main : C.line}`, background: once === v ? C.mainBg : C.white }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: once === v ? C.main : C.text }}>{t}</div>
+                <div style={{ fontSize: 10.5, color: C.faint, marginTop: 2 }}>{d}</div>
+              </button>
+            ))}
+          </div>
+
           <label style={label}>교육명</label>
           <input value={name} autoFocus onChange={(e) => setName(e.target.value)}
             placeholder="예: 신입 영업 기초 교육" style={input({ marginBottom: 10 })} />
@@ -67,7 +81,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             <div>
-              <label style={label}>첫 교육일</label>
+              <label style={label}>{once ? "교육일" : "첫 교육일"}</label>
               <input type="date" value={start} onChange={(e) => { setStart(e.target.value); setOff({}); }} style={input()} />
             </div>
             <div>
@@ -76,7 +90,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+          {!once && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             <div>
               <label style={label}>주기</label>
               <select value={rule} onChange={(e) => { setRule(e.target.value); setOff({}); }} style={input()}>
@@ -88,10 +102,10 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
               <input type="number" min="1" max="52" value={count}
                 onChange={(e) => { setCount(e.target.value); setOff({}); }} style={input()} />
             </div>
-          </div>
+          </div>}
 
           <label style={label}>
-            생성될 교육일 {start && <span style={{ color: C.main }}>({ruleLabel(rule, start)})</span>}
+            {once ? "교육 제목" : "생성될 교육일"} {start && !once && <span style={{ color: C.main }}>({ruleLabel(rule, start)})</span>}
             <span style={{ float: "right", fontWeight: 600, color: C.faint }}>{picked.length}회 선택됨</span>
           </label>
           <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 9, marginBottom: 14,
@@ -111,7 +125,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
                     </label>
                     {!off[d] && (
                       <input value={titles[d] || ""} onChange={(e) => setTitles((t) => ({ ...t, [d]: e.target.value }))}
-                        placeholder={sessionTitle(null, { name: name.trim() || "교육명" }, n)}
+                        placeholder={sessionTitle(null, { name: name.trim() || "교육명", rule: useRule }, n)}
                         style={input({ padding: "5px 8px", fontSize: 12, flex: 1, minWidth: 0 })} />
                     )}
                   </div>
