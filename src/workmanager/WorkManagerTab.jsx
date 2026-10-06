@@ -10,7 +10,7 @@ import AddScriptModal from "./AddScriptModal";
 import ProgramModal from "./ProgramModal";
 import ProgramPanel from "./ProgramPanel";
 import SessionPanel from "./SessionPanel";
-import { blankSession, genDates, ruleLabel } from "./recur";
+import { blankSession, genDates, ruleLabel, sessionTitle } from "./recur";
 import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
 import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } from "./contractMatch";
 import { extractReportTargets } from "./reportTarget";
@@ -113,10 +113,10 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   // 회차는 과정별 문서에 저장한다
   const saveSessions = async (next, pid) => { setSessions(next); await saveSessionsOf(st, pid, next); };
 
-  const createProgram = async ({ name, target, members, rule, start, time, dates }) => {
+  const createProgram = async ({ name, target, members, rule, start, time, dates, titles = [] }) => {
     const id = uid();
     const prog = { id, name, target, members, rule, start, time, createdAt: TD };
-    const made = dates.map((d) => blankSession(uid(), id, d, time, members));
+    const made = dates.map((d, i) => ({ ...blankSession(uid(), id, d, time, members), title: titles[i] || "" }));
     await savePrograms([...programs, prog]);
     await saveSessions([...sessions, ...made], id);
     setSub("edu");
@@ -177,6 +177,11 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     const i = list.findIndex((x) => x.id === sess.id);
     return i < 0 ? "-" : i + 1;
   }, [sessionsOfProgram]);
+  // 회차 제목 — 직접 정한 제목, 없으면 "과정명 - n회차"
+  const nameOf = useCallback(
+    (sess) => sessionTitle(sess, programs.find((p) => String(p.id) === String(sess.pid)), roundOf(sess)),
+    [programs, roundOf]
+  );
 
   // 스크립트별 자동 집계 — 교육 횟수 / 마지막 교육일 / 이수 인원 / 미이수자
   const allMembers = useMemo(() => [...new Set(programs.flatMap((p) => p.members || []))], [programs]);
@@ -188,14 +193,14 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     done.forEach((s) => Object.entries(s.attend || {}).forEach(([n, v]) => { if (v) learned.add(n); }));
     return {
       sessions: done.map((s) => ({
-        id: s.id, date: s.date, progName: progName(s.pid), round: roundOf(s),
+        id: s.id, date: s.date, progName: progName(s.pid), round: roundOf(s), title: nameOf(s),
         attended: Object.values(s.attend || {}).filter(Boolean).length,
       })),
       people: [...learned],
       lastDate: done.length ? done[0].date : "",
       missing: allMembers.filter((m) => !learned.has(m)),
     };
-  }, [sessions, progName, roundOf, allMembers]);
+  }, [sessions, progName, roundOf, nameOf, allMembers]);
 
   // 한 줄 입력에서 업체·세부 분류를 알아낸다. 미리보기 칩으로도 보여준다.
   // 업체가 걸리면 "어느 계약인지" 고를 수 있게 선택 옵션을 함께 내려보낸다.
@@ -316,12 +321,12 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     }));
     const b = sessions.filter((sx) => sx.status !== "skip").map((sx) => ({
       kind: "session", id: sx.id, pid: sx.pid,
-      title: progName(sx.pid) + " " + roundOf(sx) + "회차",
+      title: nameOf(sx),
       color: EDU_COLOR, date: sx.date, time: sx.time, done: sx.status === "done",
       statusLabel: SESSION_STATUS[sx.status], isEdu: true,
     }));
     return a.concat(b).sort((x, y) => (x.date + (x.time || "")).localeCompare(y.date + (y.time || "")));
-  }, [tasks, sessions, typeOf, progName, roundOf]);
+  }, [tasks, sessions, typeOf, nameOf]);
 
   const openSide = (kind, id) => setSide({ kind, id });
   const selTask = side?.kind === "task" ? tasks.find((t) => t.id === side.id) : null;
@@ -340,9 +345,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   // 자료 개선점 → 자료 제작 보드에 개선 작업으로 추가
   const improveToTask = async (sx) => {
     if (!String(sx.improve || "").trim()) { alert("자료 개선점을 먼저 입력하세요."); return; }
-    const prog = programs.find((x) => String(x.id) === String(sx.pid));
     const t = {
-      id: uid(), title: "[개선] " + (prog ? prog.name : "교육") + " " + roundOf(sx) + "회차 피드백 반영",
+      id: uid(), title: "[개선] " + nameOf(sx) + " 피드백 반영",
       type: "script", date: addDays(TD, 3), time: "", status: "todo",
       desc: sx.improve, subs: [], links: [], createdAt: TD,
     };
@@ -622,7 +626,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           <div style={{ background: C.greenBg, color: C.greenDeep, borderRadius: 8, padding: "8px 10px",
             fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>
             {next
-              ? "다음 교육: " + fmtDate(next.date) + " " + next.time + " · " + roundOf(next) + "회차" + (next.date < TD ? " (지난 일정, 결과 기록 필요)" : "")
+              ? "다음 교육: " + fmtDate(next.date) + " " + next.time + " · " + nameOf(next) + (next.date < TD ? " (지난 일정, 결과 기록 필요)" : "")
               : "모든 회차가 끝났습니다."}
           </div>
           <div style={{ overflowX: "auto" }}>
@@ -636,7 +640,11 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                   const stc = { plan: [C.muted, C.soft], done: [C.greenDeep, C.greenBg], skip: [C.red, C.redBg] }[sx.status] || [C.muted, C.soft];
                   return (
                     <tr key={sx.id} onClick={() => openSide("session", sx.id)} style={{ cursor: "pointer", background: on ? C.mainBg : "transparent" }}>
-                      <td style={td}>{sx.status === "skip" ? "—" : roundOf(sx) + "회"}</td>
+                      <td style={td}>
+                        {sx.status === "skip" ? "—" : roundOf(sx) + "회"}
+                        {sx.status !== "skip" && (sx.title || "").trim() &&
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{sx.title}</div>}
+                      </td>
                       <td style={{ ...td, color: C.faint }}>{fmtDate(sx.date)} {sx.time}</td>
                       <td style={td}><span style={badge(stc[0], stc[1], { fontSize: 10.5 })}>{SESSION_STATUS[sx.status]}</span></td>
                       <td style={td}>

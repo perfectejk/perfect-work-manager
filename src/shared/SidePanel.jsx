@@ -120,10 +120,10 @@ export default function SidePanel({ open, kind, onClose, children, width = 480 }
 
 // 상세 패널 안에서 반복해 쓰는 조각들 ------------------------------------
 
-export const SpTitle = ({ value, onChange, readOnly }) =>
+export const SpTitle = ({ value, onChange, readOnly, placeholder }) =>
   readOnly
     ? <div style={{ fontSize: 20, fontWeight: 800, color: C.title, marginBottom: 4 }}>{value}</div>
-    : <input value={value} onChange={(e) => onChange(e.target.value)}
+    : <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
         style={{ fontSize: 20, fontWeight: 800, border: "none", outline: "none", width: "100%",
           fontFamily: FONT, marginBottom: 4, color: C.title, background: "transparent" }} />;
 

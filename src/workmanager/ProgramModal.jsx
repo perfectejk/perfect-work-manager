@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { C, input, btn, modalBg, modalCard, fmtDate, addDays, YMD } from "../shared/ui";
-import { RULES, genDates, ruleLabel } from "./recur";
+import { RULES, genDates, ruleLabel, sessionTitle } from "./recur";
 import NameInput from "./NameInput";
 
 // 교육 과정 등록 — 주기를 정하면 회차 날짜가 자동으로 만들어지고,
@@ -15,6 +15,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
   const [rule, setRule] = useState("w2");
   const [count, setCount] = useState(6);
   const [off, setOff] = useState({});      // 체크 해제한 날짜
+  const [titles, setTitles] = useState({}); // 날짜별 회차 제목 (비워두면 "교육명 - n회차")
   const [busy, setBusy] = useState(false);
 
   const dates = useMemo(
@@ -28,7 +29,8 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
     if (!start) { alert("첫 교육일을 선택해주세요."); return; }
     if (picked.length === 0) { alert("교육일을 최소 1개는 남겨주세요."); return; }
     setBusy(true);
-    await onCreate({ name: name.trim(), target: target.trim(), members, rule, start, time, dates: picked });
+    await onCreate({ name: name.trim(), target: target.trim(), members, rule, start, time, dates: picked,
+      titles: picked.map((d) => (titles[d] || "").trim()) });
     setBusy(false);
     onClose();
   };
@@ -41,7 +43,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
         <div style={{ padding: "18px 20px 0", flexShrink: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.title, marginBottom: 4 }}>교육 과정 등록</div>
           <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>
-            주기를 정하면 회차가 자동으로 만들어집니다. 빼고 싶은 날짜는 체크를 해제하세요.
+            주기를 정하면 회차가 자동으로 만들어집니다. 빼고 싶은 날짜는 체크를 해제하세요. 회차 제목은 비워두면 "교육명 - n회차"로 표시됩니다.
           </div>
         </div>
 
@@ -93,17 +95,28 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
             <span style={{ float: "right", fontWeight: 600, color: C.faint }}>{picked.length}회 선택됨</span>
           </label>
           <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 9, marginBottom: 14,
-            maxHeight: 190, overflowY: "auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 10px" }}>
+            maxHeight: 260, overflowY: "auto", display: "grid", gridTemplateColumns: "1fr", gap: 5 }}>
             {dates.length === 0
               ? <span style={{ fontSize: 12, color: C.faint }}>첫 교육일을 선택하세요.</span>
-              : dates.map((d, i) => (
-                <label key={d + i} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, cursor: "pointer",
-                  color: off[d] ? "#b5bdc9" : C.text, textDecoration: off[d] ? "line-through" : "none" }}>
-                  <input type="checkbox" checked={!off[d]} onChange={() => setOff((o) => ({ ...o, [d]: !o[d] }))}
-                    style={{ cursor: "pointer", accentColor: C.main }} />
-                  {i + 1}회 · {fmtDate(d)}
-                </label>
-              ))}
+              : dates.map((d, i) => {
+                // 체크 해제한 날짜는 회차로 만들지 않으므로, 번호는 남은 날짜 기준으로 센다
+                const n = picked.indexOf(d) + 1;
+                return (
+                  <div key={d + i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, cursor: "pointer", flexShrink: 0, width: 150,
+                      color: off[d] ? "#b5bdc9" : C.text, textDecoration: off[d] ? "line-through" : "none" }}>
+                      <input type="checkbox" checked={!off[d]} onChange={() => setOff((o) => ({ ...o, [d]: !o[d] }))}
+                        style={{ cursor: "pointer", accentColor: C.main }} />
+                      {off[d] ? "제외" : n + "회"} · {fmtDate(d)}
+                    </label>
+                    {!off[d] && (
+                      <input value={titles[d] || ""} onChange={(e) => setTitles((t) => ({ ...t, [d]: e.target.value }))}
+                        placeholder={sessionTitle(null, { name: name.trim() || "교육명" }, n)}
+                        style={input({ padding: "5px 8px", fontSize: 12, flex: 1, minWidth: 0 })} />
+                    )}
+                  </div>
+                );
+              })}
           </div>
         </div>
 

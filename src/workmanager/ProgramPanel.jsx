@@ -2,7 +2,7 @@ import React from "react";
 import { C, input, btn, badge, fmtDate } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section } from "../shared/SidePanel";
 import { SESSION_STATUS } from "./store";
-import { ruleLabel } from "./recur";
+import { ruleLabel, sessionTitle } from "./recur";
 import NameInput from "./NameInput";
 
 // 교육 과정 상세 — 이름 / 대상 / 대상자 명단 편집 / 회차 목록
@@ -46,7 +46,7 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
               style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
                 fontSize: 12.5, padding: "7px 8px", borderRadius: 6, cursor: "pointer", background: C.soft, marginBottom: 4 }}>
               <span style={{ color: C.text }}>
-                {s.status === "skip" ? "취소" : `${roundOf(s)}회차`} · {fmtDate(s.date)}{s.time ? " " + s.time : ""}
+                {s.status === "skip" ? "취소" : sessionTitle(s, program, roundOf(s))} · {fmtDate(s.date)}{s.time ? " " + s.time : ""}
               </span>
               {stBadge(s)}
             </div>

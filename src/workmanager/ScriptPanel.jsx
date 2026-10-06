@@ -42,7 +42,7 @@ export default function ScriptPanel({ script, cats, stats, onPatch, onDelete, on
               style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12.5,
                 padding: "7px 8px", borderRadius: 6, cursor: onOpenSession ? "pointer" : "default",
                 background: C.soft, marginBottom: 4 }}>
-              <span style={{ color: C.text }}>{s.progName} {s.round}회차</span>
+              <span style={{ color: C.text }}>{s.title}</span>
               <span style={{ color: C.faint, whiteSpace: "nowrap" }}>{fmtDate(s.date)} · 참석 {s.attended}명</span>
             </div>
           ))}

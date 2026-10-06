@@ -51,6 +51,15 @@ export function ruleLabel(rule, startStr) {
   }[rule] || "";
 }
 
+// 회차 제목 — 직접 정한 제목이 있으면 그것, 없으면 "과정명 - n회차".
+// 기본 제목은 저장하지 않고 그때그때 만든다. 과정명을 바꾸거나 중간 회차를
+// 취소해도 번호가 저절로 맞춰지게 하려는 것이다.
+export function sessionTitle(sess, prog, round) {
+  const t = ((sess && sess.title) || "").trim();
+  if (t) return t;
+  return `${(prog && prog.name) || "(삭제된 과정)"} - ${round}회차`;
+}
+
 // 빈 회차 한 건
 export function blankSession(id, pid, date, time, members, status) {
   const attend = {};

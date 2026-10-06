@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { C, FONT, input, inputSm, btn, badge, fmtDate } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section, CheckList, Textarea } from "../shared/SidePanel";
 import { SESSION_STATUS } from "./store";
-import { ruleLabel } from "./recur";
+import { ruleLabel, sessionTitle } from "./recur";
 import NameInput from "./NameInput";
 
 // 교육 회차 기록
@@ -37,8 +37,10 @@ export default function SessionPanel({
 
   return (
     <>
-      <SpTitle value={`${program.name} · ${round}회차`} readOnly />
-      <SpSub>대상: {program.target || "—"} · {ruleLabel(program.rule, program.start)}</SpSub>
+      {/* 제목 — 비워두면 "과정명 - n회차"로 보인다 */}
+      <SpTitle value={s.title || ""} onChange={(v) => p({ title: v })}
+        placeholder={sessionTitle(null, program, round)} />
+      <SpSub>{round}회차 · 대상: {program.target || "—"} · {ruleLabel(program.rule, program.start)}</SpSub>
 
       <Props>
         <PropLabel>날짜</PropLabel>
