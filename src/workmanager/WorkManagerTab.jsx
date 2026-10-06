@@ -45,6 +45,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [bizSub, setBizSub] = useState("all");
   const [bizDone, setBizDone] = useState("open");
   const [calDay, setCalDay] = useState("");   // 캘린더에서 고른 날짜
+  const [calFilter, setCalFilter] = useState("all");   // 캘린더 필터 — all 전체 / edu 교육 과정만 / task 작업만
   const [showTypes, setShowTypes] = useState(false);
   const [showScript, setShowScript] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
@@ -669,7 +670,11 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   };
 
   // ---- 캘린더 ----
-  const dayItems = useMemo(() => (calDay ? items.filter((x) => x.date === calDay) : []), [items, calDay]);
+  const calItems = useMemo(
+    () => (calFilter === "edu" ? items.filter((x) => x.isEdu) : calFilter === "task" ? items.filter((x) => !x.isEdu) : items),
+    [items, calFilter]
+  );
+  const dayItems = useMemo(() => (calDay ? calItems.filter((x) => x.date === calDay) : []), [calItems, calDay]);
   const calView = () => {
     const { y, m } = calMonth;
     const first = new Date(y, m, 1);
@@ -678,6 +683,15 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     const move = (delta) => { const d = new Date(y, m + delta, 1); setCalMonth({ y: d.getFullYear(), m: d.getMonth() }); };
     return (
       <>
+        {/* 보기 필터 */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+          {[["all", "전체", C.main], ["edu", "교육 과정만", EDU_COLOR], ["task", "작업만", C.main]].map(([k, label, color]) => (
+            <button key={k} onClick={() => setCalFilter(k)}
+              style={{ padding: "5px 12px", borderRadius: 99, cursor: "pointer", fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
+                border: `1px solid ${calFilter === k ? color : C.line}`,
+                background: calFilter === k ? color + "18" : C.white, color: calFilter === k ? color : C.muted }}>{label}</button>
+          ))}
+        </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <button onClick={() => move(-1)} style={btn("ghost", { padding: "5px 12px", fontSize: 15 })}>‹</button>
           <b style={{ fontSize: 14, color: C.title }}>{y}년 {m + 1}월</b>
@@ -690,7 +704,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           ))}
           {cells.map((d, i) => {
             const ds = YMD(d), inMonth = d.getMonth() === m, isToday = ds === TD;
-            const evs = items.filter((x) => x.date === ds);
+            const evs = calItems.filter((x) => x.date === ds);
             return (
               <div key={i} onClick={() => setCalDay(calDay === ds ? "" : ds)}
                 style={{ minHeight: 86, padding: 4, borderRadius: 6, boxSizing: "border-box", cursor: "pointer",
