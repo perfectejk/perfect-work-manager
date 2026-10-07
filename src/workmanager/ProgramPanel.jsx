@@ -6,7 +6,7 @@ import { ruleLabel, sessionTitle } from "./recur";
 import NameInput from "./NameInput";
 
 // 교육 과정 상세 — 이름 / 대상 / 대상자 명단 편집 / 회차 목록
-export default function ProgramPanel({ program, sessions, people, roundOf, onPatch, onAddPerson, onOpenSession, onDelete }) {
+export default function ProgramPanel({ program, sessions, people, roundOf, onPatch, onAddPerson, onOpenSession, onDelete, onDeleteSession }) {
   if (!program) return null;
   const p = (patch) => onPatch(program.id, patch);
   const sel = input({ padding: "5px 7px", fontSize: 12, background: C.soft, border: "1px solid transparent" });
@@ -39,6 +39,7 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
       </Section>
 
       <Section title="회차" count={`${done}/${active.length}회 완료`}>
+        <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>회차를 누르면 수정, ✕ 를 누르면 삭제합니다.</div>
         {sessions.length === 0
           ? <p style={{ fontSize: 12, color: C.faint, margin: 0 }}>회차가 없습니다.</p>
           : sessions.map((s) => (
@@ -48,7 +49,11 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
               <span style={{ color: C.text }}>
                 {s.status === "skip" ? "취소" : sessionTitle(s, program, roundOf(s))} · {fmtDate(s.date)}{s.time ? " " + s.time : ""}
               </span>
-              {stBadge(s)}
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {stBadge(s)}
+                <button onClick={(e) => { e.stopPropagation(); onDeleteSession(s); }} title="이 회차 삭제"
+                  style={{ border: "none", background: "none", color: "#c5cdd8", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+              </span>
             </div>
           ))}
       </Section>

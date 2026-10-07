@@ -155,6 +155,18 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     await saveSessions(sessions.map((sx) => (sx.id === id ? { ...sx, ...patch } : sx)), target.pid);
   };
 
+  // 회차 한 건 삭제 — "취소"와 달리 기록 없이 완전히 지운다. 뒤 회차 번호는 자동으로 당겨진다.
+  const deleteSession = async (sx) => {
+    const hasRecord = (sx.scripts || []).length || (sx.actions || []).length || (sx.materials || []).length
+      || Object.values(sx.attend || {}).some(Boolean) || sx.score || sx.reaction || sx.improve || sx.next;
+    const msg = "\"" + nameOf(sx) + "\" (" + fmtDate(sx.date) + ") 회차를 삭제할까요?"
+      + (hasRecord ? "\n이 회차에 적어둔 기록(참석자·스크립트·과제 등)도 함께 사라집니다." : "")
+      + "\n되돌릴 수 없습니다. 기록을 남기려면 삭제 대신 상태를 '취소'로 바꾸세요.";
+    if (!window.confirm(msg)) return;
+    await saveSessions(sessions.filter((x) => x.id !== sx.id), sx.pid);
+    if (side?.kind === "session" && side.id === sx.id) setSide(null);
+  };
+
   // 다음 회차 한 건 추가 — 마지막 회차 날짜에서 주기만큼 뒤로
   const addSession = async (pid) => {
     const prog = programs.find((x) => x.id === pid);
@@ -632,7 +644,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
-              <thead><tr>{["회차", "날짜", "상태", "다룬 스크립트", "참석", "이해도", "과제"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+              <thead><tr>{["회차", "날짜", "상태", "다룬 스크립트", "참석", "이해도", "과제", ""].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>
                 {list.map((sx) => {
                   const sc = (sx.scripts || []).map((sid) => scripts.find((y) => y.id === sid)).filter(Boolean);
@@ -658,6 +670,12 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                       <td style={{ ...td, color: sx.score ? "#f2a400" : C.faint }}>
                         {sx.status === "done" && sx.score ? "★".repeat(sx.score) : "—"}</td>
                       <td style={{ ...td, color: C.faint }}>{(sx.actions || []).length ? ad + "/" + sx.actions.length : "—"}</td>
+                      <td style={{ ...td, whiteSpace: "nowrap", textAlign: "right" }}>
+                        <button onClick={(ev) => { ev.stopPropagation(); openSide("session", sx.id); }}
+                          style={btn("ghost", { padding: "3px 9px", fontSize: 11, marginRight: 4 })}>수정</button>
+                        <button onClick={(ev) => { ev.stopPropagation(); deleteSession(sx); }}
+                          style={btn("danger", { padding: "3px 9px", fontSize: 11 })}>삭제</button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -859,14 +877,15 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       <SidePanel open={!!selProgram} kind="교육 과정 상세" onClose={() => setSide(null)}>
         {selProgram && <ProgramPanel program={selProgram} sessions={sessionsOfProgram(selProgram.id)}
           people={people} roundOf={roundOf} onPatch={patchProgram} onAddPerson={addPerson}
-          onOpenSession={(id) => setSide({ kind: "session", id })} onDelete={deleteProgram} />}
+          onOpenSession={(id) => setSide({ kind: "session", id })} onDelete={deleteProgram}
+          onDeleteSession={deleteSession} />}
       </SidePanel>
 
       <SidePanel open={!!selSession} kind="교육 회차 기록" onClose={() => setSide(null)}>
         {selSession && selSessionProgram && (
           <SessionPanel session={selSession} program={selSessionProgram} prevSession={prevSession}
             round={roundOf(selSession)} scripts={scripts} people={people}
-            onPatch={patchSession} onPatchPrev={patchSession} onAddPerson={addPerson}
+            onPatch={patchSession} onPatchPrev={patchSession} onAddPerson={addPerson} onDelete={deleteSession}
             onImproveToTask={improveToTask} />
         )}
       </SidePanel>

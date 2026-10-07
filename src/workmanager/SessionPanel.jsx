@@ -10,7 +10,7 @@ import NameInput from "./NameInput";
 //  선택 — 반응·질문 / 자료 개선점 / 다음 회차 준비사항 / 장소·방식
 export default function SessionPanel({
   session, program, prevSession, round, scripts, people,
-  onPatch, onPatchPrev, onAddPerson, onImproveToTask,
+  onPatch, onPatchPrev, onAddPerson, onImproveToTask, onDelete,
 }) {
   const [q, setQ] = useState("");
   if (!session || !program) return null;
@@ -172,6 +172,11 @@ export default function SessionPanel({
         <Textarea value={s.next || ""} onChange={(e) => p({ next: e.target.value })}
           placeholder="다음 교육 전에 준비할 것" />
       </Section>
+
+      <button onClick={() => onDelete(s)} style={btn("danger")}>이 회차 삭제</button>
+      <div style={{ fontSize: 10.5, color: C.faint, marginTop: 6, lineHeight: 1.55 }}>
+        삭제하면 이 회차와 기록이 완전히 사라지고 뒤 회차 번호가 당겨집니다. 기록을 남기려면 상태를 "취소"로 바꾸세요.
+      </div>
     </>
   );
 }
