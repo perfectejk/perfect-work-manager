@@ -45,7 +45,12 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [bizSub, setBizSub] = useState("all");
   const [bizDone, setBizDone] = useState("open");
   const [calDay, setCalDay] = useState("");   // 캘린더에서 고른 날짜
-  const [calFilter, setCalFilter] = useState("all");   // 캘린더 필터 — all 전체 / edu 교육 과정만 / task 작업만
+  const [calFilter, setCalFilter] = useState("all");
+  // 교육 과정 목록 정렬·필터 — 고른 값은 이 브라우저에 기억해 둔다
+  const [eduSort, setEduSort] = useState(() => { try { return localStorage.getItem("wm:eduSort") || "recent"; } catch { return "recent"; } });
+  const [eduShow, setEduShow] = useState(() => { try { return localStorage.getItem("wm:eduShow") || "all"; } catch { return "all"; } });
+  const pickEduSort = (v) => { setEduSort(v); try { localStorage.setItem("wm:eduSort", v); } catch { /* 저장 못 해도 동작엔 지장 없음 */ } };
+  const pickEduShow = (v) => { setEduShow(v); try { localStorage.setItem("wm:eduShow", v); } catch { /* 저장 못 해도 동작엔 지장 없음 */ } };   // 캘린더 필터 — all 전체 / edu 교육 과정만 / task 작업만
   const [showTypes, setShowTypes] = useState(false);
   const [showScript, setShowScript] = useState(false);
   const [showProgram, setShowProgram] = useState(false);
@@ -613,7 +618,47 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
         등록된 교육 과정이 없습니다. 오른쪽 위 [+ 교육 과정 등록]으로 시작하세요.
       </div>
     );
-    return programs.map((prog) => {
+    // 종료 = 남은 "예정" 회차가 없는 과정
+    const info = programs.map((prog, idx) => {
+      const ss = sessionsOfProgram(prog.id).filter((sx) => sx.status !== "skip");
+      const nextPlan = ss.find((sx) => sx.status === "plan");
+      return { prog, idx, ended: ss.length > 0 && !nextPlan, nextDate: nextPlan ? nextPlan.date : "" };
+    });
+    const cnt = { all: info.length, ing: info.filter((x) => !x.ended).length, end: info.filter((x) => x.ended).length };
+    let shown = info.filter((x) => eduShow === "all" || (eduShow === "end" ? x.ended : !x.ended));
+    shown = [...shown].sort((a, b) => {
+      if (eduSort === "old") return a.idx - b.idx;
+      if (eduSort === "next") {
+        // 다음 교육일이 가까운 순, 남은 회차가 없는 과정은 맨 뒤
+        if (!a.nextDate !== !b.nextDate) return a.nextDate ? -1 : 1;
+        return a.nextDate.localeCompare(b.nextDate) || b.idx - a.idx;
+      }
+      return b.idx - a.idx;   // recent — 최근 등록순
+    });
+    const chip = (on) => ({ padding: "5px 12px", borderRadius: 99, cursor: "pointer", fontFamily: FONT, fontSize: 11.5, fontWeight: 700,
+      border: `1px solid ${on ? C.main : C.line}`, background: on ? C.mainBg : C.white, color: on ? C.main : C.muted });
+    const bar = (
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+        {[["all", "전체"], ["ing", "진행중"], ["end", "종료"]].map(([k, label]) => (
+          <button key={k} onClick={() => pickEduShow(k)} style={chip(eduShow === k)}>{label} {cnt[k]}</button>
+        ))}
+        <select value={eduSort} onChange={(e) => pickEduSort(e.target.value)}
+          style={inputSm({ marginLeft: "auto", cursor: "pointer" })}>
+          <option value="recent">최근 등록순</option>
+          <option value="old">등록순 (오래된 것부터)</option>
+          <option value="next">다음 교육일 가까운 순</option>
+        </select>
+      </div>
+    );
+    if (shown.length === 0) return (
+      <>
+        {bar}
+        <div style={{ textAlign: "center", padding: "30px 0", color: C.faint, fontSize: 13 }}>
+          {eduShow === "end" ? "종료된 교육 과정이 없습니다." : "진행중인 교육 과정이 없습니다."}
+        </div>
+      </>
+    );
+    return <>{bar}{shown.map(({ prog, ended }) => {
       const list = sessionsOfProgram(prog.id);
       const active = list.filter((sx) => sx.status !== "skip");
       const doneCnt = active.filter((sx) => sx.status === "done").length;
@@ -624,7 +669,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           <div onClick={() => openSide("program", prog.id)} title="클릭하면 과정 상세·대상자 편집"
             style={{ fontSize: 15, fontWeight: 700, color: C.title, cursor: "pointer", marginBottom: 4 }}>
             <i style={{ width: 10, height: 10, borderRadius: "50%", background: progColor(prog), display: "inline-block", marginRight: 7 }} />
-            {prog.name} <span style={{ fontSize: 11, fontWeight: 500, color: C.faint }}>› 대상자·색 편집</span>
+            {prog.name} {ended && <span style={badge(C.muted, C.soft, { fontSize: 10.5, verticalAlign: "middle" })}>종료</span>}
+            {" "}<span style={{ fontSize: 11, fontWeight: 500, color: C.faint }}>› 대상자·색 편집</span>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.faint }}>
             <span>대상: {prog.target || "—"} ({(prog.members || []).length}명)</span>
@@ -685,7 +731,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           </div>
         </div>
       );
-    });
+    })}</>;
   };
 
   // ---- 캘린더 ----
