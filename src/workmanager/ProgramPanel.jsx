@@ -4,6 +4,8 @@ import { SpTitle, SpSub, Props, PropLabel, Section } from "../shared/SidePanel";
 import { SESSION_STATUS } from "./store";
 import { ruleLabel, sessionTitle } from "./recur";
 import NameInput from "./NameInput";
+import { ColorSwatches } from "./ProgramModal";
+import { progColor } from "./store";
 
 // 교육 과정 상세 — 이름 / 대상 / 대상자 명단 편집 / 회차 목록
 export default function ProgramPanel({ program, sessions, people, roundOf, onPatch, onAddPerson, onOpenSession, onDelete, onDeleteSession }) {
@@ -27,6 +29,8 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
         <PropLabel>대상</PropLabel>
         <input value={program.target || ""} onChange={(e) => p({ target: e.target.value })}
           placeholder="예: 신입 사원" style={sel} />
+        <PropLabel>캘린더 색</PropLabel>
+        <ColorSwatches value={progColor(program)} onChange={(c) => p({ color: c })} />
       </Props>
 
       <Section title="대상자 명단" count={`${(program.members || []).length}명`}>

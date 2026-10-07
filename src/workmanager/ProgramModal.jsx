@@ -2,13 +2,30 @@ import React, { useState, useMemo } from "react";
 import { C, input, btn, modalBg, modalCard, fmtDate, addDays, YMD } from "../shared/ui";
 import { RULES, genDates, ruleLabel, sessionTitle } from "./recur";
 import NameInput from "./NameInput";
+import { EDU_COLORS } from "./store";
+
+// 색 고르기 — 동그라미 색상 버튼 줄
+export function ColorSwatches({ value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+      {EDU_COLORS.map((c) => (
+        <button key={c} type="button" onClick={() => onChange(c)} title={c}
+          style={{ width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer", padding: 0,
+            border: value === c ? "3px solid #fff" : "3px solid transparent",
+            boxShadow: value === c ? `0 0 0 2px ${c}` : "none" }} />
+      ))}
+    </div>
+  );
+}
 
 // 교육 과정 등록 — 주기를 정하면 회차 날짜가 자동으로 만들어지고,
 // 빼고 싶은 날짜는 체크를 해제해서 제외한다.
-export default function ProgramModal({ people, onAddPerson, onCreate, onClose, today }) {
+export default function ProgramModal({ people, onAddPerson, onCreate, onClose, today, usedColors = [] }) {
   const TD = today || YMD(new Date());
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
+  // 기본 색은 다른 과정이 아직 안 쓴 색 중 첫 번째
+  const [color, setColor] = useState(() => EDU_COLORS.find((c) => !usedColors.includes(c)) || EDU_COLORS[0]);
   const [members, setMembers] = useState([]);
   const [start, setStart] = useState(addDays(TD, 7));
   const [time, setTime] = useState("10:00");
@@ -31,7 +48,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
     if (!start) { alert("첫 교육일을 선택해주세요."); return; }
     if (picked.length === 0) { alert("교육일을 최소 1개는 남겨주세요."); return; }
     setBusy(true);
-    await onCreate({ name: name.trim(), target: target.trim(), members, rule: useRule, start, time, dates: picked,
+    await onCreate({ name: name.trim(), target: target.trim(), members, color, rule: useRule, start, time, dates: picked,
       titles: picked.map((d) => (titles[d] || "").trim()) });
     setBusy(false);
     onClose();
@@ -65,6 +82,9 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
           <label style={label}>교육명</label>
           <input value={name} autoFocus onChange={(e) => setName(e.target.value)}
             placeholder="예: 신입 영업 기초 교육" style={input({ marginBottom: 10 })} />
+
+          <label style={label}>캘린더 색</label>
+          <div style={{ marginBottom: 12 }}><ColorSwatches value={color} onChange={setColor} /></div>
 
           <label style={label}>대상</label>
           <input value={target} onChange={(e) => setTarget(e.target.value)}

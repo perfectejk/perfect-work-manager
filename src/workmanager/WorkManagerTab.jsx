@@ -11,7 +11,7 @@ import ProgramModal from "./ProgramModal";
 import ProgramPanel from "./ProgramPanel";
 import SessionPanel from "./SessionPanel";
 import { blankSession, genDates, ruleLabel, sessionTitle } from "./recur";
-import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
+import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, progColor, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
 import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } from "./contractMatch";
 import { extractReportTargets } from "./reportTarget";
 import ImportModal from "./ImportModal";
@@ -114,9 +114,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   // 회차는 과정별 문서에 저장한다
   const saveSessions = async (next, pid) => { setSessions(next); await saveSessionsOf(st, pid, next); };
 
-  const createProgram = async ({ name, target, members, rule, start, time, dates, titles = [] }) => {
+  const createProgram = async ({ name, target, members, color, rule, start, time, dates, titles = [] }) => {
     const id = uid();
-    const prog = { id, name, target, members, rule, start, time, createdAt: TD };
+    const prog = { id, name, target, members, color, rule, start, time, createdAt: TD };
     const made = dates.map((d, i) => ({ ...blankSession(uid(), id, d, time, members), title: titles[i] || "" }));
     await savePrograms([...programs, prog]);
     await saveSessions([...sessions, ...made], id);
@@ -335,11 +335,11 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     const b = sessions.filter((sx) => sx.status !== "skip").map((sx) => ({
       kind: "session", id: sx.id, pid: sx.pid,
       title: nameOf(sx),
-      color: EDU_COLOR, date: sx.date, time: sx.time, done: sx.status === "done",
+      color: progColor(programs.find((p) => String(p.id) === String(sx.pid))), date: sx.date, time: sx.time, done: sx.status === "done",
       statusLabel: SESSION_STATUS[sx.status], isEdu: true,
     }));
     return a.concat(b).sort((x, y) => (x.date + (x.time || "")).localeCompare(y.date + (y.time || "")));
-  }, [tasks, sessions, typeOf, nameOf]);
+  }, [tasks, sessions, programs, typeOf, nameOf]);
 
   const openSide = (kind, id) => setSide({ kind, id });
   const selTask = side?.kind === "task" ? tasks.find((t) => t.id === side.id) : null;
@@ -623,7 +623,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
         <div key={prog.id} style={{ border: "1px solid " + C.line, borderRadius: 12, padding: 14, marginBottom: 14 }}>
           <div onClick={() => openSide("program", prog.id)} title="클릭하면 과정 상세·대상자 편집"
             style={{ fontSize: 15, fontWeight: 700, color: C.title, cursor: "pointer", marginBottom: 4 }}>
-            {prog.name} <span style={{ fontSize: 11, fontWeight: 500, color: C.faint }}>› 대상자 편집</span>
+            <i style={{ width: 10, height: 10, borderRadius: "50%", background: progColor(prog), display: "inline-block", marginRight: 7 }} />
+            {prog.name} <span style={{ fontSize: 11, fontWeight: 500, color: C.faint }}>› 대상자·색 편집</span>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.faint }}>
             <span>대상: {prog.target || "—"} ({(prog.members || []).length}명)</span>
@@ -634,7 +635,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
               style={btn("ghost", { marginLeft: "auto", padding: "4px 10px", fontSize: 11 })}>+ 회차 추가</button>
           </div>
           <div style={{ height: 6, background: C.line, borderRadius: 3, overflow: "hidden", margin: "9px 0 12px" }}>
-            <div style={{ height: "100%", width: (active.length ? (doneCnt / active.length) * 100 : 0) + "%", background: EDU_COLOR }} />
+            <div style={{ height: "100%", width: (active.length ? (doneCnt / active.length) * 100 : 0) + "%", background: progColor(prog) }} />
           </div>
           <div style={{ background: C.greenBg, color: C.greenDeep, borderRadius: 8, padding: "8px 10px",
             fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>
@@ -858,9 +859,14 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
             <i style={{ width: 8, height: 8, borderRadius: "50%", background: t.c, display: "inline-block" }} />{t.n}
           </span>
         ))}
-        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+        {programs.length === 0 && <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <i style={{ width: 8, height: 8, borderRadius: "50%", background: EDU_COLOR, display: "inline-block" }} />교육 회차
-        </span>
+        </span>}
+        {programs.map((pg) => (
+          <span key={pg.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <i style={{ width: 8, height: 8, borderRadius: "50%", background: progColor(pg), display: "inline-block" }} />{pg.name}
+          </span>
+        ))}
       </div>
 
       <SidePanel open={!!selTask} kind="작업 상세" onClose={() => setSide(null)}>
@@ -891,6 +897,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       </SidePanel>
 
       {showProgram && <ProgramModal people={people} onAddPerson={addPerson} today={TD}
+        usedColors={programs.map((pg) => pg.color).filter(Boolean)}
         onCreate={createProgram} onClose={() => setShowProgram(false)} />}
       {showScript && <AddScriptModal cats={scriptCats} onAdd={addScript} onClose={() => setShowScript(false)} />}
 

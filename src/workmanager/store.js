@@ -65,6 +65,9 @@ export const reportLabel = (t) => (t ? (t.name + (t.title ? " " + t.title : ""))
 export const STATUS = [["todo", "대기"], ["doing", "진행중"], ["review", "검토"], ["done", "완료"]];
 export const SESSION_STATUS = { plan: "예정", done: "완료", skip: "취소" };
 export const EDU_COLOR = "#10b981";   // 교육 회차 — 기존 앱의 초록과 통일
+// 교육 과정별 색 — 등록할 때 고른다. 색이 없는 예전 과정은 EDU_COLOR 로 보인다.
+export const EDU_COLORS = ["#10b981", "#0ea5e9", "#8b5cf6", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6", "#6366f1", "#84cc16", "#f97316"];
+export const progColor = (prog) => (prog && prog.color) || EDU_COLOR;
 
 // 저장된 유형 목록에 기본 유형이 빠져 있으면 끼워 넣는다.
 // (예전에 유형을 저장해 둔 사용자도 "계약업체"가 생기도록)
