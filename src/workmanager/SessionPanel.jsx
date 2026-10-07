@@ -5,6 +5,9 @@ import { SESSION_STATUS } from "./store";
 import { ruleLabel, sessionTitle } from "./recur";
 import NameInput from "./NameInput";
 
+// 링크 주소 정리 — http(s) 로 시작하지 않으면 https:// 를 붙인다 (javascript: 같은 주소도 막힌다)
+const toUrl = (v) => (/^https?:\/\//i.test(v) ? v : "https://" + v.replace(/^[a-z]+:\/*/i, ""));
+
 // 교육 회차 기록
 //  필수 — 다룬 스크립트 / 참석자 / 이해도 / 액션 아이템
 //  선택 — 반응·질문 / 자료 개선점 / 다음 회차 준비사항 / 장소·방식
@@ -13,6 +16,10 @@ export default function SessionPanel({
   onPatch, onPatchPrev, onAddPerson, onImproveToTask, onDelete,
 }) {
   const [q, setQ] = useState("");
+  // 활용 자료·결과물 입력칸
+  const [matKind, setMatKind] = useState("link");
+  const [matLabel, setMatLabel] = useState("");
+  const [matVal, setMatVal] = useState("");
   if (!session || !program) return null;
   const s = session;
   const p = (patch) => onPatch(s.id, patch);
@@ -34,6 +41,15 @@ export default function SessionPanel({
   const roster = [...new Set([...(program.members || []), ...Object.keys(s.attend || {})])];
   const attendCount = Object.values(s.attend || {}).filter(Boolean).length;
   const openPrev = prevSession ? (prevSession.actions || []).filter((a) => !a.d) : [];
+  const mats = s.materials || [];
+  const addMat = () => {
+    const v = matVal.trim();
+    if (!v) return;
+    const m = { id: Date.now().toString(36), kind: matKind, label: matLabel.trim() };
+    if (matKind === "link") m.url = toUrl(v); else m.text = v;
+    p({ materials: [...mats, m] });
+    setMatLabel(""); setMatVal("");
+  };
 
   return (
     <>
@@ -110,6 +126,46 @@ export default function SessionPanel({
                 </div>
               ))}
           </div>
+        </div>
+      </Section>
+
+      <Section title="활용 자료·결과물" optional count={mats.length ? `${mats.length}건` : ""}>
+        <div style={{ fontSize: 11, color: C.faint, marginBottom: 6, lineHeight: 1.55 }}>
+          자습 자료, 필기평가 시험지·결과, 발표 자료 등 스크립트 외 자료를 링크나 메모로 남깁니다.
+        </div>
+        {mats.map((m) => (
+          <div key={m.id} style={{ display: "flex", gap: 6, alignItems: "flex-start", background: C.soft, borderRadius: 8,
+            padding: "7px 9px", marginBottom: 5, fontSize: 12.5 }}>
+            <span style={badge(m.kind === "link" ? C.main : C.muted, C.white, { fontSize: 10, flexShrink: 0 })}>
+              {m.kind === "link" ? "링크" : "메모"}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {m.label && <div style={{ fontWeight: 700, color: C.title, marginBottom: 2 }}>{m.label}</div>}
+              {m.kind === "link"
+                ? <a href={m.url} target="_blank" rel="noreferrer"
+                    style={{ color: C.main, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.url}</a>
+                : <div style={{ color: C.text, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{m.text}</div>}
+            </div>
+            <button onClick={() => p({ materials: mats.filter((x) => x.id !== m.id) })} title="삭제"
+              style={{ border: "none", background: "none", color: "#c5cdd8", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>✕</button>
+          </div>
+        ))}
+        <div style={{ border: `1px dashed ${C.line}`, borderRadius: 8, padding: 8 }}>
+          <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+            {[["link", "링크"], ["note", "메모(내용)"]].map(([k, n]) => (
+              <button key={k} onClick={() => setMatKind(k)}
+                style={btn(matKind === k ? "primary" : "ghost", { padding: "4px 10px", fontSize: 11 })}>{n}</button>
+            ))}
+          </div>
+          <input value={matLabel} onChange={(e) => setMatLabel(e.target.value)}
+            placeholder="이름 (선택) 예: 필기평가 결과, 자습 자료" style={inputSm({ width: "100%", marginBottom: 5 })} />
+          {matKind === "link"
+            ? <input value={matVal} onChange={(e) => setMatVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) addMat(); }}
+                placeholder="구글 드라이브·PPT·시트 주소" style={inputSm({ width: "100%", marginBottom: 5 })} />
+            : <Textarea value={matVal} onChange={(e) => setMatVal(e.target.value)}
+                placeholder="내용을 적거나 붙여넣으세요 (예: 필기평가 평균 82점, 최고 95 / 최저 60)" />}
+          <button onClick={addMat} disabled={!matVal.trim()}
+            style={btn("primary", { padding: "5px 12px", fontSize: 11.5, marginTop: 5, opacity: matVal.trim() ? 1 : 0.5 })}>+ 추가</button>
         </div>
       </Section>
 

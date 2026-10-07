@@ -72,6 +72,6 @@ export function blankSession(id, pid, date, time, members, status) {
   return {
     id, pid, date, time: time || "", status: status || "plan",
     place: "", attend, scripts: [], score: 0,
-    reaction: "", actions: [], improve: "", next: "",
+    reaction: "", actions: [], improve: "", next: "", materials: [],
   };
 }

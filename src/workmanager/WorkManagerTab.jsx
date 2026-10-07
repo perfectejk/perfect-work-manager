@@ -691,7 +691,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
-              <thead><tr>{["회차", "날짜", "상태", "다룬 스크립트", "참석", "이해도", "과제", ""].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+              <thead><tr>{["회차", "날짜", "상태", "스크립트·자료", "참석", "이해도", "과제", ""].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>
                 {list.map((sx) => {
                   const sc = (sx.scripts || []).map((sid) => scripts.find((y) => y.id === sid)).filter(Boolean);
@@ -710,7 +710,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                       <td style={td}>
                         {sc.slice(0, 2).map((y) => <span key={y.id} style={{ ...badge(C.main, C.mainBg), marginRight: 4 }}>{y.name}</span>)}
                         {sc.length > 2 && <span style={{ fontSize: 11, color: C.faint }}>외 {sc.length - 2}</span>}
-                        {!sc.length && sx.status === "done" && <span style={{ fontSize: 11, color: C.amber, fontWeight: 600 }}>미기록</span>}
+                        {(sx.materials || []).length > 0 && <span style={{ fontSize: 11, color: C.muted }}>{sc.length ? " · " : ""}자료 {sx.materials.length}건</span>}
+                        {!sc.length && !(sx.materials || []).length && sx.status === "done" && <span style={{ fontSize: 11, color: C.amber, fontWeight: 600 }}>미기록</span>}
                       </td>
                       <td style={{ ...td, color: C.faint }}>
                         {sx.status === "done" ? Object.values(sx.attend || {}).filter(Boolean).length + "/" + (prog.members || []).length : "—"}</td>
