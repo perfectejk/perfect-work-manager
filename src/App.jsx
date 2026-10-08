@@ -2876,6 +2876,8 @@ if(!no.includes("dash")){no.unshift("dash");await st.set("config:navOrder",no);}
 if(!no.includes("work")){const wi=no.indexOf("contracts");if(wi>=0)no.splice(wi+1,0,"work");else no.push("work");await st.set("config:navOrder",no);}
 // 업무보고·매출랭킹 메뉴 제거 — 저장된 순서에 남아 있으면 걷어냄
 if(no.includes("report")||no.includes("ranking")){const cleaned=no.filter(x=>x!=="report"&&x!=="ranking");no.length=0;no.push(...cleaned);await st.set("config:navOrder",no);}
+// 목록·캘린더 탭 제거 — 메뉴 순서 설정 화면에 "list"/"calendar" 가 뜨지 않게 불러온 값에서만 뺀다 (저장값은 그대로)
+if(no.includes("list")||no.includes("calendar")){const kept=no.filter(x=>x!=="list"&&x!=="calendar");no.length=0;no.push(...kept);}
 if(!no.includes("revenue")){const idx=no.indexOf("calendar");const newArr=[...no];if(idx>=0)newArr.splice(idx+1,0,"revenue");else newArr.push("revenue");await st.set("config:navOrder",newArr);setNavOrder(newArr);}else setNavOrder(no);}const ts=await st.get("wt:ts:fixed")||[];setTimeslots(ts);if(ts.length>0){setSelTs(ts[ts.length-1]);setMyTs(ts[ts.length-1]);}};
   const addTimeslot=async()=>{const ts=newTs.trim();if(!ts)return;const list=await st.get("wt:ts:fixed")||[];if(!list.includes(ts)){list.push(ts);await st.set("wt:ts:fixed",list);setTimeslots(list);}setSelTs(ts);setMyTs(ts);setNewTs("");};
   const removeTimeslot=async ts=>{const list=(await st.get("wt:ts:fixed")||[]).filter(t=>t!==ts);await st.set("wt:ts:fixed",list);setTimeslots(list);if(selTs===ts)setSelTs(list[list.length-1]||"");if(myTs===ts)setMyTs(list[list.length-1]||"");};
