@@ -23,7 +23,7 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
   return (
     <>
       <SpTitle value={program.name} onChange={(v) => p({ name: v })} />
-      <SpSub>교육 과정 · {ruleLabel(program.rule, program.start)} {program.time}</SpSub>
+      <SpSub>교육 과정 · {ruleLabel(program.rule, program.start, program.days)} {program.time}</SpSub>
 
       <Props>
         <PropLabel>대상</PropLabel>

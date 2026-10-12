@@ -56,7 +56,7 @@ export default function SessionPanel({
       {/* 제목 — 비워두면 "과정명 - n회차"로 보인다 */}
       <SpTitle value={s.title || ""} onChange={(v) => p({ title: v })}
         placeholder={sessionTitle(null, program, round)} />
-      <SpSub>{round}회차 · 대상: {program.target || "—"} · {ruleLabel(program.rule, program.start)}</SpSub>
+      <SpSub>{round}회차 · 대상: {program.target || "—"} · {ruleLabel(program.rule, program.start, program.days)}</SpSub>
 
       <Props>
         <PropLabel>날짜</PropLabel>

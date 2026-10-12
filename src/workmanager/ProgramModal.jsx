@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
-import { C, input, btn, modalBg, modalCard, fmtDate, addDays, YMD } from "../shared/ui";
-import { RULES, genDates, ruleLabel, sessionTitle } from "./recur";
+import { C, input, btn, modalBg, modalCard, fmtDate, addDays, YMD, WD } from "../shared/ui";
+import { RULES, genDates, ruleLabel, sessionTitle, isWeekly, weekDays } from "./recur";
 import NameInput from "./NameInput";
 import { EDU_COLORS } from "./store";
 
@@ -32,15 +32,24 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
   const [once, setOnce] = useState(false);   // 1회 교육 (오리엔테이션 등)
   const [rule, setRule] = useState("w2");
   const [count, setCount] = useState(6);
+  const [days, setDays] = useState(null);  // 고른 요일 (null이면 첫 교육일의 요일)
   const [off, setOff] = useState({});      // 체크 해제한 날짜
   const [titles, setTitles] = useState({}); // 날짜별 회차 제목 (비워두면 "교육명 - n회차")
   const [busy, setBusy] = useState(false);
 
   const useRule = once ? "once" : rule;
+  const useDays = isWeekly(useRule) ? weekDays(days, start) : null;
   const dates = useMemo(
-    () => genDates(start, useRule, Math.max(1, Math.min(52, parseInt(count) || 1))),
-    [start, useRule, count]
+    () => genDates(start, useRule, Math.max(1, Math.min(52, parseInt(count) || 1)), useDays),
+    [start, useRule, count, useDays && useDays.join()]
   );
+  // 요일 켜고 끄기 — 마지막 하나는 끌 수 없다
+  const toggleDay = (x) => {
+    const cur = weekDays(days, start);
+    const next = cur.includes(x) ? cur.filter((y) => y !== x) : [...cur, x];
+    if (!next.length) return;
+    setDays(next); setOff({});
+  };
   const picked = dates.filter((d) => !off[d]);
 
   const submit = async () => {
@@ -48,7 +57,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
     if (!start) { alert("첫 교육일을 선택해주세요."); return; }
     if (picked.length === 0) { alert("교육일을 최소 1개는 남겨주세요."); return; }
     setBusy(true);
-    await onCreate({ name: name.trim(), target: target.trim(), members, color, rule: useRule, start, time, dates: picked,
+    await onCreate({ name: name.trim(), target: target.trim(), members, color, rule: useRule, ...(useDays ? { days: useDays } : {}), start, time, dates: picked,
       titles: picked.map((d) => (titles[d] || "").trim()) });
     setBusy(false);
     onClose();
@@ -124,8 +133,23 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
             </div>
           </div>}
 
+          {!once && isWeekly(rule) && <div style={{ marginBottom: 12 }}>
+            <label style={label}>요일 <span style={{ fontWeight: 600, color: C.faint }}>(여러 개 고를 수 있어요)</span></label>
+            <div style={{ display: "flex", gap: 5 }}>
+              {[1, 2, 3, 4, 5, 6, 0].map((x) => {
+                const on = useDays.includes(x);
+                return (
+                  <button key={x} type="button" onClick={() => toggleDay(x)}
+                    style={{ width: 36, height: 32, borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700,
+                      border: `1.5px solid ${on ? C.main : C.line}`, background: on ? C.main : C.white,
+                      color: on ? "#fff" : x === 0 ? "#e5484d" : x === 6 ? "#0071CE" : C.text }}>{WD[x]}</button>
+                );
+              })}
+            </div>
+          </div>}
+
           <label style={label}>
-            {once ? "교육 제목" : "생성될 교육일"} {start && !once && <span style={{ color: C.main }}>({ruleLabel(rule, start)})</span>}
+            {once ? "교육 제목" : "생성될 교육일"} {start && !once && <span style={{ color: C.main }}>({ruleLabel(rule, start, useDays)})</span>}
             <span style={{ float: "right", fontWeight: 600, color: C.faint }}>{picked.length}회 선택됨</span>
           </label>
           <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 9, marginBottom: 14,

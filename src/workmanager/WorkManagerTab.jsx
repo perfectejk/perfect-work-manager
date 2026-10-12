@@ -10,7 +10,7 @@ import AddScriptModal from "./AddScriptModal";
 import ProgramModal from "./ProgramModal";
 import ProgramPanel from "./ProgramPanel";
 import SessionPanel from "./SessionPanel";
-import { blankSession, genDates, ruleLabel, sessionTitle } from "./recur";
+import { blankSession, genDates, ruleLabel, sessionTitle, weekDays } from "./recur";
 import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, progColor, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
 import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } from "./contractMatch";
 import { extractReportTargets } from "./reportTarget";
@@ -119,9 +119,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   // 회차는 과정별 문서에 저장한다
   const saveSessions = async (next, pid) => { setSessions(next); await saveSessionsOf(st, pid, next); };
 
-  const createProgram = async ({ name, target, members, color, rule, start, time, dates, titles = [] }) => {
+  const createProgram = async ({ name, target, members, color, rule, days, start, time, dates, titles = [] }) => {
     const id = uid();
-    const prog = { id, name, target, members, color, rule, start, time, createdAt: TD };
+    const prog = { id, name, target, members, color, rule, ...(days ? { days } : {}), start, time, createdAt: TD };
     const made = dates.map((d, i) => ({ ...blankSession(uid(), id, d, time, members), title: titles[i] || "" }));
     await savePrograms([...programs, prog]);
     await saveSessions([...sessions, ...made], id);
@@ -178,7 +178,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     if (!prog) return;
     const list = sessionsOfProgram(pid);
     const from = list.length ? list[list.length - 1].date : prog.start;
-    const next = genDates(from, prog.rule, 2)[1] || addDays(from, 7);
+    // 여러 요일이면 같은 주의 다음 요일이 먼저 온다
+    const next = genDates(from, prog.rule, 3, weekDays(prog.days, prog.start)).find((d) => d > from) || addDays(from, 7);
     const sess = blankSession(uid(), pid, next, prog.time, prog.members);
     await saveSessions([...sessions, sess], pid);
     setSide({ kind: "session", id: sess.id });
@@ -674,7 +675,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.faint }}>
             <span>대상: {prog.target || "—"} ({(prog.members || []).length}명)</span>
-            <span>{ruleLabel(prog.rule, prog.start)} {prog.time}</span>
+            <span>{ruleLabel(prog.rule, prog.start, prog.days)} {prog.time}</span>
             <span>진행 {doneCnt}/{active.length}회</span>
             <span>교육한 스크립트 {covered.size}개</span>
             <button onClick={() => addSession(prog.id)}
