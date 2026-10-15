@@ -1465,23 +1465,27 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
             </div>
           )}
 
-          {/* 블로그 리뷰 진행률 — 아래 블로그 리뷰 계획에서 올려준 값 */}
-          {blogSum&&(
-            <div style={{flex:"1 1 260px",background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px"}}>
+          {/* 블로그 리뷰 배분 — 트래픽처럼 계약 제공내역(블플) 총량과 대조한다.
+              배분 = 리뷰나우 세팅 총 건수 합 + CMS 기록, 값은 아래 블로그 리뷰 계획에서 올려준다 */}
+          {blogSum&&(()=>{
+            const bt=parseInt(sel?.provide?.blogPlus)||0,bu=blogSum.plannedTotal,br=bt-bu,bo=bu>bt;
+            return(
+            <div style={{flex:"1 1 260px",background:"#fff",borderRadius:12,border:"1px solid "+(bo?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#8468D3",marginBottom:5}}>블로그 리뷰</div>
-              {blogSum.goal===0?(
-                <div style={{fontSize:12,color:"#92400e",fontWeight:600}}>총 목표 미설정 · 완료 {blogSum.done}건</div>
+              {bt===0?(
+                <div style={{fontSize:12,color:"#92400e",fontWeight:600}}>제공내역 총량 미설정 · 배분 {bu.toLocaleString()}건</div>
               ):(<>
-                <div style={{fontSize:12,color:"#374151",fontWeight:600}}>총 {blogSum.goal}건 중 <b style={{color:"#8468D3"}}>{blogSum.done}건</b> 완료</div>
-                <div style={{fontSize:12,marginTop:2,fontWeight:700,color:blogSum.done>=blogSum.goal?"#10b981":"#374151"}}>{blogSum.done>=blogSum.goal?"목표 달성":"남은 "+(blogSum.goal-blogSum.done)+"건"}</div>
-                <div style={{height:6,background:"#f0f1f3",borderRadius:99,marginTop:8,overflow:"hidden"}}><div style={{height:"100%",width:Math.min(100,Math.round(blogSum.done/blogSum.goal*100))+"%",background:blogSum.done>=blogSum.goal?"#10b981":"#8468D3",borderRadius:99}}/></div>
+                <div style={{fontSize:12,color:"#374151",fontWeight:600}}>총 {bt.toLocaleString()}건 중 <b style={{color:"#8468D3"}}>{bu.toLocaleString()}건</b> 배분</div>
+                <div style={{fontSize:12,marginTop:2,fontWeight:700,color:bo?"#ef4444":"#10b981"}}>{bo?"초과 "+Math.abs(br).toLocaleString()+"건":"잔여 "+br.toLocaleString()+"건"}</div>
+                <div style={{height:6,background:"#f0f1f3",borderRadius:99,marginTop:8,overflow:"hidden"}}><div style={{height:"100%",width:Math.min(100,Math.round(bu/bt*100))+"%",background:bo?"#ef4444":"#8468D3",borderRadius:99}}/></div>
               </>)}
               <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px solid #f7f8fa"}}>
-                <span style={{fontSize:11,color:"#8468D3",fontWeight:700}}>리뷰나우 {blogSum.runDone}건</span>
-                <span style={{fontSize:11,color:"#0891b2",fontWeight:700}}>CMS {blogSum.cmsDone}건</span>
+                <span style={{fontSize:11,color:"#8468D3",fontWeight:700}}>리뷰나우 {(blogSum.plannedTotal-blogSum.cmsDone).toLocaleString()}건</span>
+                <span style={{fontSize:11,color:"#0891b2",fontWeight:700}}>CMS {blogSum.cmsDone.toLocaleString()}건</span>
+                <span style={{fontSize:11,color:"#10b981",fontWeight:700}}>완료 {blogSum.done.toLocaleString()}건</span>
               </div>
-            </div>
-          )}
+            </div>);
+          })()}
 
           {summary.byType.filter(t=>!t.pk).map(t=>(
             <div key={t.k} style={{flex:"0 1 150px",background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px"}}>
@@ -1494,6 +1498,11 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
         {summary.over&&(
           <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"11px 16px",marginBottom:12,fontSize:12,color:"#b91c1c",fontWeight:600}}>
             총량 초과 — 리워드트래픽 {Math.abs(summary.remain).toLocaleString()}타 만큼 계약 제공내역보다 많이 배분되었습니다.
+          </div>
+        )}
+        {blogSum&&(parseInt(sel?.provide?.blogPlus)||0)>0&&blogSum.plannedTotal>(parseInt(sel?.provide?.blogPlus)||0)&&(
+          <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"11px 16px",marginBottom:12,fontSize:12,color:"#b91c1c",fontWeight:600}}>
+            총량 초과 — 블로그 리뷰 {(blogSum.plannedTotal-(parseInt(sel?.provide?.blogPlus)||0)).toLocaleString()}건 만큼 계약 제공내역보다 많이 배분되었습니다.
           </div>
         )}
 
