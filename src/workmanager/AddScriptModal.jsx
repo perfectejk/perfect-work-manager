@@ -2,9 +2,9 @@ import React, { useState } from "react";
 import { C, input, btn, modalBg, modalCard } from "../shared/ui";
 
 // 스크립트 추가 — 분류는 기존 것을 고르거나 새 이름을 적으면 새로 생긴다.
-export default function AddScriptModal({ cats, onAdd, onClose }) {
+export default function AddScriptModal({ cats, initialCat, onAdd, onClose }) {
   const [name, setName] = useState("");
-  const [cat, setCat] = useState(cats[0] || "");
+  const [cat, setCat] = useState(initialCat || cats[0] || "");
 
   const submit = async () => {
     if (!name.trim()) { alert("스크립트 이름을 입력해주세요."); return; }

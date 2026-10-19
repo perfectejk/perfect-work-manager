@@ -35,6 +35,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [types, setTypes] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [scripts, setScripts] = useState([]);
+  const [catList, setCatList] = useState([]);       // 직접 추가한 스크립트 분류
+  const [catDraft, setCatDraft] = useState(null);   // 분류 추가 입력칸 (null이면 숨김)
   const [programs, setPrograms] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [people, setPeople] = useState([]);
@@ -52,7 +54,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const pickEduSort = (v) => { setEduSort(v); try { localStorage.setItem("wm:eduSort", v); } catch { /* 저장 못 해도 동작엔 지장 없음 */ } };
   const pickEduShow = (v) => { setEduShow(v); try { localStorage.setItem("wm:eduShow", v); } catch { /* 저장 못 해도 동작엔 지장 없음 */ } };   // 캘린더 필터 — all 전체 / edu 교육 과정만 / task 작업만
   const [showTypes, setShowTypes] = useState(false);
-  const [showScript, setShowScript] = useState(false);
+  const [showScript, setShowScript] = useState(false);   // false 또는 {cat} (분류를 미리 채워 열기)
   const [showProgram, setShowProgram] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [side, setSide] = useState(null);           // {kind:"task", id}
@@ -63,7 +65,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     (async () => {
       const d = await loadAll(st);
       if (!alive) return;
-      setTypes(d.types); setTasks(d.tasks); setScripts(d.scripts);
+      setTypes(d.types); setTasks(d.tasks); setScripts(d.scripts); setCatList(d.scriptCats);
       setPrograms(d.programs); setSessions(d.sessions); setPeople(d.people);
       setSubTypes(d.subTypes); setReportTargets(d.reportTargets);
       setLoading(false);
@@ -94,7 +96,22 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const saveScripts = async (next) => { setScripts(next); await st.set(K.scripts, next); };
 
   // ---- 스크립트 ----
-  const scriptCats = useMemo(() => [...new Set(scripts.map((s) => s.cat).filter(Boolean))], [scripts]);
+  // 분류 = 직접 추가한 분류 + 스크립트에 붙어 있는 분류
+  const scriptCats = useMemo(() => [...new Set([...catList, ...scripts.map((s) => s.cat).filter(Boolean)])], [catList, scripts]);
+  const saveCatList = async (next) => { setCatList(next); await st.set(K.scriptCats, next); };
+  const addCat = async () => {
+    const n = String(catDraft || "").trim();
+    if (!n) return;
+    if (scriptCats.includes(n)) { alert("이미 있는 분류입니다."); return; }
+    await saveCatList([...catList, n]);
+    setCatDraft(null);
+  };
+  // 스크립트가 남아 있는 분류는 지울 수 없다 (목록에서만 빠지고 다시 생기므로)
+  const delCat = async (n) => {
+    if (scripts.some((s) => s.cat === n)) return;
+    if (!window.confirm(`분류 "${n}"을 삭제할까요?`)) return;
+    await saveCatList(catList.filter((x) => x !== n));
+  };
   const addScript = async (name, cat) => {
     const n = String(name || "").trim();
     if (!n) return;
@@ -474,7 +491,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const libView = () => {
     const q = libQuery.trim();
     const found = scripts.filter((x) => !q || (x.name || "").includes(q) || (x.cat || "").includes(q));
-    const cats = [...new Set(found.map((x) => x.cat || "미분류"))];
+    // 검색 중이 아니면 스크립트가 없는 빈 분류도 보여준다
+    const cats = [...new Set([...(q ? [] : scriptCats), ...found.map((x) => x.cat || "미분류")])];
     return (
       <>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
@@ -482,9 +500,21 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
             placeholder="스크립트 검색 (이름·분류, 예: 반론)"
             style={inputSm({ width: 260, maxWidth: "100%", fontSize: 12.5, padding: "7px 10px" })} />
           <span style={{ fontSize: 11, color: C.faint }}>총 {scripts.length}개 · 교육 회차 기록이 자동 집계됩니다</span>
-          <button onClick={() => setShowScript(true)} style={btn("primary", { padding: "6px 12px", fontSize: 11.5 })}>+ 스크립트 추가</button>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => setCatDraft(catDraft == null ? "" : null)} style={btn("ghost", { padding: "6px 12px", fontSize: 11.5 })}>+ 분류 추가</button>
+            <button onClick={() => setShowScript(true)} style={btn("primary", { padding: "6px 12px", fontSize: 11.5 })}>+ 스크립트 추가</button>
+          </div>
         </div>
-        {found.length === 0
+        {catDraft != null && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 12, padding: "9px 10px", border: `1px solid ${C.line}`, borderRadius: 9, background: C.soft }}>
+            <input value={catDraft} autoFocus onChange={(e) => setCatDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addCat(); if (e.key === "Escape") setCatDraft(null); }}
+              placeholder="새 분류 이름 (예: 반론 대응)" style={inputSm({ width: 240, maxWidth: "100%", fontSize: 12.5, padding: "6px 9px" })} />
+            <button onClick={addCat} style={btn("primary", { padding: "6px 12px", fontSize: 11.5 })}>추가</button>
+            <button onClick={() => setCatDraft(null)} style={btn("ghost", { padding: "6px 12px", fontSize: 11.5 })}>취소</button>
+          </div>
+        )}
+        {cats.length === 0
           ? <div style={{ textAlign: "center", padding: "40px 0", color: C.faint, fontSize: 13 }}>
               {scripts.length === 0 ? "등록된 스크립트가 없습니다. [+ 스크립트 추가]로 시작하세요." : "검색 결과가 없습니다."}
             </div>
@@ -493,6 +523,13 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
               <div style={{ fontSize: 12.5, fontWeight: 700, color: C.title, marginBottom: 6, display: "flex", gap: 6, alignItems: "center" }}>
                 {cat}<span style={{ ...badge(C.muted, C.soft), fontSize: 10.5 }}>{found.filter((x) => (x.cat || "미분류") === cat).length}</span>
               </div>
+              {!found.some((x) => (x.cat || "미분류") === cat) ? (
+                <div style={{ border: `1px dashed ${C.line}`, borderRadius: 9, padding: "14px 12px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: C.faint, flex: 1 }}>아직 스크립트가 없습니다.</span>
+                  <button onClick={() => setShowScript({ cat })} style={btn("ghost", { padding: "5px 10px", fontSize: 11 })}>+ 이 분류에 스크립트 추가</button>
+                  <button onClick={() => delCat(cat)} style={btn("ghost", { padding: "5px 10px", fontSize: 11, color: C.red })}>삭제</button>
+                </div>
+              ) : (
               <div style={{ overflowX: "auto", border: `1px solid ${C.line}`, borderRadius: 9 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 540 }}>
                   <thead><tr>{["스크립트", "교육 횟수", "마지막 교육", "이수 인원", "미이수"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
@@ -516,6 +553,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
           ))}
       </>
@@ -947,7 +985,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       {showProgram && <ProgramModal people={people} onAddPerson={addPerson} today={TD}
         usedColors={programs.map((pg) => pg.color).filter(Boolean)}
         onCreate={createProgram} onClose={() => setShowProgram(false)} />}
-      {showScript && <AddScriptModal cats={scriptCats} onAdd={addScript} onClose={() => setShowScript(false)} />}
+      {showScript && <AddScriptModal cats={scriptCats} initialCat={showScript.cat} onAdd={addScript} onClose={() => setShowScript(false)} />}
 
       {showImport && <ImportModal st={st} contracts={contracts} subTypes={subTypes}
         existing={tasks} today={TD} onDone={saveTasks} onClose={() => setShowImport(false)} />}

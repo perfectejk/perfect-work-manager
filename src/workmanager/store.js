@@ -10,11 +10,13 @@
 //                         (예전에 순위 기록을 한 문서에 몰아넣었다가 Firestore 1MB
 //                          한도에 걸린 적이 있어, 처음부터 쪼개 둔다)
 //   wm:people             사람 이름 목록
+//   wm:scriptcats         스크립트 분류 목록 (스크립트가 없어도 남는 빈 분류용)
 
 export const K = {
   types: "wm:types",
   tasks: "wm:tasks",
   scripts: "wm:scripts",
+  scriptCats: "wm:scriptcats",
   programs: "wm:programs",
   people: "wm:people",
   subTypes: "wm:subtypes",
@@ -84,9 +86,9 @@ export function mergeDefaults(saved, defaults) {
 
 // 한 번에 모든 업무관리 데이터를 읽어온다.
 export async function loadAll(st) {
-  const [types, tasks, scripts, programs, people, subTypes, reportTargets] = await Promise.all([
+  const [types, tasks, scripts, programs, people, subTypes, reportTargets, scriptCats] = await Promise.all([
     st.get(K.types), st.get(K.tasks), st.get(K.scripts), st.get(K.programs), st.get(K.people),
-    st.get(K.subTypes), st.get(K.reportTargets),
+    st.get(K.subTypes), st.get(K.reportTargets), st.get(K.scriptCats),
   ]);
   const progs = Array.isArray(programs) ? programs : [];
   const keys = await st.list(K.sessionsPrefix);
@@ -99,6 +101,7 @@ export async function loadAll(st) {
     reportTargets: mergeDefaults(reportTargets, DEFAULT_REPORT_TARGETS),
     tasks: Array.isArray(tasks) ? tasks : [],
     scripts: Array.isArray(scripts) ? scripts : [],
+    scriptCats: Array.isArray(scriptCats) ? scriptCats : [],
     programs: progs,
     people: Array.isArray(people) ? people : [],
     sessions,
