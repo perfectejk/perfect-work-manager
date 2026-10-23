@@ -15,6 +15,7 @@ import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, progColor,
 import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } from "./contractMatch";
 import { extractReportTargets } from "./reportTarget";
 import ImportModal from "./ImportModal";
+import RepeatModal from "./RepeatModal";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
 // 1단계 자료 제작 → 2단계 교육 과정 운영.
@@ -57,6 +58,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [showScript, setShowScript] = useState(false);   // false 또는 {cat} (분류를 미리 채워 열기)
   const [showProgram, setShowProgram] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [repeatTask, setRepeatTask] = useState(null);   // 반복 일정 만들기 창에 넘길 작업
   const [side, setSide] = useState(null);           // {kind:"task", id}
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(TD + "T00:00:00"); return { y: d.getFullYear(), m: d.getMonth() }; });
 
@@ -335,6 +337,29 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     await saveTasks(tasks.filter((x) => x.id !== t.id));
     setSide(null);
   };
+  // 반복 일정 — 지금 작업을 첫 번째로 두고 나머지 날짜에 복사본을 만든다.
+  // 같은 반복끼리는 repeat.id 로 묶는다 (첫 작업의 id).
+  const createRepeats = async (base, rule, dates) => {
+    const rid = base.id;
+    const repeat = { id: rid, ...rule };
+    const copies = dates.map((d) => ({
+      ...base, id: uid(), date: d, status: "todo", createdAt: TD, repeat,
+      subs: (base.subs || []).map((x) => ({ ...x, d: false })),
+      links: [...(base.links || [])],
+    }));
+    await saveTasks([...tasks.map((t) => (t.id === base.id ? { ...t, repeat } : t)), ...copies]);
+  };
+  // 같은 반복 중 이 날짜 이후의 미완료 일정을 한꺼번에 지운다 (완료한 기록은 남긴다)
+  const deleteRepeatRest = async (t) => {
+    const rid = t.repeat && t.repeat.id;
+    if (!rid) return;
+    const rest = tasks.filter((x) => x.repeat && x.repeat.id === rid && x.date >= t.date && x.status !== "done");
+    if (!window.confirm(`"${t.title}" 반복 일정 중 ${fmtDate(t.date)}부터의 미완료 일정 ${rest.length}건을 삭제할까요?
+완료한 일정은 남습니다. 되돌릴 수 없습니다.`)) return;
+    const ids = new Set(rest.map((x) => x.id));
+    await saveTasks(tasks.filter((x) => !ids.has(x.id)));
+    setSide(null);
+  };
   const cycleStatus = async (t) => patchTask(t.id, { status: t.status === "done" ? "todo" : "done" });
   // 목록·캘린더의 체크버튼 — 작업과 회차를 구분해 완료 표시를 뒤집는다
   const toggleItem = async (it) => {
@@ -353,7 +378,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       kind: "task", id: t.id, title: t.title, color: typeOf(t.type).c,
       date: t.date, time: t.time, done: t.status === "done",
       statusLabel: (STATUS.find((x) => x[0] === t.status) || STATUS[0])[1],
-      reportTo: t.reportTo || [],
+      reportTo: t.reportTo || [], repeatId: t.repeat ? t.repeat.id : "",
     }));
     const b = sessions.filter((sx) => sx.status !== "skip").map((sx) => ({
       kind: "session", id: sx.id, pid: sx.pid,
@@ -407,6 +432,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
         <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: it.done ? C.faint : C.title,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           textDecoration: it.done ? "line-through" : "none" }}>{it.title}</span>
+        {it.repeatId && <span title="반복 일정" style={{ fontSize: 11, color: C.faint }}>↻</span>}
         {it.reportTo && it.reportTo.length > 0 && (
           <span style={{ ...badge("#b45309", "#fffbeb"), fontSize: 10 }}>
             보고 · {it.reportTo.map(reportName).filter(Boolean).join(", ")}
@@ -430,7 +456,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       else if (i.date <= weekEnd) g.week.push(i);
       else {
         // 예정 구간에서 교육은 과정별 다음 회차 하나만 보여준다
-        if (i.isEdu) { if (shown[i.pid]) return; shown[i.pid] = 1; }
+        // 반복 작업도 같은 반복끼리는 다음 한 건만 보여준다
+        const gk = i.isEdu ? "p" + i.pid : i.repeatId ? "r" + i.repeatId : "";
+        if (gk) { if (shown[gk]) return; shown[gk] = 1; }
         g.later.push(i);
       }
     });
@@ -446,7 +474,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     ) : null;
     const any = Object.values(g).some((x) => x.length);
     if (!any) return <div style={{ textAlign: "center", padding: "44px 0", color: C.faint, fontSize: 13 }}>작업이 없습니다. 위 입력창에 한 줄로 적어보세요.</div>;
-    return <>{sec("late", "지연됨", true)}{sec("today", "오늘")}{sec("week", "이번 주")}{sec("later", "예정 (교육은 과정별 다음 회차만)")}{sec("done", "최근 완료")}</>;
+    return <>{sec("late", "지연됨", true)}{sec("today", "오늘")}{sec("week", "이번 주")}{sec("later", "예정 (교육·반복 일정은 다음 한 건만)")}{sec("done", "최근 완료")}</>;
   };
 
   // ---- 자료 제작 보드 (드래그로 단계 이동) ----
@@ -957,8 +985,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
 
       <SidePanel open={!!selTask} kind="작업 상세" onClose={() => setSide(null)}>
         <TaskPanel task={selTask} types={types} subTypes={subTypes} contracts={contracts}
-          reportTargets={reportTargets}
-          onPatch={patchTask} onDelete={deleteTask} onOpenContract={onOpenContract} />
+          reportTargets={reportTargets} series={selTask && selTask.repeat ? tasks.filter((x) => x.repeat && x.repeat.id === selTask.repeat.id) : []}
+          onPatch={patchTask} onDelete={deleteTask} onOpenContract={onOpenContract}
+          onRepeat={setRepeatTask} onDeleteRepeatRest={deleteRepeatRest} />
       </SidePanel>
 
       <SidePanel open={!!selScript} kind="스크립트 상세" onClose={() => setSide(null)}>
@@ -985,6 +1014,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       {showProgram && <ProgramModal people={people} onAddPerson={addPerson} today={TD}
         usedColors={programs.map((pg) => pg.color).filter(Boolean)}
         onCreate={createProgram} onClose={() => setShowProgram(false)} />}
+      {repeatTask && <RepeatModal task={repeatTask} onCreate={createRepeats} onClose={() => setRepeatTask(null)} />}
       {showScript && <AddScriptModal cats={scriptCats} initialCat={showScript.cat} onAdd={addScript} onClose={() => setShowScript(false)} />}
 
       {showImport && <ImportModal st={st} contracts={contracts} subTypes={subTypes}

@@ -1,13 +1,14 @@
 import React from "react";
-import { C, FONT, input, btn } from "../shared/ui";
+import { C, FONT, input, btn, fmtDate } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section, CheckList, Textarea } from "../shared/SidePanel";
 import { STATUS, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
+import { ruleLabel } from "./recur";
 
 // 작업 상세 — 유형 / 상태 / 날짜 / 시간 / 작업 설명 / 하위 작업 / 관련 링크
 // 유형이 "계약업체"면 연결된 계약과 세부 분류가 더 나온다.
 // 계약은 고유 식별값(contractId)으로 저장하고 화면에는 상호명을 보여준다.
 // 입력하는 즉시 onPatch 로 저장한다.
-export default function TaskPanel({ task, types, subTypes = [], contracts = [], reportTargets = [], onPatch, onDelete, onOpenContract }) {
+export default function TaskPanel({ task, types, subTypes = [], contracts = [], reportTargets = [], series = [], onPatch, onDelete, onOpenContract, onRepeat, onDeleteRepeatRest }) {
   const [link, setLink] = React.useState("");
   if (!task) return null;
   const p = (patch) => onPatch(task.id, patch);
@@ -102,6 +103,35 @@ export default function TaskPanel({ task, types, subTypes = [], contracts = [], 
           연결된 업체가 없습니다. 위에서 골라주세요.
         </div>
       )}
+
+      <Section title="반복" optional count={task.repeat ? series.length + "건" : null}>
+        {task.repeat ? (() => {
+          const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date));
+          const n = sorted.findIndex((x) => x.id === task.id) + 1;
+          return (
+            <>
+              <div style={{ fontSize: 12, color: C.text, marginBottom: 6, lineHeight: 1.6 }}>
+                <b style={{ color: C.main }}>↻ {ruleLabel(task.repeat.rule, task.repeat.start, task.repeat.days)}</b>
+                {" "}· {sorted.length}건 중 {n}번째
+                {sorted.length > 0 && <span style={{ color: C.faint }}> ({fmtDate(sorted[0].date)} ~ {fmtDate(sorted[sorted.length - 1].date)})</span>}
+              </div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 8, lineHeight: 1.55 }}>
+                여기서 바꾸는 내용은 이 날짜 일정에만 적용됩니다.
+              </div>
+              {onDeleteRepeatRest && <button onClick={() => onDeleteRepeatRest(task)}
+                style={btn("ghost", { padding: "5px 10px", fontSize: 11, color: C.red })}>이 날짜부터 남은 반복 일정 삭제</button>}
+            </>
+          );
+        })() : (
+          <>
+            <div style={{ fontSize: 11, color: C.faint, marginBottom: 8, lineHeight: 1.55 }}>
+              매주·격주·매월처럼 같은 일정을 여러 날짜에 한 번에 만듭니다. 이 일정이 첫 번째가 됩니다.
+            </div>
+            {onRepeat && <button onClick={() => { if (!task.date) { alert("날짜를 먼저 정해주세요."); return; } onRepeat(task); }}
+              style={btn("ghost", { padding: "5px 12px", fontSize: 11.5 })}>↻ 반복 일정 만들기</button>}
+          </>
+        )}
+      </Section>
 
       <Section title="보고 대상" optional count={reps.length ? reps.length + "명" : null}>
         <div style={{ fontSize: 11, color: C.faint, marginBottom: 6, lineHeight: 1.55 }}>
