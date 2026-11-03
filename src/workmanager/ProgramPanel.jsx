@@ -2,13 +2,59 @@ import React from "react";
 import { C, input, btn, badge, fmtDate } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section } from "../shared/SidePanel";
 import { SESSION_STATUS } from "./store";
-import { ruleLabel, sessionTitle } from "./recur";
+import { sessionTitle, isSetProg, progRuleLabel } from "./recur";
 import NameInput from "./NameInput";
 import { ColorSwatches } from "./ProgramModal";
+import { ScriptSelect } from "./SetFields";
 import { progColor } from "./store";
 
+// 세트 교육의 세트 목록 — 세트별 멘트 2개 고르기, ↑↓ 로 세트 순서(멘트) 바꾸기
+function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet }) {
+  const nums = [...new Set(sessions.map((s) => s.set).filter(Boolean))].sort((a, b) => a - b);
+  const sm = input({ padding: "5px 7px", fontSize: 12 });
+  return (
+    <Section title="세트" count={`${nums.length}세트`}>
+      <div style={{ fontSize: 11, color: C.faint, marginBottom: 6, lineHeight: 1.55 }}>
+        멘트를 바꾸면 그 세트의 <b>아직 안 끝난 회차</b>에 모두 반영돼요. ↑↓ 는 날짜는 두고 멘트만 맞바꿉니다 (끝난 회차가 있는 세트는 제외).
+      </div>
+      {nums.map((k, idx) => {
+        const list = sessions.filter((s) => s.set === k);
+        const doneN = list.filter((s) => s.status === "done").length;
+        const allDone = doneN === list.length;
+        const base = list.find((s) => s.status !== "done") || list[0];
+        const m = base.scripts || [];
+        const change = (slot, id) => onSetMents(program.id, k, slot === 0 ? [id, m[1]] : [m[0], id]);
+        return (
+          <div key={k} style={{ background: C.soft, borderRadius: 8, padding: "7px 8px", marginBottom: 5 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+              <b style={{ fontSize: 12.5, color: C.title }}>{k}세트</b>
+              <span style={{ fontSize: 11, color: C.faint }}>{fmtDate(list[0].date)} 주 · 완료 {doneN}/{list.length}</span>
+              <span style={{ marginLeft: "auto", display: "flex", gap: 3 }}>
+                <button type="button" onClick={() => onSwapSets(program.id, k, nums[idx - 1])} disabled={idx === 0} title="앞 세트와 바꾸기"
+                  style={btn("ghost", { padding: "2px 8px", fontSize: 11 })}>↑</button>
+                <button type="button" onClick={() => onSwapSets(program.id, k, nums[idx + 1])} disabled={idx === nums.length - 1} title="뒤 세트와 바꾸기"
+                  style={btn("ghost", { padding: "2px 8px", fontSize: 11 })}>↓</button>
+              </span>
+            </div>
+            {allDone
+              ? <div style={{ fontSize: 11.5, color: C.muted }}>
+                  {m.map((id) => (scripts.find((x) => x.id === id) || {}).name).filter(Boolean).join(" · ") || "멘트 없음"} (완료)
+                </div>
+              : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  <ScriptSelect scripts={scripts} value={m[0]} onChange={(id) => change(0, id)} style={sm} />
+                  <ScriptSelect scripts={scripts} value={m[1]} onChange={(id) => change(1, id)} style={sm} />
+                </div>}
+          </div>
+        );
+      })}
+      <button onClick={() => onAddSet(program.id)} style={btn("ghost", { padding: "5px 12px", fontSize: 11.5, marginTop: 2 })}>+ 세트 추가</button>
+    </Section>
+  );
+}
+
 // 교육 과정 상세 — 이름 / 대상 / 대상자 명단 편집 / 회차 목록
-export default function ProgramPanel({ program, sessions, people, roundOf, onPatch, onAddPerson, onOpenSession, onDelete, onDeleteSession }) {
+export default function ProgramPanel({ program, sessions, people, roundOf, onPatch, onAddPerson, onOpenSession, onDelete, onDeleteSession,
+  scripts = [], onSetMents, onSwapSets, onAddSet }) {
   if (!program) return null;
   const p = (patch) => onPatch(program.id, patch);
   const sel = input({ padding: "5px 7px", fontSize: 12, background: C.soft, border: "1px solid transparent" });
@@ -23,7 +69,7 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
   return (
     <>
       <SpTitle value={program.name} onChange={(v) => p({ name: v })} />
-      <SpSub>교육 과정 · {ruleLabel(program.rule, program.start, program.days)} {program.time}</SpSub>
+      <SpSub>교육 과정 · {progRuleLabel(program)}{isSetProg(program) ? "" : " " + program.time}</SpSub>
 
       <Props>
         <PropLabel>대상</PropLabel>
@@ -41,6 +87,9 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
         <NameInput value={program.members || []} people={people}
           onChange={(v) => p({ members: v })} onAddPerson={onAddPerson} placeholder="이름 입력 (예: 김)" />
       </Section>
+
+      {isSetProg(program) && <SetList program={program} sessions={sessions} scripts={scripts}
+        onSetMents={onSetMents} onSwapSets={onSwapSets} onAddSet={onAddSet} />}
 
       <Section title="회차" count={`${done}/${active.length}회 완료`}>
         <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>회차를 누르면 수정, ✕ 를 누르면 삭제합니다.</div>

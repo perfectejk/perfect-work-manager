@@ -87,9 +87,61 @@ export function sessionTitle(sess, prog, round) {
   const t = ((sess && sess.title) || "").trim();
   if (t) return t;
   const name = (prog && prog.name) || "(삭제된 과정)";
+  // 세트 교육은 "과정명 - 2세트 필기 인출"
+  if (isSetProg(prog) && sess && sess.set) return `${name} - ${setLabel(sess, prog).replace(" · ", " ")}`;
   // 1회 교육은 회차 번호 없이 교육명만 쓴다
   if (prog && prog.rule === "once" && round === 1) return name;
   return `${name} - ${round}회차`;
+}
+
+// ===== 세트 교육 (영업력 강화처럼 "멘트 2개 = 한 세트, 정해진 요일 단계" 로 도는 과정) =====
+// 과정에는 kind: "set", rule: "set", steps: [{ n: 단계명, wd: 요일(0=일), time }] 가 붙는다.
+// 회차에는 set: 세트 번호(1부터), step: 단계 순서(0부터) 가 붙는다.
+export const SET_STEPS = [
+  { n: "대면", wd: 1, time: "11:00" },
+  { n: "자습", wd: 1, time: "18:30" },
+  { n: "필기 인출", wd: 2, time: "11:00" },
+  { n: "ARS 녹취 판정", wd: 3, time: "11:00" },
+];
+export const isSetProg = (prog) => !!prog && prog.kind === "set";
+// 그 주 안에서 요일 순서 (월=0 … 일=6)
+const wdOffset = (wd) => (wd + 6) % 7;
+
+// 세트 k(1부터)의 단계별 날짜 — 첫 세트 주의 월요일에서 (k-1)주 뒤.
+// 단계는 순서대로 진행되므로, 각 단계는 앞 단계 날짜 이후의 그 요일로 잡는다
+// (예: 목 대면 → 금 필기 → 월 ARS 면 ARS 는 다음 주 월요일).
+export function setDates(startStr, k, steps) {
+  if (!startStr) return [];
+  const mon = mondayOf(parseYMD(startStr));
+  let prev = null;
+  return (steps || []).map((st, i) => {
+    const d = new Date(mon);
+    if (i === 0) d.setDate(mon.getDate() + 7 * (k - 1) + wdOffset(st.wd));
+    else { d.setTime(prev.getTime()); d.setDate(d.getDate() + ((st.wd - prev.getDay() + 7) % 7)); }
+    prev = d;
+    return YMD(d);
+  });
+}
+// 날짜가 속한 주의 월요일 (YYYY-MM-DD)
+export const mondayStr = (s) => YMD(mondayOf(parseYMD(s)));
+
+// "세트 교육 · 월 대면·자습 / 화 필기 인출 / 수 ARS 녹취 판정"
+export function setRuleLabel(steps) {
+  // 단계 순서대로, 연달아 같은 요일인 단계는 하나로 묶는다
+  const byDay = [];
+  (steps || []).forEach((st) => {
+    const g = byDay[byDay.length - 1];
+    if (g && g.wd === st.wd) g.names.push(st.n); else byDay.push({ wd: st.wd, names: [st.n] });
+  });
+  return "세트 교육 · " + byDay.map((g) => WD[g.wd] + " " + g.names.join("·")).join(" / ");
+}
+// 과정 하나의 주기 설명 — 세트 교육이면 단계 요일, 아니면 기존 주기
+export const progRuleLabel = (prog) =>
+  !prog ? "" : isSetProg(prog) ? setRuleLabel(prog.steps) : ruleLabel(prog.rule, prog.start, prog.days);
+// 세트 교육 회차의 짧은 이름 — "2세트 · 필기 인출"
+export function setLabel(sess, prog) {
+  const st = (prog && prog.steps && prog.steps[sess.step]) || {};
+  return `${sess.set}세트 · ${st.n || "단계"}`;
 }
 
 // 빈 회차 한 건

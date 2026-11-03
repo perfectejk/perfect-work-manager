@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { C, FONT, input, inputSm, btn, badge, fmtDate } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section, CheckList, Textarea } from "../shared/SidePanel";
 import { SESSION_STATUS } from "./store";
-import { ruleLabel, sessionTitle } from "./recur";
+import { sessionTitle, isSetProg, setLabel, progRuleLabel } from "./recur";
 import NameInput from "./NameInput";
 
 // 링크 주소 정리 — http(s) 로 시작하지 않으면 https:// 를 붙인다 (javascript: 같은 주소도 막힌다)
@@ -56,7 +56,7 @@ export default function SessionPanel({
       {/* 제목 — 비워두면 "과정명 - n회차"로 보인다 */}
       <SpTitle value={s.title || ""} onChange={(v) => p({ title: v })}
         placeholder={sessionTitle(null, program, round)} />
-      <SpSub>{round}회차 · 대상: {program.target || "—"} · {ruleLabel(program.rule, program.start, program.days)}</SpSub>
+      <SpSub>{isSetProg(program) && s.set ? setLabel(s, program) : round + "회차"} · 대상: {program.target || "—"} · {progRuleLabel(program)}</SpSub>
 
       <Props>
         <PropLabel>날짜</PropLabel>

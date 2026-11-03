@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { C, input, btn, modalBg, modalCard, fmtDate, addDays, YMD, WD } from "../shared/ui";
-import { RULES, genDates, ruleLabel, sessionTitle, isWeekly, weekDays } from "./recur";
+import { RULES, genDates, ruleLabel, sessionTitle, isWeekly, weekDays, SET_STEPS, setDates, mondayStr } from "./recur";
 import NameInput from "./NameInput";
+import SetFields from "./SetFields";
 import { EDU_COLORS } from "./store";
 
 // 색 고르기 — 동그라미 색상 버튼 줄
@@ -20,7 +21,7 @@ export function ColorSwatches({ value, onChange }) {
 
 // 교육 과정 등록 — 주기를 정하면 회차 날짜가 자동으로 만들어지고,
 // 빼고 싶은 날짜는 체크를 해제해서 제외한다.
-export default function ProgramModal({ people, onAddPerson, onCreate, onClose, today, usedColors = [] }) {
+export default function ProgramModal({ people, onAddPerson, onCreate, onClose, today, usedColors = [], scripts = [] }) {
   const TD = today || YMD(new Date());
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
@@ -29,7 +30,12 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
   const [members, setMembers] = useState([]);
   const [start, setStart] = useState(addDays(TD, 7));
   const [time, setTime] = useState("10:00");
-  const [once, setOnce] = useState(false);   // 1회 교육 (오리엔테이션 등)
+  // 교육 종류 — repeat 반복 / once 1회 (오리엔테이션 등) / set 세트 교육 (멘트 2개씩, 단계별 요일)
+  const [mode, setMode] = useState("repeat");
+  const once = mode === "once";
+  const isSet = mode === "set";
+  const [steps, setSteps] = useState(() => SET_STEPS.map((x) => ({ ...x })));
+  const [sets, setSets] = useState(() => Array.from({ length: 4 }, () => ["", ""]));   // 세트별 멘트 2개
   const [rule, setRule] = useState("w2");
   const [count, setCount] = useState(6);
   const [days, setDays] = useState(null);  // 고른 요일 (null이면 첫 교육일의 요일)
@@ -54,7 +60,22 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
 
   const submit = async () => {
     if (!name.trim()) { alert("교육명을 입력해주세요."); return; }
-    if (!start) { alert("첫 교육일을 선택해주세요."); return; }
+    if (!start) { alert(isSet ? "첫 세트 시작 주를 선택해주세요." : "첫 교육일을 선택해주세요."); return; }
+    if (isSet) {
+      if (steps.some((st) => !st.n.trim())) { alert("단계 이름을 비워둘 수 없어요."); return; }
+      const cleanSteps = steps.map((st) => ({ ...st, n: st.n.trim() }));
+      const items = [];
+      sets.forEach((m, k) => {
+        const ds = setDates(start, k + 1, cleanSteps);
+        cleanSteps.forEach((st, i) => items.push({ date: ds[i], time: st.time, set: k + 1, step: i, scripts: m.filter(Boolean) }));
+      });
+      setBusy(true);
+      await onCreate({ kind: "set", name: name.trim(), target: target.trim(), members, color, steps: cleanSteps,
+        start: mondayStr(start), time: cleanSteps[0].time, items });
+      setBusy(false);
+      onClose();
+      return;
+    }
     if (picked.length === 0) { alert("교육일을 최소 1개는 남겨주세요."); return; }
     setBusy(true);
     await onCreate({ name: name.trim(), target: target.trim(), members, color, rule: useRule, ...(useDays ? { days: useDays } : {}), start, time, dates: picked,
@@ -78,11 +99,12 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
         <div style={{ flex: 1, overflowY: "auto", padding: "0 20px" }}>
           {/* 반복 교육 / 1회 교육 */}
           <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-            {[[false, "반복 교육", "정해진 주기로 여러 번"], [true, "1회 교육", "오리엔테이션처럼 한 번만"]].map(([v, t, d]) => (
-              <button key={t} type="button" onClick={() => { setOnce(v); setOff({}); }}
+            {[["repeat", "반복 교육", "정해진 주기로 여러 번"], ["once", "1회 교육", "오리엔테이션처럼 한 번만"],
+              ["set", "세트 교육", "멘트 2개씩, 단계별 요일 (영업력 강화)"]].map(([v, t, d]) => (
+              <button key={t} type="button" onClick={() => { setMode(v); setOff({}); }}
                 style={{ flex: 1, padding: "9px 10px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                  border: `1.5px solid ${once === v ? C.main : C.line}`, background: once === v ? C.mainBg : C.white }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: once === v ? C.main : C.text }}>{t}</div>
+                  border: `1.5px solid ${mode === v ? C.main : C.line}`, background: mode === v ? C.mainBg : C.white }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: mode === v ? C.main : C.text }}>{t}</div>
                 <div style={{ fontSize: 10.5, color: C.faint, marginTop: 2 }}>{d}</div>
               </button>
             ))}
@@ -108,6 +130,10 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
               placeholder="이름 입력 (예: 김팀장)" />
           </div>
 
+          {isSet ? (
+            <SetFields steps={steps} onSteps={setSteps} start={start} onStart={setStart}
+              sets={sets} onSets={setSets} scripts={scripts} />
+          ) : <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             <div>
               <label style={label}>{once ? "교육일" : "첫 교육일"}</label>
@@ -176,12 +202,13 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
                 );
               })}
           </div>
+          </>}
         </div>
 
         <div style={{ padding: "12px 20px 18px", display: "flex", gap: 8, justifyContent: "flex-end", flexShrink: 0, borderTop: `1px solid ${C.line}` }}>
           <button onClick={onClose} disabled={busy} style={btn("ghost", { padding: "9px 18px", fontSize: 12.5 })}>취소</button>
           <button onClick={submit} disabled={busy} style={btn("primary", { padding: "9px 18px", fontSize: 12.5 })}>
-            {busy ? "등록 중…" : `등록 (${picked.length}회차)`}</button>
+            {busy ? "등록 중…" : isSet ? `등록 (${sets.length}세트 · ${sets.length * steps.length}회)` : `등록 (${picked.length}회차)`}</button>
         </div>
       </div>
     </div>

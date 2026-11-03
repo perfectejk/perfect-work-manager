@@ -10,7 +10,7 @@ import AddScriptModal from "./AddScriptModal";
 import ProgramModal from "./ProgramModal";
 import ProgramPanel from "./ProgramPanel";
 import SessionPanel from "./SessionPanel";
-import { blankSession, genDates, ruleLabel, sessionTitle, weekDays } from "./recur";
+import { blankSession, genDates, sessionTitle, weekDays, isSetProg, setDates, setLabel, progRuleLabel } from "./recur";
 import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, progColor, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
 import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } from "./contractMatch";
 import { extractReportTargets } from "./reportTarget";
@@ -138,10 +138,17 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   // 회차는 과정별 문서에 저장한다
   const saveSessions = async (next, pid) => { setSessions(next); await saveSessionsOf(st, pid, next); };
 
-  const createProgram = async ({ name, target, members, color, rule, days, start, time, dates, titles = [] }) => {
+  const createProgram = async ({ kind, steps, items, name, target, members, color, rule, days, start, time, dates, titles = [] }) => {
     const id = uid();
-    const prog = { id, name, target, members, color, rule, ...(days ? { days } : {}), start, time, createdAt: TD };
-    const made = dates.map((d, i) => ({ ...blankSession(uid(), id, d, time, members), title: titles[i] || "" }));
+    let prog, made;
+    if (kind === "set") {
+      // 세트 교육 — 회차마다 몇 번째 세트의 어느 단계인지, 그 세트의 멘트를 함께 저장
+      prog = { id, kind: "set", rule: "set", name, target, members, color, steps, start, time, createdAt: TD };
+      made = items.map((it) => ({ ...blankSession(uid(), id, it.date, it.time, members), title: "", set: it.set, step: it.step, scripts: it.scripts }));
+    } else {
+      prog = { id, name, target, members, color, rule, ...(days ? { days } : {}), start, time, createdAt: TD };
+      made = dates.map((d, i) => ({ ...blankSession(uid(), id, d, time, members), title: titles[i] || "" }));
+    }
     await savePrograms([...programs, prog]);
     await saveSessions([...sessions, ...made], id);
     setSub("edu");
@@ -196,12 +203,44 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     const prog = programs.find((x) => x.id === pid);
     if (!prog) return;
     const list = sessionsOfProgram(pid);
+    if (isSetProg(prog)) {
+      // 세트 교육 — 마지막 세트 다음 주에 단계 전체를 한 세트로 추가 (멘트는 과정 상세에서 고른다)
+      const k = Math.max(0, ...list.map((sx) => sx.set || 0)) + 1;
+      const ds = setDates(prog.start, k, prog.steps);
+      const made = prog.steps.map((stp, i) => ({ ...blankSession(uid(), pid, ds[i], stp.time, prog.members), title: "", set: k, step: i }));
+      await saveSessions([...sessions, ...made], pid);
+      setSide({ kind: "program", id: pid });
+      return;
+    }
     const from = list.length ? list[list.length - 1].date : prog.start;
     // 여러 요일이면 같은 주의 다음 요일이 먼저 온다
     const next = genDates(from, prog.rule, 3, weekDays(prog.days, prog.start)).find((d) => d > from) || addDays(from, 7);
     const sess = blankSession(uid(), pid, next, prog.time, prog.members);
     await saveSessions([...sessions, sess], pid);
     setSide({ kind: "session", id: sess.id });
+  };
+
+  // 세트 교육 — 한 세트의 멘트를 바꾸면 그 세트의 아직 안 끝난 회차 전체에 반영 (완료 회차의 기록은 그대로)
+  const setSetMents = async (pid, k, ids) => {
+    const clean = ids.filter(Boolean);
+    await saveSessions(sessions.map((sx) => (String(sx.pid) === String(pid) && sx.set === k && sx.status !== "done"
+      ? { ...sx, scripts: clean } : sx)), pid);
+  };
+  // 세트 교육 — 두 세트의 순서 바꾸기. 날짜는 그대로 두고 멘트(와 직접 쓴 제목)만 맞바꾼다.
+  const swapSets = async (pid, a, b) => {
+    const inSet = (k) => sessions.filter((sx) => String(sx.pid) === String(pid) && sx.set === k);
+    const A = inSet(a), B = inSet(b);
+    if (!A.length || !B.length) return;
+    if ([...A, ...B].some((sx) => sx.status === "done")) {
+      alert("이미 끝난 회차가 있는 세트는 순서를 바꿀 수 없어요. (기록이 섞이지 않도록)");
+      return;
+    }
+    const pick = (list, step) => list.find((sx) => sx.step === step) || list[0];
+    await saveSessions(sessions.map((sx) => {
+      if (String(sx.pid) !== String(pid) || (sx.set !== a && sx.set !== b)) return sx;
+      const other = pick(sx.set === a ? B : A, sx.step);
+      return { ...sx, scripts: other.scripts || [], title: other.title || "" };
+    }), pid);
   };
 
   const progName = useCallback((pid) => (programs.find((p) => String(p.id) === String(pid)) || {}).name || "(삭제된 과정)", [programs]);
@@ -741,11 +780,12 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.faint }}>
             <span>대상: {prog.target || "—"} ({(prog.members || []).length}명)</span>
-            <span>{ruleLabel(prog.rule, prog.start, prog.days)} {prog.time}</span>
+            <span>{progRuleLabel(prog)}{isSetProg(prog) ? "" : " " + prog.time}</span>
+            {isSetProg(prog) && <span>{new Set(list.map((sx) => sx.set)).size}세트</span>}
             <span>진행 {doneCnt}/{active.length}회</span>
             <span>교육한 스크립트 {covered.size}개</span>
             <button onClick={() => addSession(prog.id)}
-              style={btn("ghost", { marginLeft: "auto", padding: "4px 10px", fontSize: 11 })}>+ 회차 추가</button>
+              style={btn("ghost", { marginLeft: "auto", padding: "4px 10px", fontSize: 11 })}>{isSetProg(prog) ? "+ 세트 추가" : "+ 회차 추가"}</button>
           </div>
           <div style={{ height: 6, background: C.line, borderRadius: 3, overflow: "hidden", margin: "9px 0 12px" }}>
             <div style={{ height: "100%", width: (active.length ? (doneCnt / active.length) * 100 : 0) + "%", background: progColor(prog) }} />
@@ -768,7 +808,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                   return (
                     <tr key={sx.id} onClick={() => openSide("session", sx.id)} style={{ cursor: "pointer", background: on ? C.mainBg : "transparent" }}>
                       <td style={td}>
-                        {sx.status === "skip" ? "—" : roundOf(sx) + "회"}
+                        {isSetProg(prog) && sx.set ? setLabel(sx, prog) : sx.status === "skip" ? "—" : roundOf(sx) + "회"}
                         {sx.status !== "skip" && (sx.title || "").trim() &&
                           <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{sx.title}</div>}
                       </td>
@@ -998,6 +1038,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       <SidePanel open={!!selProgram} kind="교육 과정 상세" onClose={() => setSide(null)}>
         {selProgram && <ProgramPanel program={selProgram} sessions={sessionsOfProgram(selProgram.id)}
           people={people} roundOf={roundOf} onPatch={patchProgram} onAddPerson={addPerson}
+          scripts={scripts} onSetMents={setSetMents} onSwapSets={swapSets} onAddSet={addSession}
           onOpenSession={(id) => setSide({ kind: "session", id })} onDelete={deleteProgram}
           onDeleteSession={deleteSession} />}
       </SidePanel>
@@ -1011,7 +1052,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
         )}
       </SidePanel>
 
-      {showProgram && <ProgramModal people={people} onAddPerson={addPerson} today={TD}
+      {showProgram && <ProgramModal people={people} onAddPerson={addPerson} today={TD} scripts={scripts}
         usedColors={programs.map((pg) => pg.color).filter(Boolean)}
         onCreate={createProgram} onClose={() => setShowProgram(false)} />}
       {repeatTask && <RepeatModal task={repeatTask} onCreate={createRepeats} onClose={() => setRepeatTask(null)} />}
