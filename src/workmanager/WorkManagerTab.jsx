@@ -1039,6 +1039,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
         {selProgram && <ProgramPanel program={selProgram} sessions={sessionsOfProgram(selProgram.id)}
           people={people} roundOf={roundOf} onPatch={patchProgram} onAddPerson={addPerson}
           scripts={scripts} onSetMents={setSetMents} onSwapSets={swapSets} onAddSet={addSession}
+          onCopy={(pg) => setShowProgram({ copy: pg })}
           onOpenSession={(id) => setSide({ kind: "session", id })} onDelete={deleteProgram}
           onDeleteSession={deleteSession} />}
       </SidePanel>
@@ -1053,6 +1054,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       </SidePanel>
 
       {showProgram && <ProgramModal people={people} onAddPerson={addPerson} today={TD} scripts={scripts}
+        source={showProgram.copy ? { program: showProgram.copy, sessions: sessionsOfProgram(showProgram.copy.id) } : null}
         taken={sessions.filter((sx) => sx.status !== "skip" && sx.date >= TD).map((sx) => ({ date: sx.date, time: sx.time, label: nameOf(sx) }))}
         usedColors={programs.map((pg) => pg.color).filter(Boolean)}
         onCreate={createProgram} onClose={() => setShowProgram(false)} />}

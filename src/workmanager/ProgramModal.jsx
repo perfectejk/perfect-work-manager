@@ -19,29 +19,68 @@ export function ColorSwatches({ value, onChange }) {
   );
 }
 
+// 복제할 때 새 이름 제안 — "… 1기" 면 "… 2기", 아니면 뒤에 " 2기"
+const nextCohortName = (n) => {
+  const m = String(n || "").match(/^(.*?)(\d+)기\s*$/);
+  return m ? `${m[1]}${Number(m[2]) + 1}기` : `${String(n || "").trim()} 2기`;
+};
+
+// 복제 원본 → 등록 창 처음 값. 기록(참석·이해도·과제 등)은 가져오지 않고,
+// 주기·요일·시간·회차 제목 순서(세트 교육이면 단계와 세트별 멘트 순서)만 가져온다.
+function fromSource(source) {
+  if (!source) return null;
+  const { program: pg, sessions: ss } = source;
+  const live = ss.filter((s) => s.status !== "skip");
+  const base = { name: nextCohortName(pg.name), target: pg.target || "", time: pg.time || "10:00" };
+  if (pg.kind === "set") {
+    const nums = [...new Set(live.map((s) => s.set).filter(Boolean))].sort((a, b) => a - b);
+    const sets = nums.map((k) => {
+      const m = (live.find((s) => s.set === k && s.step === 0) || live.find((s) => s.set === k) || {}).scripts || [];
+      return [m[0] || "", m[1] || ""];
+    });
+    return { ...base, mode: "set", steps: (pg.steps || SET_STEPS).map((x) => ({ ...x })), sets: sets.length ? sets : [["", ""]] };
+  }
+  return {
+    ...base, mode: pg.rule === "once" ? "once" : "repeat", rule: pg.rule === "once" ? "w1" : pg.rule,
+    days: Array.isArray(pg.days) && pg.days.length ? pg.days : null,
+    count: Math.max(1, live.length), seq: live.map((s) => s.title || ""),
+  };
+}
+
 // 교육 과정 등록 — 주기를 정하면 회차 날짜가 자동으로 만들어지고,
 // 빼고 싶은 날짜는 체크를 해제해서 제외한다.
-export default function ProgramModal({ people, onAddPerson, onCreate, onClose, today, usedColors = [], scripts = [], taken = [] }) {
+// source 가 있으면 그 과정을 복제해서 새 기수로 등록한다.
+export default function ProgramModal({ people, onAddPerson, onCreate, onClose, today, usedColors = [], scripts = [], taken = [], source = null }) {
   const TD = today || YMD(new Date());
-  const [name, setName] = useState("");
-  const [target, setTarget] = useState("");
+  const [init] = useState(() => fromSource(source) || {});
+  const [name, setName] = useState(init.name || "");
+  const [target, setTarget] = useState(init.target || "");
   // 기본 색은 다른 과정이 아직 안 쓴 색 중 첫 번째
   const [color, setColor] = useState(() => EDU_COLORS.find((c) => !usedColors.includes(c)) || EDU_COLORS[0]);
   const [members, setMembers] = useState([]);
   const [start, setStart] = useState(addDays(TD, 7));
-  const [time, setTime] = useState("10:00");
+  const [time, setTime] = useState(init.time || "10:00");
   // 교육 종류 — repeat 반복 / once 1회 (오리엔테이션 등) / set 세트 교육 (멘트 2개씩, 단계별 요일)
-  const [mode, setMode] = useState("repeat");
+  const [mode, setMode] = useState(init.mode || "repeat");
   const once = mode === "once";
   const isSet = mode === "set";
-  const [steps, setSteps] = useState(() => SET_STEPS.map((x) => ({ ...x })));
-  const [sets, setSets] = useState(() => Array.from({ length: 4 }, () => ["", ""]));   // 세트별 멘트 2개
-  const [rule, setRule] = useState("w2");
-  const [count, setCount] = useState(6);
-  const [days, setDays] = useState(null);  // 고른 요일 (null이면 첫 교육일의 요일)
+  const [steps, setSteps] = useState(() => init.steps || SET_STEPS.map((x) => ({ ...x })));
+  const [sets, setSets] = useState(() => init.sets || Array.from({ length: 4 }, () => ["", ""]));   // 세트별 멘트 2개
+  const [rule, setRule] = useState(init.rule || "w2");
+  const [count, setCount] = useState(init.count || 6);
+  const [days, setDays] = useState(init.days || null);  // 고른 요일 (null이면 첫 교육일의 요일)
   const [off, setOff] = useState({});      // 체크 해제한 날짜
-  const [titles, setTitles] = useState({}); // 날짜별 회차 제목 (비워두면 "교육명 - n회차")
+  // 회차 제목 — 순서대로 (n번째 남은 날짜가 seq[n-1]). 날짜를 바꾸거나 빼도 제목 순서는 유지된다.
+  const [seq, setSeq] = useState(() => init.seq || []);
   const [busy, setBusy] = useState(false);
+  const setSeqAt = (i, v) => setSeq((q) => { const n = [...q]; while (n.length <= i) n.push(""); n[i] = v; return n; });
+  // 회차 순서 바꾸기 — 날짜는 그대로, 제목만 위아래로
+  const moveSeq = (i, dir) => setSeq((q) => {
+    const n = [...q]; const t = i + dir;
+    while (n.length <= Math.max(i, t)) n.push("");
+    [n[i], n[t]] = [n[t], n[i]];
+    return n;
+  });
 
   const useRule = once ? "once" : rule;
   const useDays = isWeekly(useRule) ? weekDays(days, start) : null;
@@ -83,7 +122,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
     if (picked.length === 0) { alert("교육일을 최소 1개는 남겨주세요."); return; }
     setBusy(true);
     await onCreate({ name: name.trim(), target: target.trim(), members, color, rule: useRule, ...(useDays ? { days: useDays } : {}), start, time, dates: picked,
-      titles: picked.map((d) => (titles[d] || "").trim()) });
+      titles: picked.map((d, i) => (seq[i] || "").trim()) });
     setBusy(false);
     onClose();
   };
@@ -94,7 +133,11 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
     <div style={modalBg(1300)} onClick={onClose}>
       <div style={modalCard(560)} onClick={(e) => e.stopPropagation()}>
         <div style={{ padding: "18px 20px 0", flexShrink: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.title, marginBottom: 4 }}>교육 과정 등록</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.title, marginBottom: 4 }}>
+            {source ? `교육 과정 복제 — "${source.program.name}" 에서` : "교육 과정 등록"}</div>
+          {source && <div style={{ fontSize: 11.5, color: C.main, background: C.mainBg, borderRadius: 8, padding: "7px 10px", marginBottom: 8, lineHeight: 1.55 }}>
+            주기·요일·시간·회차 제목{source.program.kind === "set" ? "·단계·세트별 멘트" : ""}를 가져왔어요. 첫 교육일과 대상자를 새로 정하고, 순서는 ↑↓ 로 바꾸세요.
+            원본 과정과 기록은 그대로 남아요.</div>}
           <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>
             주기를 정하면 회차가 자동으로 만들어집니다. 빼고 싶은 날짜는 체크를 해제하세요. 회차 제목은 비워두면 "교육명 - n회차"로 표시됩니다.
           </div>
@@ -200,9 +243,17 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
                       {off[d] ? "제외" : n + "회"} · {fmtDate(d)}
                     </label>
                     {!off[d] && (
-                      <input value={titles[d] || ""} onChange={(e) => setTitles((t) => ({ ...t, [d]: e.target.value }))}
+                      <input value={seq[n - 1] || ""} onChange={(e) => setSeqAt(n - 1, e.target.value)}
                         placeholder={sessionTitle(null, { name: name.trim() || "교육명", rule: useRule }, n)}
                         style={input({ padding: "5px 8px", fontSize: 12, flex: 1, minWidth: 0 })} />
+                    )}
+                    {!off[d] && picked.length > 1 && (
+                      <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                        <button type="button" onClick={() => moveSeq(n - 1, -1)} disabled={n === 1} title="제목을 앞 회차와 바꾸기"
+                          style={btn("ghost", { padding: "2px 7px", fontSize: 11 })}>↑</button>
+                        <button type="button" onClick={() => moveSeq(n - 1, 1)} disabled={n === picked.length} title="제목을 뒤 회차와 바꾸기"
+                          style={btn("ghost", { padding: "2px 7px", fontSize: 11 })}>↓</button>
+                      </span>
                     )}
                   </div>
                   {clash.length > 0 && <div style={{ fontSize: 11, color: C.red, margin: "2px 0 0 22px" }}>{clashText(clash)}</div>}

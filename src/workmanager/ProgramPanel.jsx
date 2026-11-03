@@ -54,7 +54,7 @@ function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet 
 
 // 교육 과정 상세 — 이름 / 대상 / 대상자 명단 편집 / 회차 목록
 export default function ProgramPanel({ program, sessions, people, roundOf, onPatch, onAddPerson, onOpenSession, onDelete, onDeleteSession,
-  scripts = [], onSetMents, onSwapSets, onAddSet }) {
+  scripts = [], onSetMents, onSwapSets, onAddSet, onCopy }) {
   if (!program) return null;
   const p = (patch) => onPatch(program.id, patch);
   const sel = input({ padding: "5px 7px", fontSize: 12, background: C.soft, border: "1px solid transparent" });
@@ -110,6 +110,13 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
             </div>
           ))}
       </Section>
+
+      {onCopy && <>
+        <button onClick={() => onCopy(program)} style={btn("ghost", { width: "100%", marginBottom: 6 })}>이 과정 복제해서 새 기수 만들기</button>
+        <div style={{ fontSize: 10.5, color: C.faint, marginBottom: 14, lineHeight: 1.55 }}>
+          주기·회차 제목(세트 교육이면 멘트 순서까지)을 그대로 가져와 새 과정을 만들어요. 순서는 등록 창에서 바꿀 수 있어요.
+        </div>
+      </>}
 
       <button onClick={() => onDelete(program)} style={btn("danger")}>교육 과정 삭제</button>
       <div style={{ fontSize: 10.5, color: C.faint, marginTop: 6, lineHeight: 1.55 }}>
