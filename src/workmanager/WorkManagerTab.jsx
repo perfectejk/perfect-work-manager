@@ -49,6 +49,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [bizDone, setBizDone] = useState("open");
   const [calDay, setCalDay] = useState("");   // 캘린더에서 고른 날짜
   const [calFilter, setCalFilter] = useState("all");
+  const [calPerson, setCalPerson] = useState("");   // 캘린더 대상자 필터 ("" = 전체)
   // 교육 과정 목록 정렬·필터 — 고른 값은 이 브라우저에 기억해 둔다
   const [eduSort, setEduSort] = useState(() => { try { return localStorage.getItem("wm:eduSort") || "recent"; } catch { return "recent"; } });
   const [eduShow, setEduShow] = useState(() => { try { return localStorage.getItem("wm:eduShow") || "all"; } catch { return "all"; } });
@@ -869,10 +870,24 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   };
 
   // ---- 캘린더 ----
-  const calItems = useMemo(
-    () => (calFilter === "edu" ? items.filter((x) => x.isEdu) : calFilter === "task" ? items.filter((x) => !x.isEdu) : items),
-    [items, calFilter]
-  );
+  // 대상자 필터 — 고른 사람이 과정 대상자이거나 그 회차에 참석한 교육만 (작업은 숨김)
+  const calPeople = useMemo(() => {
+    const s = new Set(programs.flatMap((p) => p.members || []));
+    sessions.forEach((sx) => Object.entries(sx.attend || {}).forEach(([n, v]) => { if (v) s.add(n); }));
+    return [...s].sort((a, b) => a.localeCompare(b, "ko"));
+  }, [programs, sessions]);
+  const personSessionIds = useMemo(() => {
+    if (!calPerson) return null;
+    return new Set(sessions.filter((sx) => {
+      const pg = programs.find((p) => String(p.id) === String(sx.pid));
+      return ((pg && pg.members) || []).includes(calPerson) || !!(sx.attend || {})[calPerson];
+    }).map((sx) => sx.id));
+  }, [calPerson, sessions, programs]);
+  const calItems = useMemo(() => {
+    let list = calFilter === "edu" ? items.filter((x) => x.isEdu) : calFilter === "task" ? items.filter((x) => !x.isEdu) : items;
+    if (personSessionIds) list = list.filter((x) => x.isEdu && personSessionIds.has(x.id));
+    return list;
+  }, [items, calFilter, personSessionIds]);
   const dayItems = useMemo(() => (calDay ? calItems.filter((x) => x.date === calDay) : []), [calItems, calDay]);
   const calView = () => {
     const { y, m } = calMonth;
@@ -890,7 +905,17 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                 border: `1px solid ${calFilter === k ? color : C.line}`,
                 background: calFilter === k ? color + "18" : C.white, color: calFilter === k ? color : C.muted }}>{label}</button>
           ))}
+          <select value={calPerson} onChange={(e) => setCalPerson(e.target.value)} title="대상자별로 교육 일정만 보기"
+            style={inputSm({ marginLeft: "auto", cursor: "pointer", fontWeight: calPerson ? 700 : 400,
+              color: calPerson ? EDU_COLOR : undefined, borderColor: calPerson ? EDU_COLOR : undefined })}>
+            <option value="">대상자 전체</option>
+            {calPeople.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
         </div>
+        {calPerson && <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
+          <b style={{ color: EDU_COLOR }}>{calPerson}</b> 님이 대상자이거나 참석한 교육만 보여요. (작업은 숨김)
+          <button onClick={() => setCalPerson("")} style={btn("ghost", { marginLeft: 6, padding: "2px 8px", fontSize: 11 })}>필터 해제</button>
+        </div>}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <button onClick={() => move(-1)} style={btn("ghost", { padding: "5px 12px", fontSize: 15 })}>‹</button>
           <b style={{ fontSize: 14, color: C.title }}>{y}년 {m + 1}월</b>
