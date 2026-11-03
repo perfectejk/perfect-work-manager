@@ -247,6 +247,17 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     }), pid);
   };
 
+  // 세트 교육 — 재교육 회차 추가 (예: ARS 녹취 판정 통과 못 한 사람). 같은 세트·단계로 붙고 멘트도 그 세트 것을 쓴다.
+  const addRetake = async (pid, k, step, date, time) => {
+    const prog = programs.find((x) => x.id === pid);
+    if (!prog || !date) return;
+    const inSet = sessionsOfProgram(pid).filter((sx) => sx.set === k);
+    const base = inSet.find((sx) => sx.step === step) || inSet[0] || {};
+    const sess = { ...blankSession(uid(), pid, date, time, prog.members), title: "", set: k, step, retake: true, scripts: [...(base.scripts || [])] };
+    await saveSessions([...sessions, sess], pid);
+    setSide({ kind: "session", id: sess.id });
+  };
+
   // 세트 교육 — k세트부터 한 주 미루기. k세트는 한 주 뒤로, 뒤 세트들은 겹치면 같이 밀린다.
   // 월말 프로모션 주에 걸리면 한 주 더 민다. 끝난 회차가 있으면 미루지 않는다.
   const delaySets = async (pid, k) => {
@@ -1089,7 +1100,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       <SidePanel open={!!selProgram} kind="교육 과정 상세" onClose={() => setSide(null)}>
         {selProgram && <ProgramPanel program={selProgram} sessions={sessionsOfProgram(selProgram.id)}
           people={people} roundOf={roundOf} onPatch={patchProgram} onAddPerson={addPerson}
-          scripts={scripts} onSetMents={setSetMents} onSwapSets={swapSets} onAddSet={addSession} onDelaySet={delaySets}
+          scripts={scripts} onSetMents={setSetMents} onSwapSets={swapSets} onAddSet={addSession} onDelaySet={delaySets} onAddRetake={addRetake}
           onCopy={(pg) => setShowProgram({ copy: pg })}
           onOpenSession={(id) => setSide({ kind: "session", id })} onDelete={deleteProgram}
           onDeleteSession={deleteSession} />}

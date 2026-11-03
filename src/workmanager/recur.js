@@ -177,7 +177,7 @@ export const progRuleLabel = (prog) =>
 // 세트 교육 회차의 짧은 이름 — "2세트 · 필기 인출"
 export function setLabel(sess, prog) {
   const st = (prog && prog.steps && prog.steps[sess.step]) || {};
-  return `${sess.set}세트 · ${st.n || "단계"}`;
+  return `${sess.set}세트 · ${st.n || "단계"}${sess.retake ? " (재교육)" : ""}`;
 }
 
 // ===== 일정 겹침 =====

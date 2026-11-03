@@ -1,5 +1,5 @@
-import React from "react";
-import { C, input, btn, badge, fmtDate } from "../shared/ui";
+import React, { useState } from "react";
+import { C, input, btn, badge, fmtDate, addDays, WD } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section } from "../shared/SidePanel";
 import { SESSION_STATUS } from "./store";
 import { sessionTitle, isSetProg, progRuleLabel, isPromoWeek } from "./recur";
@@ -9,8 +9,18 @@ import { ScriptSelect } from "./SetFields";
 import { progColor } from "./store";
 
 // 세트 교육의 세트 목록 — 세트별 멘트 2개 고르기, ↑↓ 로 세트 순서(멘트) 바꾸기
-function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet, onDelaySet }) {
+function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet, onDelaySet, onAddRetake, onPatch }) {
   const nums = [...new Set(sessions.map((s) => s.set).filter(Boolean))].sort((a, b) => a - b);
+  // 재교육 추가 입력칸 — 어느 세트에 열려 있는지와 입력값
+  const [rt, setRt] = useState(null);   // { k, step, date, time }
+  const [showSteps, setShowSteps] = useState(false);
+  const steps = program.steps || [];
+  const openRetake = (k, list) => {
+    const step = steps.length - 1;   // 기본은 마지막 단계 (ARS 녹취 판정)
+    const last = list.filter((s) => s.step === step).map((s) => s.date).sort().pop() || list[list.length - 1].date;
+    setRt({ k, step, date: addDays(last, 1), time: (steps[step] || {}).time || "" });
+  };
+  const setStep = (i, patch) => onPatch({ steps: steps.map((st, j) => (j === i ? { ...st, ...patch } : st)) });
   // k세트부터 뒤 세트까지 끝난 회차가 하나도 없으면 미룰 수 있다
   const canDelay = (k) => !sessions.some((s) => s.set >= k && s.status === "done");
   const skip = program.skipPromo !== false;
@@ -48,6 +58,27 @@ function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet,
                   style={btn("ghost", { marginLeft: "auto", padding: "2px 8px", fontSize: 10.5 })}>이 세트부터 한 주 미루기</button>}
               </div>
             )}
+            {rt && rt.k === k ? (
+              <div style={{ background: C.white, border: `1px solid ${C.line}`, borderRadius: 8, padding: 7, marginBottom: 5 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: C.title, marginBottom: 5 }}>{k}세트 재교육 회차 추가</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px", gap: 5, marginBottom: 6 }}>
+                  <select value={rt.step} onChange={(e) => { const i = Number(e.target.value); setRt({ ...rt, step: i, time: (steps[i] || {}).time || rt.time }); }} style={sm}>
+                    {steps.map((st, i) => <option key={i} value={i}>{st.n}</option>)}
+                  </select>
+                  <input type="date" value={rt.date} onChange={(e) => setRt({ ...rt, date: e.target.value })} style={sm} />
+                  <input type="time" value={rt.time} onChange={(e) => setRt({ ...rt, time: e.target.value })} style={sm} />
+                </div>
+                <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
+                  <button type="button" onClick={() => setRt(null)} style={btn("ghost", { padding: "3px 10px", fontSize: 11 })}>취소</button>
+                  <button type="button" disabled={!rt.date}
+                    onClick={() => { onAddRetake(program.id, k, rt.step, rt.date, rt.time); setRt(null); }}
+                    style={btn("primary", { padding: "3px 10px", fontSize: 11 })}>추가</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => openRetake(k, list)} title="통과하지 못한 사람을 위한 재교육 회차를 이 세트에 추가해요"
+                style={btn("ghost", { padding: "2px 8px", fontSize: 10.5, marginBottom: 5 })}>+ 재교육</button>
+            )}
             {allDone
               ? <div style={{ fontSize: 11.5, color: C.muted }}>
                   {m.map((id) => (scripts.find((x) => x.id === id) || {}).name).filter(Boolean).join(" · ") || "멘트 없음"} (완료)
@@ -59,14 +90,35 @@ function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet,
           </div>
         );
       })}
-      <button onClick={() => onAddSet(program.id)} style={btn("ghost", { padding: "5px 12px", fontSize: 11.5, marginTop: 2 })}>+ 세트 추가</button>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 2 }}>
+        <button onClick={() => onAddSet(program.id)} style={btn("ghost", { padding: "5px 12px", fontSize: 11.5 })}>+ 세트 추가</button>
+        <button type="button" onClick={() => setShowSteps(!showSteps)}
+          style={{ marginLeft: "auto", border: "none", background: "none", color: C.main, cursor: "pointer", fontSize: 11.5, fontFamily: "inherit" }}>
+          새 세트 요일·시간 {showSteps ? "▲" : "▼"}</button>
+      </div>
+      {showSteps && (
+        <div style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: 8, marginTop: 6 }}>
+          <div style={{ fontSize: 11, color: C.faint, marginBottom: 6, lineHeight: 1.55 }}>
+            [+ 세트 추가] 로 만들 세트의 요일·시간이에요. 이미 만들어진 회차는 바뀌지 않아요 — 회차 하나의 날짜·시간은 그 회차를 눌러 바꾸세요.
+          </div>
+          {steps.map((st, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 68px 84px", gap: 5, marginBottom: 4, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: C.text }}>{st.n}</span>
+              <select value={st.wd} onChange={(e) => setStep(i, { wd: Number(e.target.value) })} style={sm}>
+                {[1, 2, 3, 4, 5, 6, 0].map((x) => <option key={x} value={x}>{WD[x]}요일</option>)}
+              </select>
+              <input type="time" value={st.time} onChange={(e) => setStep(i, { time: e.target.value })} style={sm} />
+            </div>
+          ))}
+        </div>
+      )}
     </Section>
   );
 }
 
 // 교육 과정 상세 — 이름 / 대상 / 대상자 명단 편집 / 회차 목록
 export default function ProgramPanel({ program, sessions, people, roundOf, onPatch, onAddPerson, onOpenSession, onDelete, onDeleteSession,
-  scripts = [], onSetMents, onSwapSets, onAddSet, onDelaySet, onCopy }) {
+  scripts = [], onSetMents, onSwapSets, onAddSet, onDelaySet, onAddRetake, onCopy }) {
   if (!program) return null;
   const p = (patch) => onPatch(program.id, patch);
   const sel = input({ padding: "5px 7px", fontSize: 12, background: C.soft, border: "1px solid transparent" });
@@ -109,7 +161,8 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
       </Section>
 
       {isSetProg(program) && <SetList program={program} sessions={sessions} scripts={scripts}
-        onSetMents={onSetMents} onSwapSets={onSwapSets} onAddSet={onAddSet} onDelaySet={onDelaySet} />}
+        onSetMents={onSetMents} onSwapSets={onSwapSets} onAddSet={onAddSet} onDelaySet={onDelaySet}
+        onAddRetake={onAddRetake} onPatch={p} />}
 
       <Section title="회차" count={`${done}/${active.length}회 완료`}>
         <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>회차를 누르면 수정, ✕ 를 누르면 삭제합니다.</div>
