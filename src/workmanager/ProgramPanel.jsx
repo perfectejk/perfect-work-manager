@@ -89,6 +89,14 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
           placeholder="예: 신입 사원" style={sel} />
         <PropLabel>캘린더 색</PropLabel>
         <ColorSwatches value={progColor(program)} onChange={(c) => p({ color: c })} />
+        {!isSetProg(program) && <>
+          <PropLabel>스크립트</PropLabel>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.text, cursor: "pointer" }}>
+            <input type="checkbox" checked={!program.noScripts} onChange={(e) => p({ noScripts: !e.target.checked })}
+              style={{ accentColor: C.main, cursor: "pointer" }} />
+            회차 기록에서 스크립트 고르기 {program.noScripts && <span style={{ color: C.faint }}>(꺼짐 — 멘트 교육이 아닌 과정)</span>}
+          </label>
+        </>}
       </Props>
 
       <Section title="대상자 명단" count={`${(program.members || []).length}명`}>

@@ -139,7 +139,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   // 회차는 과정별 문서에 저장한다
   const saveSessions = async (next, pid) => { setSessions(next); await saveSessionsOf(st, pid, next); };
 
-  const createProgram = async ({ kind, steps, items, skipPromo, name, target, members, color, rule, days, start, time, dates, titles = [] }) => {
+  const createProgram = async ({ kind, steps, items, skipPromo, noScripts, name, target, members, color, rule, days, start, time, dates, titles = [] }) => {
     const id = uid();
     let prog, made;
     if (kind === "set") {
@@ -147,7 +147,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       prog = { id, kind: "set", rule: "set", name, target, members, color, steps, start, time, skipPromo: skipPromo !== false, createdAt: TD };
       made = items.map((it) => ({ ...blankSession(uid(), id, it.date, it.time, members), title: "", set: it.set, step: it.step, scripts: it.scripts }));
     } else {
-      prog = { id, name, target, members, color, rule, ...(days ? { days } : {}), start, time, createdAt: TD };
+      prog = { id, name, target, members, color, rule, ...(days ? { days } : {}), ...(noScripts ? { noScripts: true } : {}), start, time, createdAt: TD };
       made = dates.map((d, i) => ({ ...blankSession(uid(), id, d, time, members), title: titles[i] || "" }));
     }
     await savePrograms([...programs, prog]);
@@ -810,7 +810,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
             <span>{progRuleLabel(prog)}{isSetProg(prog) ? "" : " " + prog.time}</span>
             {isSetProg(prog) && <span>{new Set(list.map((sx) => sx.set)).size}세트</span>}
             <span>진행 {doneCnt}/{active.length}회</span>
-            <span>교육한 스크립트 {covered.size}개</span>
+            {!prog.noScripts && <span>교육한 스크립트 {covered.size}개</span>}
             <button onClick={() => addSession(prog.id)}
               style={btn("ghost", { marginLeft: "auto", padding: "4px 10px", fontSize: 11 })}>{isSetProg(prog) ? "+ 세트 추가" : "+ 회차 추가"}</button>
           </div>

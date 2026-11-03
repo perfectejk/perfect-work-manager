@@ -94,7 +94,8 @@ export default function SessionPanel({
         </div>
       )}
 
-      <Section title="다룬 스크립트" required count={`${picked.length}개`}>
+      {/* 스크립트를 쓰지 않는 과정(PROS 등)은 이 칸을 숨긴다 */}
+      {!program.noScripts && <Section title="다룬 스크립트" required count={`${picked.length}개`}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
           {picked.length === 0
             ? <span style={{ fontSize: 11.5, color: C.faint }}>아래에서 선택하세요.</span>
@@ -127,7 +128,7 @@ export default function SessionPanel({
               ))}
           </div>
         </div>
-      </Section>
+      </Section>}
 
       <Section title="활용 자료·결과물" optional count={mats.length ? `${mats.length}건` : ""}>
         <div style={{ fontSize: 11, color: C.faint, marginBottom: 6, lineHeight: 1.55 }}>

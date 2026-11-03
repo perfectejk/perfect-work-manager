@@ -43,7 +43,7 @@ function fromSource(source) {
   return {
     ...base, mode: pg.rule === "once" ? "once" : "repeat", rule: pg.rule === "once" ? "w1" : pg.rule,
     days: Array.isArray(pg.days) && pg.days.length ? pg.days : null,
-    count: Math.max(1, live.length), seq: live.map((s) => s.title || ""),
+    count: Math.max(1, live.length), seq: live.map((s) => s.title || ""), noScripts: !!pg.noScripts,
   };
 }
 
@@ -78,6 +78,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
   // 회차 제목 — 순서대로 (n번째 남은 날짜가 seq[n-1]). 날짜를 바꾸거나 빼도 제목 순서는 유지된다.
   const [seq, setSeq] = useState(() => init.seq || []);
   const [busy, setBusy] = useState(false);
+  const [noScripts, setNoScripts] = useState(!!init.noScripts);   // 멘트 교육이 아닌 과정 (PROS 등)
   const setSeqAt = (i, v) => setSeq((q) => { const n = [...q]; while (n.length <= i) n.push(""); n[i] = v; return n; });
   // 회차 순서 바꾸기 — 날짜는 그대로, 제목만 위아래로
   const moveSeq = (i, dir) => setSeq((q) => {
@@ -126,7 +127,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
     }
     if (picked.length === 0) { alert("교육일을 최소 1개는 남겨주세요."); return; }
     setBusy(true);
-    await onCreate({ name: name.trim(), target: target.trim(), members, color, rule: useRule, ...(useDays ? { days: useDays } : {}), start, time, dates: picked,
+    await onCreate({ name: name.trim(), target: target.trim(), members, color, noScripts, rule: useRule, ...(useDays ? { days: useDays } : {}), start, time, dates: picked,
       titles: picked.map((d, i) => (seq[i] || "").trim()) });
     setBusy(false);
     onClose();
@@ -172,6 +173,13 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
           <label style={label}>대상</label>
           <input value={target} onChange={(e) => setTarget(e.target.value)}
             placeholder="예: 신입 사원" style={input({ marginBottom: 10 })} />
+
+          {!isSet && (
+            <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: C.text, cursor: "pointer", marginBottom: 12 }}>
+              <input type="checkbox" checked={noScripts} onChange={(e) => setNoScripts(e.target.checked)} style={{ accentColor: C.main, cursor: "pointer" }} />
+              <span><b>스크립트 고르지 않는 교육</b> <span style={{ color: C.faint, fontSize: 11 }}>(PROS처럼 멘트 교육이 아닌 과정 — 회차 기록에서 스크립트 칸을 숨겨요)</span></span>
+            </label>
+          )}
 
           <label style={label}>대상자 명단</label>
           <div style={{ fontSize: 11, color: C.faint, marginBottom: 5, lineHeight: 1.55 }}>
