@@ -51,6 +51,14 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [calFilter, setCalFilter] = useState("all");
   const [calPerson, setCalPerson] = useState("");   // 캘린더 대상자 필터 ("" = 전체)
   // 교육 과정 목록 정렬·필터 — 고른 값은 이 브라우저에 기억해 둔다
+  // 세트 교육 목록에서 펼친 세트 { "과정id:세트번호": true } — 기본은 모두 접힘
+  const [openSets, setOpenSets] = useState({});
+  const toggleSet = (pid, k) => setOpenSets((o) => ({ ...o, [pid + ":" + k]: !o[pid + ":" + k] }));
+  const setAllSets = (pid, nums, open) => setOpenSets((o) => {
+    const n = { ...o };
+    nums.forEach((k) => { if (open) n[pid + ":" + k] = true; else delete n[pid + ":" + k]; });
+    return n;
+  });
   const [eduSort, setEduSort] = useState(() => { try { return localStorage.getItem("wm:eduSort") || "recent"; } catch { return "recent"; } });
   const [eduShow, setEduShow] = useState(() => { try { return localStorage.getItem("wm:eduShow") || "all"; } catch { return "all"; } });
   const pickEduSort = (v) => { setEduSort(v); try { localStorage.setItem("wm:eduSort", v); } catch { /* 저장 못 해도 동작엔 지장 없음 */ } };
@@ -811,6 +819,48 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       const doneCnt = active.filter((sx) => sx.status === "done").length;
       const next = active.find((sx) => sx.status === "plan");
       const covered = new Set(list.filter((sx) => sx.status === "done").flatMap((sx) => sx.scripts || []));
+      // 세트 교육은 세트마다 한 줄로 접어 두고, 펼친 세트만 회차를 보여 준다
+      const isSet = isSetProg(prog);
+      const setNums = isSet ? [...new Set(list.map((sx) => sx.set).filter(Boolean))] : [];
+      const allOpen = setNums.length > 0 && setNums.every((k) => openSets[prog.id + ":" + k]);
+      const flatRows = [];
+      if (!isSet) flatRows.push(...list);
+      else {
+        const seen = new Set();
+        list.forEach((sx) => {
+          if (!sx.set) { flatRows.push(sx); return; }
+          if (seen.has(sx.set)) return;
+          seen.add(sx.set);
+          const items = list.filter((x) => x.set === sx.set);
+          flatRows.push({ head: true, k: sx.set, items });
+          if (openSets[prog.id + ":" + sx.set]) flatRows.push(...items);
+        });
+      }
+      const setHeadRow = (g) => {
+        const open = !!openSets[prog.id + ":" + g.k];
+        const live = g.items.filter((x) => x.status !== "skip");
+        const doneN = live.filter((x) => x.status === "done").length;
+        const retakeN = g.items.filter((x) => x.retake).length;
+        const ments = ((g.items.find((x) => x.status !== "done") || g.items[0]).scripts || [])
+          .map((sid) => (scripts.find((y) => y.id === sid) || {}).name).filter(Boolean);
+        const first = g.items[0].date;
+        return (
+          <tr key={"set-" + g.k} onClick={() => toggleSet(prog.id, g.k)} style={{ cursor: "pointer", background: C.soft }}>
+            <td style={{ ...td, fontWeight: 700, color: C.title, whiteSpace: "nowrap" }}>{open ? "▼" : "▶"} {g.k}세트</td>
+            <td style={{ ...td, color: C.faint, whiteSpace: "nowrap" }}>{fmtDate(first)} 주</td>
+            <td style={td}>
+              <span style={badge(doneN === live.length && live.length ? C.greenDeep : C.muted, doneN === live.length && live.length ? C.greenBg : C.white, { fontSize: 10.5 })}>
+                완료 {doneN}/{live.length}</span>
+            </td>
+            <td style={td} colSpan={4}>
+              {ments.map((n) => <span key={n} style={{ ...badge(C.main, C.mainBg), marginRight: 4 }}>{n}</span>)}
+              {!ments.length && <span style={{ fontSize: 11, color: C.faint }}>멘트 미정</span>}
+              {retakeN > 0 && <span style={{ fontSize: 11, color: C.amber, fontWeight: 600 }}> · 재교육 {retakeN}회</span>}
+            </td>
+            <td style={{ ...td, textAlign: "right", fontSize: 11, color: C.main, whiteSpace: "nowrap" }}>{open ? "접기" : "펼쳐 보기"}</td>
+          </tr>
+        );
+      };
       return (
         <div key={prog.id} style={{ border: "1px solid " + C.line, borderRadius: 12, padding: 14, marginBottom: 14 }}>
           <div onClick={() => openSide("program", prog.id)} title="클릭하면 과정 상세·대상자 편집"
@@ -827,6 +877,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
             {!prog.noScripts && <span>교육한 스크립트 {covered.size}개</span>}
             <button onClick={() => addSession(prog.id)}
               style={btn("ghost", { marginLeft: "auto", padding: "4px 10px", fontSize: 11 })}>{isSetProg(prog) ? "+ 세트 추가" : "+ 회차 추가"}</button>
+            {isSet && setNums.length > 0 && <button onClick={() => setAllSets(prog.id, setNums, !allOpen)}
+              style={btn("ghost", { padding: "4px 10px", fontSize: 11 })}>{allOpen ? "모두 접기" : "모두 펼치기"}</button>}
           </div>
           <div style={{ height: 6, background: C.line, borderRadius: 3, overflow: "hidden", margin: "9px 0 12px" }}>
             <div style={{ height: "100%", width: (active.length ? (doneCnt / active.length) * 100 : 0) + "%", background: progColor(prog) }} />
@@ -841,7 +893,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
               <thead><tr>{["회차", "날짜", "상태", "스크립트·자료", "참석", "이해도", "과제", ""].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>
-                {list.map((sx) => {
+                {flatRows.map((it) => {
+                  if (it.head) return setHeadRow(it);
+                  const sx = it;
                   const sc = (sx.scripts || []).map((sid) => scripts.find((y) => y.id === sid)).filter(Boolean);
                   const ad = (sx.actions || []).filter((a) => a.d).length;
                   const on = side?.kind === "session" && side?.id === sx.id;
