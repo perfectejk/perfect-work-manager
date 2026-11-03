@@ -149,6 +149,15 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
             회차 기록에서 스크립트 고르기 {program.noScripts && <span style={{ color: C.faint }}>(꺼짐 — 멘트 교육이 아닌 과정)</span>}
           </label>
         </>}
+        {program.rule !== "once" && <>
+          <PropLabel>월말 주</PropLabel>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.text, cursor: "pointer" }}>
+            <input type="checkbox" style={{ accentColor: C.main, cursor: "pointer" }}
+              checked={isSetProg(program) ? program.skipPromo !== false : program.skipPromo === true}
+              onChange={(e) => p({ skipPromo: e.target.checked })} />
+            <span>월말 마지막 주 건너뛰기 <span style={{ color: C.faint }}>({isSetProg(program) ? "+ 세트 추가" : "+ 회차 추가"} 때)</span></span>
+          </label>
+        </>}
       </Props>
 
       <Section title="대상자 명단" count={`${(program.members || []).length}명`}>

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { C, input, btn, modalBg, modalCard, fmtDate, addDays, YMD, WD } from "../shared/ui";
-import { RULES, genDates, ruleLabel, sessionTitle, isWeekly, weekDays, SET_STEPS, stepDates, planWeeks, mondayStr, findClash, clashText } from "./recur";
+import { RULES, genDates, ruleLabel, sessionTitle, isWeekly, weekDays, SET_STEPS, stepDates, planWeeks, mondayStr, findClash, clashText, isPromoWeek } from "./recur";
 import NameInput from "./NameInput";
 import SetFields from "./SetFields";
 import { EDU_COLORS } from "./store";
@@ -41,7 +41,7 @@ function fromSource(source) {
     return { ...base, mode: "set", skipPromo: pg.skipPromo !== false, steps: (pg.steps || SET_STEPS).map((x) => ({ ...x })), sets: sets.length ? sets : [["", ""]] };
   }
   return {
-    ...base, mode: pg.rule === "once" ? "once" : "repeat", rule: pg.rule === "once" ? "w1" : pg.rule,
+    ...base, mode: pg.rule === "once" ? "once" : "repeat", rule: pg.rule === "once" ? "w1" : pg.rule, skipPromo: pg.skipPromo !== false,
     days: Array.isArray(pg.days) && pg.days.length ? pg.days : null,
     count: Math.max(1, live.length), seq: live.map((s) => s.title || ""), noScripts: !!pg.noScripts,
   };
@@ -90,10 +90,15 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
 
   const useRule = once ? "once" : rule;
   const useDays = isWeekly(useRule) ? weekDays(days, start) : null;
-  const dates = useMemo(
-    () => genDates(start, useRule, Math.max(1, Math.min(52, parseInt(count) || 1)), useDays),
-    [start, useRule, count, useDays && useDays.join()]
-  );
+  // 반복 교육도 월말 프로모션 주는 빼고, 뺀 만큼 뒤에서 채운다
+  const { dates, promoSkipped } = useMemo(() => {
+    const n = Math.max(1, Math.min(52, parseInt(count) || 1));
+    if (useRule === "once" || !skipPromo) return { dates: genDates(start, useRule, n, useDays), promoSkipped: [] };
+    const many = genDates(start, useRule, n * 3 + 10, useDays);
+    const kept = many.filter((d) => !isPromoWeek(d)).slice(0, n);
+    const last = kept[kept.length - 1] || "";
+    return { dates: kept, promoSkipped: many.filter((d) => isPromoWeek(d) && d <= last) };
+  }, [start, useRule, count, useDays && useDays.join(), skipPromo]);
   // 요일 켜고 끄기 — 마지막 하나는 끌 수 없다
   const toggleDay = (x) => {
     const cur = weekDays(days, start);
@@ -127,7 +132,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
     }
     if (picked.length === 0) { alert("교육일을 최소 1개는 남겨주세요."); return; }
     setBusy(true);
-    await onCreate({ name: name.trim(), target: target.trim(), members, color, noScripts, rule: useRule, ...(useDays ? { days: useDays } : {}), start, time, dates: picked,
+    await onCreate({ name: name.trim(), target: target.trim(), members, color, noScripts, ...(once ? {} : { skipPromo }), rule: useRule, ...(useDays ? { days: useDays } : {}), start, time, dates: picked,
       titles: picked.map((d, i) => (seq[i] || "").trim()) });
     setBusy(false);
     onClose();
@@ -219,6 +224,21 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
                 onChange={(e) => { setCount(e.target.value); setOff({}); }} style={input()} />
             </div>
           </div>}
+
+          {!once && (
+            <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: C.text, cursor: "pointer", marginBottom: 10 }}>
+              <input type="checkbox" checked={skipPromo} onChange={(e) => { setSkipPromo(e.target.checked); setOff({}); }} style={{ accentColor: C.main, cursor: "pointer" }} />
+              <span><b>월말 마지막 주는 건너뛰기</b> <span style={{ color: C.faint, fontSize: 11 }}>(프로모션 마감 — 뺀 만큼 뒤에 회차를 더 만들어요)</span></span>
+            </label>
+          )}
+          {!once && skipPromo && promoSkipped.length > 0 && (
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
+              월말 주라 뺀 날짜: {promoSkipped.map(fmtDate).join(", ")}
+            </div>
+          )}
+          {once && start && isPromoWeek(start) && (
+            <div style={{ fontSize: 11.5, color: C.red, fontWeight: 700, marginBottom: 10 }}>⚠ 이 날짜는 월말 프로모션 마감 주예요.</div>
+          )}
 
           {!once && isWeekly(rule) && <div style={{ marginBottom: 12 }}>
             <label style={label}>요일 <span style={{ fontWeight: 600, color: C.faint }}>(여러 개 고를 수 있어요)</span></label>

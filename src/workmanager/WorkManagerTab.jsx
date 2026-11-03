@@ -10,7 +10,7 @@ import AddScriptModal from "./AddScriptModal";
 import ProgramModal from "./ProgramModal";
 import ProgramPanel from "./ProgramPanel";
 import SessionPanel from "./SessionPanel";
-import { blankSession, genDates, sessionTitle, weekDays, isSetProg, stepDates, setLabel, progRuleLabel, mondayStr, nextOpenMonday, daysBetween } from "./recur";
+import { blankSession, genDates, sessionTitle, weekDays, isSetProg, stepDates, setLabel, progRuleLabel, mondayStr, nextOpenMonday, daysBetween, isPromoWeek } from "./recur";
 import { saveSessionsOf, removeSessionsOf, SESSION_STATUS, EDU_COLOR, progColor, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
 import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } from "./contractMatch";
 import { extractReportTargets } from "./reportTarget";
@@ -147,7 +147,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       prog = { id, kind: "set", rule: "set", name, target, members, color, steps, start, time, skipPromo: skipPromo !== false, createdAt: TD };
       made = items.map((it) => ({ ...blankSession(uid(), id, it.date, it.time, members), title: "", set: it.set, step: it.step, scripts: it.scripts }));
     } else {
-      prog = { id, name, target, members, color, rule, ...(days ? { days } : {}), ...(noScripts ? { noScripts: true } : {}), start, time, createdAt: TD };
+      prog = { id, name, target, members, color, rule, ...(days ? { days } : {}), ...(noScripts ? { noScripts: true } : {}),
+        ...(skipPromo !== undefined ? { skipPromo: !!skipPromo } : {}), start, time, createdAt: TD };
       made = dates.map((d, i) => ({ ...blankSession(uid(), id, d, time, members), title: titles[i] || "" }));
     }
     await savePrograms([...programs, prog]);
@@ -218,7 +219,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     }
     const from = list.length ? list[list.length - 1].date : prog.start;
     // 여러 요일이면 같은 주의 다음 요일이 먼저 온다
-    const next = genDates(from, prog.rule, 3, weekDays(prog.days, prog.start)).find((d) => d > from) || addDays(from, 7);
+    // 월말 프로모션 주 건너뛰기를 켠 과정은 그 주를 넘긴다 (예전 과정은 값이 없어 그대로)
+    const skip = prog.skipPromo === true;
+    const next = genDates(from, prog.rule, 12, weekDays(prog.days, prog.start)).find((d) => d > from && !(skip && isPromoWeek(d))) || addDays(from, 7);
     const sess = blankSession(uid(), pid, next, prog.time, prog.members);
     await saveSessions([...sessions, sess], pid);
     setSide({ kind: "session", id: sess.id });
