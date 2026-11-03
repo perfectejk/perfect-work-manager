@@ -144,6 +144,21 @@ export function setLabel(sess, prog) {
   return `${sess.set}세트 · ${st.n || "단계"}`;
 }
 
+// ===== 일정 겹침 =====
+// taken: 이미 있는 교육 회차 [{ date, time, label }]
+// 같은 날, 시작 시간이 1시간 미만으로 붙어 있으면 겹친다고 본다. (시간이 없는 회차는 비교하지 않음)
+const toMin = (t) => { const [h, m] = String(t || "").split(":").map(Number); return Number.isFinite(h) ? h * 60 + (m || 0) : null; };
+export function findClash(taken, date, time) {
+  const t = toMin(time);
+  if (!date || t === null) return [];
+  return (taken || []).filter((x) => {
+    if (x.date !== date) return false;
+    const u = toMin(x.time);
+    return u !== null && Math.abs(u - t) < 60;
+  });
+}
+export const clashText = (list) => "⚠ " + list.map((x) => `${x.label}(${x.time})`).join(", ") + "와 겹침";
+
 // 빈 회차 한 건
 export function blankSession(id, pid, date, time, members, status) {
   const attend = {};

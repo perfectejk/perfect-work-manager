@@ -1,6 +1,6 @@
 import React from "react";
 import { C, input, btn, fmtDate, WD } from "../shared/ui";
-import { setDates } from "./recur";
+import { setDates, findClash, clashText } from "./recur";
 
 // 스크립트(멘트) 고르기 — 분류별로 묶은 드롭다운
 export function ScriptSelect({ scripts, value, onChange, style }) {
@@ -18,7 +18,7 @@ export function ScriptSelect({ scripts, value, onChange, style }) {
 }
 
 // 세트 교육 입력칸 — 단계별 요일·시간, 첫 세트 주, 세트별 멘트 2개와 순서
-export default function SetFields({ steps, onSteps, start, onStart, sets, onSets, scripts }) {
+export default function SetFields({ steps, onSteps, start, onStart, sets, onSets, scripts, taken = [] }) {
   const label = { display: "block", fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 5 };
   const sm = input({ padding: "5px 7px", fontSize: 12 });
   const setStep = (i, patch) => onSteps(steps.map((st, j) => (j === i ? { ...st, ...patch } : st)));
@@ -75,6 +75,8 @@ export default function SetFields({ steps, onSteps, start, onStart, sets, onSets
         {sets.map((m, k) => {
           const ds = setDates(start, k + 1, steps);
           const first = ds.length ? [...ds].sort()[0] : "";
+          // 이 세트의 단계 중 다른 과정과 겹치는 것
+          const clashes = steps.map((st, i) => ({ st, d: ds[i], list: findClash(taken, ds[i], st.time) })).filter((x) => x.list.length);
           return (
             <div key={k} style={{ background: C.soft, borderRadius: 8, padding: "7px 8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
@@ -91,6 +93,9 @@ export default function SetFields({ steps, onSteps, start, onStart, sets, onSets
                 <ScriptSelect scripts={scripts} value={m[0]} onChange={(id) => setMent(k, 0, id)} style={sm} />
                 <ScriptSelect scripts={scripts} value={m[1]} onChange={(id) => setMent(k, 1, id)} style={sm} />
               </div>
+              {clashes.map((x, j) => (
+                <div key={j} style={{ fontSize: 11, color: C.red, marginTop: 4 }}>{fmtDate(x.d)} {x.st.n} {x.st.time} — {clashText(x.list)}</div>
+              ))}
             </div>
           );
         })}

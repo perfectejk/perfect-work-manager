@@ -1053,6 +1053,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       </SidePanel>
 
       {showProgram && <ProgramModal people={people} onAddPerson={addPerson} today={TD} scripts={scripts}
+        taken={sessions.filter((sx) => sx.status !== "skip" && sx.date >= TD).map((sx) => ({ date: sx.date, time: sx.time, label: nameOf(sx) }))}
         usedColors={programs.map((pg) => pg.color).filter(Boolean)}
         onCreate={createProgram} onClose={() => setShowProgram(false)} />}
       {repeatTask && <RepeatModal task={repeatTask} onCreate={createRepeats} onClose={() => setRepeatTask(null)} />}

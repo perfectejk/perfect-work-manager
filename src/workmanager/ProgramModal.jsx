@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { C, input, btn, modalBg, modalCard, fmtDate, addDays, YMD, WD } from "../shared/ui";
-import { RULES, genDates, ruleLabel, sessionTitle, isWeekly, weekDays, SET_STEPS, setDates, mondayStr } from "./recur";
+import { RULES, genDates, ruleLabel, sessionTitle, isWeekly, weekDays, SET_STEPS, setDates, mondayStr, findClash, clashText } from "./recur";
 import NameInput from "./NameInput";
 import SetFields from "./SetFields";
 import { EDU_COLORS } from "./store";
@@ -21,7 +21,7 @@ export function ColorSwatches({ value, onChange }) {
 
 // 교육 과정 등록 — 주기를 정하면 회차 날짜가 자동으로 만들어지고,
 // 빼고 싶은 날짜는 체크를 해제해서 제외한다.
-export default function ProgramModal({ people, onAddPerson, onCreate, onClose, today, usedColors = [], scripts = [] }) {
+export default function ProgramModal({ people, onAddPerson, onCreate, onClose, today, usedColors = [], scripts = [], taken = [] }) {
   const TD = today || YMD(new Date());
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
@@ -57,6 +57,10 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
     setDays(next); setOff({});
   };
   const picked = dates.filter((d) => !off[d]);
+  // 다른 과정과 겹치는 회차 수 (아래 버튼 줄에 표시)
+  const clashCount = isSet
+    ? sets.reduce((n, _, k) => n + setDates(start, k + 1, steps).filter((d, i) => findClash(taken, d, steps[i].time).length).length, 0)
+    : picked.filter((d) => findClash(taken, d, time).length).length;
 
   const submit = async () => {
     if (!name.trim()) { alert("교육명을 입력해주세요."); return; }
@@ -132,7 +136,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
 
           {isSet ? (
             <SetFields steps={steps} onSteps={setSteps} start={start} onStart={setStart}
-              sets={sets} onSets={setSets} scripts={scripts} />
+              sets={sets} onSets={setSets} scripts={scripts} taken={taken} />
           ) : <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             <div>
@@ -185,8 +189,10 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
               : dates.map((d, i) => {
                 // 체크 해제한 날짜는 회차로 만들지 않으므로, 번호는 남은 날짜 기준으로 센다
                 const n = picked.indexOf(d) + 1;
+                const clash = off[d] ? [] : findClash(taken, d, time);
                 return (
-                  <div key={d + i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div key={d + i}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5, cursor: "pointer", flexShrink: 0, width: 150,
                       color: off[d] ? "#b5bdc9" : C.text, textDecoration: off[d] ? "line-through" : "none" }}>
                       <input type="checkbox" checked={!off[d]} onChange={() => setOff((o) => ({ ...o, [d]: !o[d] }))}
@@ -199,6 +205,8 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
                         style={input({ padding: "5px 8px", fontSize: 12, flex: 1, minWidth: 0 })} />
                     )}
                   </div>
+                  {clash.length > 0 && <div style={{ fontSize: 11, color: C.red, margin: "2px 0 0 22px" }}>{clashText(clash)}</div>}
+                  </div>
                 );
               })}
           </div>
@@ -206,6 +214,8 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
         </div>
 
         <div style={{ padding: "12px 20px 18px", display: "flex", gap: 8, justifyContent: "flex-end", flexShrink: 0, borderTop: `1px solid ${C.line}` }}>
+          {clashCount > 0 && <span style={{ marginRight: "auto", alignSelf: "center", fontSize: 11.5, fontWeight: 700, color: C.red }}>
+            ⚠ 다른 교육과 겹치는 회차 {clashCount}건</span>}
           <button onClick={onClose} disabled={busy} style={btn("ghost", { padding: "9px 18px", fontSize: 12.5 })}>취소</button>
           <button onClick={submit} disabled={busy} style={btn("primary", { padding: "9px 18px", fontSize: 12.5 })}>
             {busy ? "등록 중…" : isSet ? `등록 (${sets.length}세트 · ${sets.length * steps.length}회)` : `등록 (${picked.length}회차)`}</button>
