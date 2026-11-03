@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { C, input, btn, modalBg, modalCard, fmtDate, addDays, YMD, WD } from "../shared/ui";
-import { RULES, genDates, ruleLabel, sessionTitle, isWeekly, weekDays, SET_STEPS, setDates, mondayStr, findClash, clashText } from "./recur";
+import { RULES, genDates, ruleLabel, sessionTitle, isWeekly, weekDays, SET_STEPS, stepDates, planWeeks, mondayStr, findClash, clashText } from "./recur";
 import NameInput from "./NameInput";
 import SetFields from "./SetFields";
 import { EDU_COLORS } from "./store";
@@ -38,7 +38,7 @@ function fromSource(source) {
       const m = (live.find((s) => s.set === k && s.step === 0) || live.find((s) => s.set === k) || {}).scripts || [];
       return [m[0] || "", m[1] || ""];
     });
-    return { ...base, mode: "set", steps: (pg.steps || SET_STEPS).map((x) => ({ ...x })), sets: sets.length ? sets : [["", ""]] };
+    return { ...base, mode: "set", skipPromo: pg.skipPromo !== false, steps: (pg.steps || SET_STEPS).map((x) => ({ ...x })), sets: sets.length ? sets : [["", ""]] };
   }
   return {
     ...base, mode: pg.rule === "once" ? "once" : "repeat", rule: pg.rule === "once" ? "w1" : pg.rule,
@@ -66,6 +66,11 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
   const isSet = mode === "set";
   const [steps, setSteps] = useState(() => init.steps || SET_STEPS.map((x) => ({ ...x })));
   const [sets, setSets] = useState(() => init.sets || Array.from({ length: 4 }, () => ["", ""]));   // 세트별 멘트 2개
+  const [skipPromo, setSkipPromo] = useState(init.skipPromo !== false);   // 월말 프로모션 주 건너뛰기
+  const [rest, setRest] = useState({});                                     // 직접 고른 쉬는 주 { 월요일: true }
+  const toggleRest = (mon) => setRest((r) => { const n = { ...r }; if (n[mon]) delete n[mon]; else n[mon] = true; return n; });
+  const weeks = useMemo(() => (isSet ? planWeeks(start, sets.length, skipPromo, rest) : []), [isSet, start, sets.length, skipPromo, rest]);
+  const setMons = weeks.filter((w) => w.kind === "set").map((w) => w.mon);   // 세트별 시작 주 월요일
   const [rule, setRule] = useState(init.rule || "w2");
   const [count, setCount] = useState(init.count || 6);
   const [days, setDays] = useState(init.days || null);  // 고른 요일 (null이면 첫 교육일의 요일)
@@ -98,7 +103,7 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
   const picked = dates.filter((d) => !off[d]);
   // 다른 과정과 겹치는 회차 수 (아래 버튼 줄에 표시)
   const clashCount = isSet
-    ? sets.reduce((n, _, k) => n + setDates(start, k + 1, steps).filter((d, i) => findClash(taken, d, steps[i].time).length).length, 0)
+    ? setMons.reduce((n, mon) => n + stepDates(mon, steps).filter((d, i) => findClash(taken, d, steps[i].time).length).length, 0)
     : picked.filter((d) => findClash(taken, d, time).length).length;
 
   const submit = async () => {
@@ -109,12 +114,12 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
       const cleanSteps = steps.map((st) => ({ ...st, n: st.n.trim() }));
       const items = [];
       sets.forEach((m, k) => {
-        const ds = setDates(start, k + 1, cleanSteps);
+        const ds = stepDates(setMons[k], cleanSteps);
         cleanSteps.forEach((st, i) => items.push({ date: ds[i], time: st.time, set: k + 1, step: i, scripts: m.filter(Boolean) }));
       });
       setBusy(true);
       await onCreate({ kind: "set", name: name.trim(), target: target.trim(), members, color, steps: cleanSteps,
-        start: mondayStr(start), time: cleanSteps[0].time, items });
+        start: mondayStr(start), time: cleanSteps[0].time, skipPromo, items });
       setBusy(false);
       onClose();
       return;
@@ -179,7 +184,8 @@ export default function ProgramModal({ people, onAddPerson, onCreate, onClose, t
 
           {isSet ? (
             <SetFields steps={steps} onSteps={setSteps} start={start} onStart={setStart}
-              sets={sets} onSets={setSets} scripts={scripts} taken={taken} />
+              sets={sets} onSets={setSets} scripts={scripts} taken={taken}
+              weeks={weeks} skipPromo={skipPromo} onSkipPromo={setSkipPromo} onRest={toggleRest} />
           ) : <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             <div>

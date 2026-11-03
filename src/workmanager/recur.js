@@ -112,11 +112,16 @@ const wdOffset = (wd) => (wd + 6) % 7;
 // (예: 목 대면 → 금 필기 → 월 ARS 면 ARS 는 다음 주 월요일).
 export function setDates(startStr, k, steps) {
   if (!startStr) return [];
-  const mon = mondayOf(parseYMD(startStr));
+  return stepDates(plusDays(mondayStr(startStr), 7 * (k - 1)), steps);
+}
+// 한 세트의 단계별 날짜 — 세트가 시작하는 주의 월요일(monStr) 기준
+export function stepDates(monStr, steps) {
+  if (!monStr) return [];
+  const mon = parseYMD(monStr);
   let prev = null;
   return (steps || []).map((st, i) => {
     const d = new Date(mon);
-    if (i === 0) d.setDate(mon.getDate() + 7 * (k - 1) + wdOffset(st.wd));
+    if (i === 0) d.setDate(mon.getDate() + wdOffset(st.wd));
     else { d.setTime(prev.getTime()); d.setDate(d.getDate() + ((st.wd - prev.getDay() + 7) % 7)); }
     prev = d;
     return YMD(d);
@@ -124,6 +129,37 @@ export function setDates(startStr, k, steps) {
 }
 // 날짜가 속한 주의 월요일 (YYYY-MM-DD)
 export const mondayStr = (s) => YMD(mondayOf(parseYMD(s)));
+const plusDays = (s, n) => { const d = parseYMD(s); d.setDate(d.getDate() + n); return YMD(d); };
+export const daysBetween = (a, b) => Math.round((parseYMD(b) - parseYMD(a)) / 864e5);
+
+// 월말 프로모션 마감 주 — 그 달 안에 월~금이 모두 들어 있는 마지막 주
+// (예: 2026년 10월 10/26~30, 11월 11/23~27, 12월 12/21~25). 이 주에는 세트 교육을 잡지 않는다.
+export function isPromoWeek(s) {
+  const mon = parseYMD(mondayStr(s));
+  const fri = new Date(mon); fri.setDate(mon.getDate() + 4);
+  if (fri.getMonth() !== mon.getMonth()) return false;
+  const nextFri = new Date(fri); nextFri.setDate(fri.getDate() + 7);
+  return nextFri.getMonth() !== fri.getMonth();
+}
+// monStr 주부터 시작해서, 건너뛸 주가 아니게 될 때까지 한 주씩 미룬다
+export function nextOpenMonday(monStr, skipPromo) {
+  let m = mondayStr(monStr);
+  for (let g = 0; skipPromo && isPromoWeek(m) && g < 10; g++) m = plusDays(m, 7);
+  return m;
+}
+// 세트 n개를 주마다 배치 — 월말 프로모션 주(skipPromo)와 직접 고른 쉬는 주(rest)는 건너뛴다.
+// 결과: [{ mon, kind: "set", k } | { mon, kind: "promo" } | { mon, kind: "rest" }]
+export function planWeeks(startStr, n, skipPromo, rest = {}) {
+  const out = [];
+  if (!startStr) return out;
+  let mon = mondayStr(startStr), k = 0;
+  for (let g = 0; k < n && g < 400; g++, mon = plusDays(mon, 7)) {
+    if (rest[mon]) out.push({ mon, kind: "rest" });
+    else if (skipPromo && isPromoWeek(mon)) out.push({ mon, kind: "promo" });
+    else { k++; out.push({ mon, kind: "set", k }); }
+  }
+  return out;
+}
 
 // "세트 교육 · 월 대면·자습 / 화 필기 인출 / 수 ARS 녹취 판정"
 export function setRuleLabel(steps) {

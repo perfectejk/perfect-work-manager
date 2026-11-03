@@ -1,6 +1,6 @@
 import React from "react";
 import { C, input, btn, fmtDate, WD } from "../shared/ui";
-import { setDates, findClash, clashText } from "./recur";
+import { stepDates, findClash, clashText } from "./recur";
 
 // 스크립트(멘트) 고르기 — 분류별로 묶은 드롭다운
 export function ScriptSelect({ scripts, value, onChange, style }) {
@@ -18,7 +18,8 @@ export function ScriptSelect({ scripts, value, onChange, style }) {
 }
 
 // 세트 교육 입력칸 — 단계별 요일·시간, 첫 세트 주, 세트별 멘트 2개와 순서
-export default function SetFields({ steps, onSteps, start, onStart, sets, onSets, scripts, taken = [] }) {
+export default function SetFields({ steps, onSteps, start, onStart, sets, onSets, scripts, taken = [],
+  weeks = [], skipPromo, onSkipPromo, onRest }) {
   const label = { display: "block", fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 5 };
   const sm = input({ padding: "5px 7px", fontSize: 12 });
   const setStep = (i, patch) => onSteps(steps.map((st, j) => (j === i ? { ...st, ...patch } : st)));
@@ -66,22 +67,40 @@ export default function SetFields({ steps, onSteps, start, onStart, sets, onSets
         </div>
       </div>
 
+      <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: C.text, cursor: "pointer", marginBottom: 12 }}>
+        <input type="checkbox" checked={skipPromo} onChange={(e) => onSkipPromo(e.target.checked)} style={{ accentColor: C.main, cursor: "pointer" }} />
+        <span><b>월말 마지막 주는 건너뛰기</b> <span style={{ color: C.faint, fontSize: 11 }}>(프로모션 마감 — 그 달 안에 월~금이 다 들어 있는 마지막 주)</span></span>
+      </label>
+
       <label style={label}>
         세트별 멘트 <span style={{ fontWeight: 600, color: C.faint }}>(↑↓ 로 순서를 바꾸면 멘트만 옮겨가요)</span>
         <span style={{ float: "right", fontWeight: 600, color: C.faint }}>{count * steps.length}회 만들어짐</span>
       </label>
       <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 9, marginBottom: 14, maxHeight: 300, overflowY: "auto", display: "grid", gap: 7 }}>
         {scripts.length === 0 && <div style={{ fontSize: 11.5, color: C.red }}>스크립트 목록이 비어 있어요. 스크립트 탭에서 멘트를 먼저 추가하면 고를 수 있어요.</div>}
-        {sets.map((m, k) => {
-          const ds = setDates(start, k + 1, steps);
+        {weeks.map((w) => {
+          // 건너뛰는 주 — 월말 프로모션 주 / 직접 고른 쉬는 주
+          if (w.kind !== "set") return (
+            <div key={w.mon} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.muted,
+              border: `1px dashed ${C.line}`, borderRadius: 8, padding: "6px 8px" }}>
+              <span>{fmtDate(w.mon)} 주 — {w.kind === "promo" ? "월말 프로모션 마감 주라 건너뜀" : "쉬는 주"}</span>
+              {w.kind === "rest" && <button type="button" onClick={() => onRest(w.mon)}
+                style={btn("ghost", { marginLeft: "auto", padding: "2px 8px", fontSize: 11 })}>되돌리기</button>}
+            </div>
+          );
+          const k = w.k - 1;
+          const m = sets[k] || ["", ""];
+          const ds = stepDates(w.mon, steps);
           const first = ds.length ? [...ds].sort()[0] : "";
           // 이 세트의 단계 중 다른 과정과 겹치는 것
           const clashes = steps.map((st, i) => ({ st, d: ds[i], list: findClash(taken, ds[i], st.time) })).filter((x) => x.list.length);
           return (
-            <div key={k} style={{ background: C.soft, borderRadius: 8, padding: "7px 8px" }}>
+            <div key={w.mon} style={{ background: C.soft, borderRadius: 8, padding: "7px 8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
                 <b style={{ fontSize: 12.5, color: C.title }}>{k + 1}세트</b>
                 <span style={{ fontSize: 11, color: C.faint }}>{first ? fmtDate(first) + " 주" : ""}</span>
+                <button type="button" onClick={() => onRest(w.mon)} title="이 주는 교육을 쉬고, 이 세트부터 한 주씩 뒤로 밀어요"
+                  style={btn("ghost", { padding: "2px 8px", fontSize: 10.5 })}>이 주 쉬기</button>
                 <span style={{ marginLeft: "auto", display: "flex", gap: 3 }}>
                   <button type="button" onClick={() => move(k, -1)} disabled={k === 0} title="위로"
                     style={btn("ghost", { padding: "2px 8px", fontSize: 11 })}>↑</button>

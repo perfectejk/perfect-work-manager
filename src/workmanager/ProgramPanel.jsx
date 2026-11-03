@@ -2,15 +2,18 @@ import React from "react";
 import { C, input, btn, badge, fmtDate } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section } from "../shared/SidePanel";
 import { SESSION_STATUS } from "./store";
-import { sessionTitle, isSetProg, progRuleLabel } from "./recur";
+import { sessionTitle, isSetProg, progRuleLabel, isPromoWeek } from "./recur";
 import NameInput from "./NameInput";
 import { ColorSwatches } from "./ProgramModal";
 import { ScriptSelect } from "./SetFields";
 import { progColor } from "./store";
 
 // 세트 교육의 세트 목록 — 세트별 멘트 2개 고르기, ↑↓ 로 세트 순서(멘트) 바꾸기
-function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet }) {
+function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet, onDelaySet }) {
   const nums = [...new Set(sessions.map((s) => s.set).filter(Boolean))].sort((a, b) => a - b);
+  // k세트부터 뒤 세트까지 끝난 회차가 하나도 없으면 미룰 수 있다
+  const canDelay = (k) => !sessions.some((s) => s.set >= k && s.status === "done");
+  const skip = program.skipPromo !== false;
   const sm = input({ padding: "5px 7px", fontSize: 12 });
   return (
     <Section title="세트" count={`${nums.length}세트`}>
@@ -36,6 +39,15 @@ function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet 
                   style={btn("ghost", { padding: "2px 8px", fontSize: 11 })}>↓</button>
               </span>
             </div>
+            {(skip && list.some((s) => isPromoWeek(s.date)) || canDelay(k)) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                {skip && list.some((s) => isPromoWeek(s.date)) &&
+                  <span style={{ fontSize: 11, color: C.red, fontWeight: 700 }}>⚠ 월말 프로모션 주에 걸려 있어요</span>}
+                {canDelay(k) && <button type="button" onClick={() => onDelaySet(program.id, k)}
+                  title="이 세트를 한 주 뒤로 미루고, 겹치는 뒤 세트도 같이 밀어요 (월말 프로모션 주는 건너뜀)"
+                  style={btn("ghost", { marginLeft: "auto", padding: "2px 8px", fontSize: 10.5 })}>이 세트부터 한 주 미루기</button>}
+              </div>
+            )}
             {allDone
               ? <div style={{ fontSize: 11.5, color: C.muted }}>
                   {m.map((id) => (scripts.find((x) => x.id === id) || {}).name).filter(Boolean).join(" · ") || "멘트 없음"} (완료)
@@ -54,7 +66,7 @@ function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet 
 
 // 교육 과정 상세 — 이름 / 대상 / 대상자 명단 편집 / 회차 목록
 export default function ProgramPanel({ program, sessions, people, roundOf, onPatch, onAddPerson, onOpenSession, onDelete, onDeleteSession,
-  scripts = [], onSetMents, onSwapSets, onAddSet, onCopy }) {
+  scripts = [], onSetMents, onSwapSets, onAddSet, onDelaySet, onCopy }) {
   if (!program) return null;
   const p = (patch) => onPatch(program.id, patch);
   const sel = input({ padding: "5px 7px", fontSize: 12, background: C.soft, border: "1px solid transparent" });
@@ -89,7 +101,7 @@ export default function ProgramPanel({ program, sessions, people, roundOf, onPat
       </Section>
 
       {isSetProg(program) && <SetList program={program} sessions={sessions} scripts={scripts}
-        onSetMents={onSetMents} onSwapSets={onSwapSets} onAddSet={onAddSet} />}
+        onSetMents={onSetMents} onSwapSets={onSwapSets} onAddSet={onAddSet} onDelaySet={onDelaySet} />}
 
       <Section title="회차" count={`${done}/${active.length}회 완료`}>
         <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>회차를 누르면 수정, ✕ 를 누르면 삭제합니다.</div>
