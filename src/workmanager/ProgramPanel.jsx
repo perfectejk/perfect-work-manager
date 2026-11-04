@@ -28,13 +28,13 @@ function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet,
   return (
     <Section title="세트" count={`${nums.length}세트`}>
       <div style={{ fontSize: 11, color: C.faint, marginBottom: 6, lineHeight: 1.55 }}>
-        멘트를 바꾸면 그 세트의 <b>아직 안 끝난 회차</b>에 모두 반영돼요. ↑↓ 는 날짜는 두고 멘트만 맞바꿉니다 (끝난 회차가 있는 세트는 제외).
+        멘트를 고르면 그 세트의 <b>대면·자습·필기·ARS 회차에 한 번에</b> 반영돼요. ↑↓ 는 날짜는 두고 멘트만 맞바꿉니다 (끝난 회차가 있는 세트는 제외).
       </div>
       {nums.map((k, idx) => {
         const list = sessions.filter((s) => s.set === k);
         const doneN = list.filter((s) => s.status === "done").length;
         const allDone = doneN === list.length;
-        const base = list.find((s) => s.status !== "done") || list[0];
+        const base = list.find((s) => s.status !== "done") || list.find((s) => (s.scripts || []).length) || list[0];
         const m = base.scripts || [];
         const change = (slot, id) => onSetMents(program.id, k, slot === 0 ? [id, m[1]] : [m[0], id]);
         return (
@@ -79,14 +79,11 @@ function SetList({ program, sessions, scripts, onSetMents, onSwapSets, onAddSet,
               <button type="button" onClick={() => openRetake(k, list)} title="통과하지 못한 사람을 위한 재교육 회차를 이 세트에 추가해요"
                 style={btn("ghost", { padding: "2px 8px", fontSize: 10.5, marginBottom: 5 })}>+ 재교육</button>
             )}
-            {allDone
-              ? <div style={{ fontSize: 11.5, color: C.muted }}>
-                  {m.map((id) => (scripts.find((x) => x.id === id) || {}).name).filter(Boolean).join(" · ") || "멘트 없음"} (완료)
-                </div>
-              : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                  <ScriptSelect scripts={scripts} value={m[0]} onChange={(id) => change(0, id)} style={sm} />
-                  <ScriptSelect scripts={scripts} value={m[1]} onChange={(id) => change(1, id)} style={sm} />
-                </div>}
+            {allDone && <div style={{ fontSize: 10.5, color: C.faint, marginBottom: 3 }}>끝난 세트 — 고르면 이 세트 회차 전체에 반영돼요</div>}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <ScriptSelect scripts={scripts} value={m[0]} onChange={(id) => change(0, id)} style={sm} />
+              <ScriptSelect scripts={scripts} value={m[1]} onChange={(id) => change(1, id)} style={sm} />
+            </div>
           </div>
         );
       })}

@@ -235,10 +235,14 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     setSide({ kind: "session", id: sess.id });
   };
 
-  // 세트 교육 — 한 세트의 멘트를 바꾸면 그 세트의 아직 안 끝난 회차 전체에 반영 (완료 회차의 기록은 그대로)
+  // 세트 교육 — 한 세트의 멘트를 바꾸면 그 세트 회차 전체에 한 번에 반영.
+  // 이미 멘트가 적혀 있는 완료 회차는 그대로 두되, 세트가 전부 끝났거나 완료 회차에 멘트가 비어 있으면 같이 채운다.
   const setSetMents = async (pid, k, ids) => {
     const clean = ids.filter(Boolean);
-    await saveSessions(sessions.map((sx) => (String(sx.pid) === String(pid) && sx.set === k && sx.status !== "done"
+    const inSet = sessions.filter((sx) => String(sx.pid) === String(pid) && sx.set === k);
+    const allDone = inSet.length > 0 && inSet.every((sx) => sx.status === "done");
+    await saveSessions(sessions.map((sx) => (String(sx.pid) === String(pid) && sx.set === k
+      && (allDone || sx.status !== "done" || !(sx.scripts || []).length)
       ? { ...sx, scripts: clean } : sx)), pid);
   };
   // 세트 교육 — 두 세트의 순서 바꾸기. 날짜는 그대로 두고 멘트(와 직접 쓴 제목)만 맞바꾼다.
