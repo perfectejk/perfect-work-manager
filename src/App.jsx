@@ -1149,15 +1149,20 @@ function ReviewPlanPanel({contract,st,onSummary,cfg}){
         <span style={{fontSize:12,color:"#6b7280"}}>건</span>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:10}}>
-        {[{l:"완료 합계",v:done+"건",c:"#0071CE",bg:"#f0f7ff"},{l:C.runName,v:runDone+"건",c:C.color,bg:C.bg},C.useCms&&{l:"CMS",v:cmsDone+"건",c:"#0891b2",bg:"#ecfeff"},{l:"남은 건수",v:goal>0?Math.max(0,remain)+"건":"—",c:remain<=0&&goal>0?"#10b981":"#374151",bg:remain<=0&&goal>0?"#f0fdf4":"#f7f8fa"}].filter(Boolean).map(x=>(
-          <div key={x.l} style={{background:x.bg,borderRadius:10,padding:"9px 12px",textAlign:"center"}}>
+        {/* 큰 숫자 = 배분(등록) 건수, 아래 초록 글자 = 그 중 작업이 완료된 건수 — 상단 카드(배분 기준)와 같은 숫자로 맞춘다 */}
+        {[{k:"sum",l:"배분 합계 (계약 "+provideN+"건)",v:plannedTotal+"건",s:"그 중 완료 "+done+"건",c:"#0071CE",bg:"#f0f7ff"},
+          {k:"run",l:C.runName,v:"배분 "+(plannedTotal-cmsDone)+"건",s:"그 중 완료 "+runDone+"건",c:C.color,bg:C.bg},
+          C.useCms&&{k:"cms",l:"CMS",v:cmsDone+"건",s:"올린 기록 = 완료",c:"#0891b2",bg:"#ecfeff"},
+          {k:"remain",l:"남은 작업"+(goal>0?" (목표 "+goal+"건 기준)":""),v:goal>0?Math.max(0,remain)+"건":"—",s:goal>0?"":"총 목표를 넣으면 계산",c:remain<=0&&goal>0?"#10b981":"#374151",bg:remain<=0&&goal>0?"#f0fdf4":"#f7f8fa"}].filter(Boolean).map(x=>(
+          <div key={x.k} style={{background:x.bg,borderRadius:10,padding:"9px 12px",textAlign:"center"}}>
             <div style={{fontSize:16,fontWeight:800,color:x.c}}>{x.v}</div>
+            {x.s&&<div style={{fontSize:11,fontWeight:700,color:x.k==="remain"?"#adb5bd":"#10b981",marginTop:1}}>{x.s}</div>}
             <div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>{x.l}</div>
           </div>))}
       </div>
       <div style={{marginBottom:10}}>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6b7280",marginBottom:4}}>
-          <span>진행률</span><span style={{fontWeight:700,color:pct>=100?"#10b981":"#0071CE"}}>{pct}%{goal>0&&pct>=100?" · 목표 달성":""}</span>
+          <span>작업 완료율 (목표 대비 완료)</span><span style={{fontWeight:700,color:pct>=100?"#10b981":"#0071CE"}}>{pct}%{goal>0&&pct>=100?" · 목표 달성":""}</span>
         </div>
         <div style={{height:9,background:"#f0f1f3",borderRadius:99,overflow:"hidden"}}>
           <div style={{width:pct+"%",height:"100%",background:pct>=100?"#10b981":"linear-gradient(90deg,#0071CE,"+C.color+")",borderRadius:99,transition:"width 0.3s"}}/>
@@ -1517,7 +1522,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
               <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px solid #f7f8fa"}}>
                 <span style={{fontSize:11,color:"#8468D3",fontWeight:700}}>리뷰나우 {(blogSum.plannedTotal-blogSum.cmsDone).toLocaleString()}건</span>
                 <span style={{fontSize:11,color:"#0891b2",fontWeight:700}}>CMS {blogSum.cmsDone.toLocaleString()}건</span>
-                <span style={{fontSize:11,color:"#10b981",fontWeight:700}}>완료 {blogSum.done.toLocaleString()}건</span>
+                <span style={{fontSize:11,color:"#10b981",fontWeight:700}}>그 중 완료 {blogSum.done.toLocaleString()}건</span>
               </div>
             </div>);
           })()}
