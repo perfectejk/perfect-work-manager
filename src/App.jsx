@@ -1080,8 +1080,12 @@ const blogWeeks=(start,end)=>{
 // 같은 화면(ReviewPlanPanel)을 설정만 바꿔 쓴다. 블로그 값은 이전 화면과 글자·색·저장 위치가 완전히 같다.
 const REVIEW_PANELS={
   blog:{storePrefix:"blog:plan:",collapseKey:"plan:blog",title:"블로그 리뷰 계획",provideKey:"blogPlus",provideLabel:"블플",runName:"리뷰나우",
-    color:"#8468D3",bg:"#f5f3ff",bd:"#e9d5ff",headerBg:"linear-gradient(90deg,#f5f3ff,#f0f7ff)"},
+    color:"#8468D3",bg:"#f5f3ff",bd:"#e9d5ff",headerBg:"linear-gradient(90deg,#f5f3ff,#f0f7ff)",useCms:true},
+  // 영수증리뷰 — 기간 세팅만 쓴다(건별 기록 칸 없음). 저장 위치는 새 문서 receipt:plan:{계약id}
+  receipt:{storePrefix:"receipt:plan:",collapseKey:"plan:receipt",title:"영수증 리뷰 계획",provideKey:"receipt",provideLabel:"영수증리뷰",runName:"영수증 리뷰",
+    color:"#db2777",bg:"#fdf2f8",bd:"#fbcfe8",headerBg:"linear-gradient(90deg,#fdf2f8,#f0f7ff)",useCms:false},
 };
+const receiptHasProduct=c=>(parseInt(c&&c.provide&&c.provide.receipt)||0)>0;
 function ReviewPlanPanel({contract,st,onSummary,cfg}){
   const C=cfg;// 블로그·영수증 공용 — 글자·색·저장 위치는 REVIEW_PANELS 설정에서 온다
   const cid=contract.id;
@@ -1145,7 +1149,7 @@ function ReviewPlanPanel({contract,st,onSummary,cfg}){
         <span style={{fontSize:12,color:"#6b7280"}}>건</span>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:10}}>
-        {[{l:"완료 합계",v:done+"건",c:"#0071CE",bg:"#f0f7ff"},{l:C.runName,v:runDone+"건",c:C.color,bg:C.bg},{l:"CMS",v:cmsDone+"건",c:"#0891b2",bg:"#ecfeff"},{l:"남은 건수",v:goal>0?Math.max(0,remain)+"건":"—",c:remain<=0&&goal>0?"#10b981":"#374151",bg:remain<=0&&goal>0?"#f0fdf4":"#f7f8fa"}].map(x=>(
+        {[{l:"완료 합계",v:done+"건",c:"#0071CE",bg:"#f0f7ff"},{l:C.runName,v:runDone+"건",c:C.color,bg:C.bg},C.useCms&&{l:"CMS",v:cmsDone+"건",c:"#0891b2",bg:"#ecfeff"},{l:"남은 건수",v:goal>0?Math.max(0,remain)+"건":"—",c:remain<=0&&goal>0?"#10b981":"#374151",bg:remain<=0&&goal>0?"#f0fdf4":"#f7f8fa"}].filter(Boolean).map(x=>(
           <div key={x.l} style={{background:x.bg,borderRadius:10,padding:"9px 12px",textAlign:"center"}}>
             <div style={{fontSize:16,fontWeight:800,color:x.c}}>{x.v}</div>
             <div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>{x.l}</div>
@@ -1160,14 +1164,14 @@ function ReviewPlanPanel({contract,st,onSummary,cfg}){
         </div>
       </div>
       {(overSet||shortFall||lateRun)&&(<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
-        {overSet&&warn("#fffbeb","#fde68a","#92400e","설정 합계가 총 목표를 넘습니다 — "+C.runName+"+CMS 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(plannedTotal-goal)+"건 초과)")}
+        {overSet&&warn("#fffbeb","#fde68a","#92400e","설정 합계가 총 목표를 넘습니다 — "+C.runName+(C.useCms?"+CMS":"")+" 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(plannedTotal-goal)+"건 초과)")}
         {shortFall&&warn("#fef2f2","#fecaca","#b91c1c","현재 설정으로는 목표를 채우지 못합니다 — 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(goal-plannedTotal)+"건 부족)")}
-        {lateRun&&warn("#fef2f2","#fecaca","#b91c1c",C.runName+" 예상 종료일("+blogRunEnd(lateRun)+")이 계약 종료일("+contract.endDate+")보다 늦습니다 — 일 건수를 늘리거나 CMS로 보완하세요")}
+        {lateRun&&warn("#fef2f2","#fecaca","#b91c1c",C.runName+" 예상 종료일("+blogRunEnd(lateRun)+")이 계약 종료일("+contract.endDate+")보다 늦습니다 — 일 건수를 늘리거나 "+(C.useCms?"CMS로 보완하세요":"세팅을 추가하세요"))}
       </div>)}
 
       {/* 방법 A: 기간 세팅 (블로그는 리뷰나우) */}
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
-        <span style={{fontSize:12,fontWeight:800,color:C.color}}>방법 A · {C.runName}</span>
+        <span style={{fontSize:12,fontWeight:800,color:C.color}}>{C.useCms?"방법 A · ":""}{C.runName}{C.useCms?"":" 세팅"}</span>
         <span style={{fontSize:10.5,color:"#adb5bd"}}>기간 자동 진행 · 여러 번 세팅 가능(1차·2차…)</span>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:9}}>
@@ -1233,7 +1237,8 @@ function ReviewPlanPanel({contract,st,onSummary,cfg}){
       </div>
       <button onClick={addRun} style={{width:"100%",background:C.bg,color:C.color,border:"1px dashed "+C.bd,borderRadius:9,padding:"8px",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:16,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ {C.runName} 세팅 추가</button>
 
-      {/* 방법 B: CMS */}
+      {/* 방법 B: CMS — 건별 기록 칸 (설정 useCms 가 꺼져 있으면 숨김, 예: 영수증) */}
+      {C.useCms&&(<>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
         <span style={{fontSize:12,fontWeight:800,color:"#0891b2"}}>방법 B · CMS</span>
         <span style={{fontSize:10.5,color:"#adb5bd"}}>수기 업로드 기록 · 1건씩 추가</span>
@@ -1253,12 +1258,13 @@ function ReviewPlanPanel({contract,st,onSummary,cfg}){
           </tr>))}
         </tbody></table>
       </div>):<div style={{fontSize:11.5,color:"#adb5bd",textAlign:"center",padding:"10px 0",marginBottom:16}}>아직 CMS 업로드 기록이 없습니다</div>}
+      </>)}
 
       {/* 주차별 보기 */}
       <button onClick={()=>setShowWeeks(v=>!v)} style={{width:"100%",background:"#f0f7ff",color:"#0071CE",border:"1px solid #bfd7f5",borderRadius:9,padding:"8px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>주차별 보기 {showWeeks?"닫기":"열기"} ({weeks.length}주)</button>
       {showWeeks&&(weeks.length===0?<div style={{fontSize:11.5,color:"#adb5bd",textAlign:"center",padding:"12px 0"}}>계약 시작일·종료일이 있어야 주차를 나눌 수 있습니다</div>:(
         <div style={{overflowX:"auto",marginTop:9,border:"1px solid #f0f1f3",borderRadius:9}}>
-          <table style={{width:"100%",borderCollapse:"collapse",minWidth:460}}><thead><tr>{["주차","기간",C.runName+" 예상","CMS 예정","CMS 실적"].map((h,i)=><th key={i} style={th}>{h}</th>)}</tr></thead><tbody>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:460}}><thead><tr>{(C.useCms?["주차","기간",C.runName+" 예상","CMS 예정","CMS 실적"]:["주차","기간",C.runName+" 예상"]).map((h,i)=><th key={i} style={th}>{h}</th>)}</tr></thead><tbody>
             {weeks.map((w,i)=>{
               const rn=data.runs.reduce((s,r)=>s+blogRunInRange(r,w.start,w.end),0);
               const act=blogCmsSum(data.cms,w.start,w.end);
@@ -1269,14 +1275,16 @@ function ReviewPlanPanel({contract,st,onSummary,cfg}){
                 <td style={{...td,fontWeight:700,color:isNow?"#0071CE":"#374151"}}>{i+1}주{isNow?" · 이번주":""}</td>
                 <td style={{...td,fontSize:11,color:"#6b7280"}}>{w.start.slice(5)} ~ {w.end.slice(5)}</td>
                 <td style={{...td,fontWeight:700,color:rn>0?C.color:"#d1d5db"}}>{rn}건</td>
+                {C.useCms&&<>
                 <td style={td}><input type="number" min="0" value={plan==null?"":plan} onChange={e=>setWeekPlan(w.mon,e.target.value)} placeholder="—" style={{...iS,width:62,textAlign:"center",padding:"4px 6px"}}/></td>
                 <td style={{...td,fontWeight:700,color:planN>0?(act>=planN?"#10b981":"#b45309"):"#0891b2"}}>{act}건{planN>0&&<span style={{fontSize:10,fontWeight:600}}> / {planN}</span>}</td>
+                </>}
               </tr>);})}
           </tbody></table>
         </div>))}
       <p style={{fontSize:10.5,color:"#adb5bd",margin:"9px 0 0",lineHeight:1.65}}>
         <b>{C.runName}</b>는 <b>올리는 요일</b>에만 하루 <b>일 건수</b>만큼 올라간다고 보고 진행량을 계산합니다(시작일 포함). 매일·평일 버튼을 쓰거나 요일을 직접 골라도 됩니다 (예: 월·금 하루 2건, 총 10건). 실제와 다르면 <b>실제 확인 건수</b>에 숫자를 넣으세요 — 그 값이 우선합니다.<br/>
-        <b>CMS</b>는 올린 날짜마다 1건씩 기록하고, 주차별 보기에서 <b>이번 주 예정 건수</b>와 실제 실적을 비교할 수 있습니다.<br/>
+        {C.useCms&&<><b>CMS</b>는 올린 날짜마다 1건씩 기록하고, 주차별 보기에서 <b>이번 주 예정 건수</b>와 실제 실적을 비교할 수 있습니다.<br/></>}
         입력 후 오른쪽 위 <b style={{color:C.color}}>저장</b> 버튼을 눌러야 저장됩니다.
       </p>
     </div>)}
@@ -1657,6 +1665,8 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
         </CollapsibleSection>
         {/* 블플이 포함된 계약에만 블로그 리뷰 계획을 붙인다 (provide.blogPlus > 0) */}
         {blogHasProduct(sel)&&<ReviewPlanPanel key={sel.id} cfg={REVIEW_PANELS.blog} contract={sel} st={st} onSummary={setBlogSum}/>}
+        {/* 영수증리뷰가 포함된 계약에만 영수증 리뷰 계획을 붙인다 (provide.receipt > 0) */}
+        {receiptHasProduct(sel)&&<ReviewPlanPanel key={"r-"+sel.id} cfg={REVIEW_PANELS.receipt} contract={sel} st={st}/>}
       </>)}
     </div>
   </div>);
