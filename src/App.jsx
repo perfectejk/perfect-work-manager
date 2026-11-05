@@ -1076,7 +1076,14 @@ const blogWeeks=(start,end)=>{
   while(cur<=end&&guard++<200){const we=planAddDays(cur,6);out.push({start:cur,end:we>end?end:we,mon:cur});cur=planAddDays(cur,7);}
   return out;
 };
-function BlogReviewPanel({contract,st,onSummary}){
+// ===== 블로그·영수증 리뷰 계획 공용 설정 =====
+// 같은 화면(ReviewPlanPanel)을 설정만 바꿔 쓴다. 블로그 값은 이전 화면과 글자·색·저장 위치가 완전히 같다.
+const REVIEW_PANELS={
+  blog:{storePrefix:"blog:plan:",collapseKey:"plan:blog",title:"블로그 리뷰 계획",provideKey:"blogPlus",provideLabel:"블플",runName:"리뷰나우",
+    color:"#8468D3",bg:"#f5f3ff",bd:"#e9d5ff",headerBg:"linear-gradient(90deg,#f5f3ff,#f0f7ff)"},
+};
+function ReviewPlanPanel({contract,st,onSummary,cfg}){
+  const C=cfg;// 블로그·영수증 공용 — 글자·색·저장 위치는 REVIEW_PANELS 설정에서 온다
   const cid=contract.id;
   const[data,setData]=useState(blogNorm(null));
   const[loading,setLoading]=useState(false);
@@ -1085,10 +1092,10 @@ function BlogReviewPanel({contract,st,onSummary}){
   const[showWeeks,setShowWeeks]=useState(false);
   const[cmsDraft,setCmsDraft]=useState({date:todayStr,count:"1",memo:""});
   useEffect(()=>{let alive=true;setLoading(true);setDirty(false);
-    (async()=>{const d=await st.get("blog:plan:"+cid);if(!alive)return;setData(blogNorm(d));setLoading(false);})();
+    (async()=>{const d=await st.get(C.storePrefix+cid);if(!alive)return;setData(blogNorm(d));setLoading(false);})();
     return()=>{alive=false;};},[cid]);
   const patch=fn=>{setData(d=>fn(d));setDirty(true);};
-  const save=async()=>{setSaving(true);await st.set("blog:plan:"+cid,data);setSaving(false);setDirty(false);};
+  const save=async()=>{setSaving(true);await st.set(C.storePrefix+cid,data);setSaving(false);setDirty(false);};
 
   const goal=intOr(data.goal,0);
   const runDone=data.runs.reduce((s,r)=>s+blogRunDone(r,todayStr),0);
@@ -1107,7 +1114,7 @@ function BlogReviewPanel({contract,st,onSummary}){
 
   const addRun=()=>patch(d=>({...d,runs:[...d.runs,{id:uid(),total:"",daily:"",start:todayStr,days:[1,2,3,4,5],paused:false,pausedAt:"",actual:"",memo:""}]}));
   const setRun=(id,p)=>patch(d=>({...d,runs:d.runs.map(r=>r.id===id?{...r,...p}:r)}));
-  const delRun=id=>{if(!window.confirm("이 리뷰나우 세팅을 삭제할까요?"))return;patch(d=>({...d,runs:d.runs.filter(r=>r.id!==id)}));};
+  const delRun=id=>{if(!window.confirm("이 "+C.runName+" 세팅을 삭제할까요?"))return;patch(d=>({...d,runs:d.runs.filter(r=>r.id!==id)}));};
   const togglePause=r=>setRun(r.id,r.paused?{paused:false,pausedAt:""}:{paused:true,pausedAt:todayStr});
   const addCms=()=>{if(!cmsDraft.date)return;patch(d=>({...d,cms:[...d.cms,{id:uid(),date:cmsDraft.date,count:String(intOr(cmsDraft.count,1)),memo:cmsDraft.memo||""}].sort((a,b)=>a.date.localeCompare(b.date))}));setCmsDraft({date:todayStr,count:"1",memo:""});};
   const delCms=id=>patch(d=>({...d,cms:d.cms.filter(x=>x.id!==id)}));
@@ -1119,15 +1126,15 @@ function BlogReviewPanel({contract,st,onSummary}){
   const warn=(bg,bd,col,text)=><div style={{background:bg,border:"1px solid "+bd,borderRadius:9,padding:"8px 12px",fontSize:11.5,fontWeight:600,color:col,lineHeight:1.6}}>{text}</div>;
 
   // 접기·펼치기 섹션 — 접혀 있어도 제목 옆 요약과 저장 버튼·"저장 안 됨" 표시는 항상 보인다
-  const provideN=intOr(contract.provide&&contract.provide.blogPlus,0);
-  return(<CollapsibleSection title="블로그 리뷰 계획" storageKey="plan:blog" headerBg="linear-gradient(90deg,#f5f3ff,#f0f7ff)"
+  const provideN=intOr(contract.provide&&contract.provide[C.provideKey],0);
+  return(<CollapsibleSection title={C.title} storageKey={C.collapseKey} headerBg={C.headerBg}
     summary={<span style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-      <span style={{fontSize:10,fontWeight:700,color:"#8468D3",background:"#fff",border:"1px solid #e9d5ff",borderRadius:6,padding:"2px 8px"}}>블플 {provideN}건 계약</span>
-      {loading?"불러오는 중…":<span>배분 <b style={{color:"#8468D3"}}>{plannedTotal}</b> / {provideN}건 · 완료 {done}건</span>}
+      <span style={{fontSize:10,fontWeight:700,color:C.color,background:"#fff",border:"1px solid "+C.bd,borderRadius:6,padding:"2px 8px"}}>{C.provideLabel} {provideN}건 계약</span>
+      {loading?"불러오는 중…":<span>배분 <b style={{color:C.color}}>{plannedTotal}</b> / {provideN}건 · 완료 {done}건</span>}
     </span>}
     right={<>
       {dirty&&<span style={{fontSize:11,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,padding:"3px 8px"}}>저장 안 됨</span>}
-      <button onClick={save} disabled={saving||loading} style={{background:dirty?"#8468D3":"#f3f4f6",color:dirty?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:saving||loading?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{saving?"저장 중…":"저장"}</button>
+      <button onClick={save} disabled={saving||loading} style={{background:dirty?C.color:"#f3f4f6",color:dirty?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:saving||loading?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{saving?"저장 중…":"저장"}</button>
     </>}>
     {loading?<div style={{padding:"30px 0",textAlign:"center",fontSize:12,color:"#adb5bd"}}>불러오는 중…</div>:(<div style={{padding:"14px 18px"}}>
 
@@ -1138,7 +1145,7 @@ function BlogReviewPanel({contract,st,onSummary}){
         <span style={{fontSize:12,color:"#6b7280"}}>건</span>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:10}}>
-        {[{l:"완료 합계",v:done+"건",c:"#0071CE",bg:"#f0f7ff"},{l:"리뷰나우",v:runDone+"건",c:"#8468D3",bg:"#f5f3ff"},{l:"CMS",v:cmsDone+"건",c:"#0891b2",bg:"#ecfeff"},{l:"남은 건수",v:goal>0?Math.max(0,remain)+"건":"—",c:remain<=0&&goal>0?"#10b981":"#374151",bg:remain<=0&&goal>0?"#f0fdf4":"#f7f8fa"}].map(x=>(
+        {[{l:"완료 합계",v:done+"건",c:"#0071CE",bg:"#f0f7ff"},{l:C.runName,v:runDone+"건",c:C.color,bg:C.bg},{l:"CMS",v:cmsDone+"건",c:"#0891b2",bg:"#ecfeff"},{l:"남은 건수",v:goal>0?Math.max(0,remain)+"건":"—",c:remain<=0&&goal>0?"#10b981":"#374151",bg:remain<=0&&goal>0?"#f0fdf4":"#f7f8fa"}].map(x=>(
           <div key={x.l} style={{background:x.bg,borderRadius:10,padding:"9px 12px",textAlign:"center"}}>
             <div style={{fontSize:16,fontWeight:800,color:x.c}}>{x.v}</div>
             <div style={{fontSize:10,color:"#adb5bd",marginTop:2}}>{x.l}</div>
@@ -1149,29 +1156,29 @@ function BlogReviewPanel({contract,st,onSummary}){
           <span>진행률</span><span style={{fontWeight:700,color:pct>=100?"#10b981":"#0071CE"}}>{pct}%{goal>0&&pct>=100?" · 목표 달성":""}</span>
         </div>
         <div style={{height:9,background:"#f0f1f3",borderRadius:99,overflow:"hidden"}}>
-          <div style={{width:pct+"%",height:"100%",background:pct>=100?"#10b981":"linear-gradient(90deg,#0071CE,#8468D3)",borderRadius:99,transition:"width 0.3s"}}/>
+          <div style={{width:pct+"%",height:"100%",background:pct>=100?"#10b981":"linear-gradient(90deg,#0071CE,"+C.color+")",borderRadius:99,transition:"width 0.3s"}}/>
         </div>
       </div>
       {(overSet||shortFall||lateRun)&&(<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
-        {overSet&&warn("#fffbeb","#fde68a","#92400e","설정 합계가 총 목표를 넘습니다 — 리뷰나우+CMS 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(plannedTotal-goal)+"건 초과)")}
+        {overSet&&warn("#fffbeb","#fde68a","#92400e","설정 합계가 총 목표를 넘습니다 — "+C.runName+"+CMS 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(plannedTotal-goal)+"건 초과)")}
         {shortFall&&warn("#fef2f2","#fecaca","#b91c1c","현재 설정으로는 목표를 채우지 못합니다 — 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(goal-plannedTotal)+"건 부족)")}
-        {lateRun&&warn("#fef2f2","#fecaca","#b91c1c","리뷰나우 예상 종료일("+blogRunEnd(lateRun)+")이 계약 종료일("+contract.endDate+")보다 늦습니다 — 일 건수를 늘리거나 CMS로 보완하세요")}
+        {lateRun&&warn("#fef2f2","#fecaca","#b91c1c",C.runName+" 예상 종료일("+blogRunEnd(lateRun)+")이 계약 종료일("+contract.endDate+")보다 늦습니다 — 일 건수를 늘리거나 CMS로 보완하세요")}
       </div>)}
 
-      {/* 방법 A: 리뷰나우 */}
+      {/* 방법 A: 기간 세팅 (블로그는 리뷰나우) */}
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
-        <span style={{fontSize:12,fontWeight:800,color:"#8468D3"}}>방법 A · 리뷰나우</span>
+        <span style={{fontSize:12,fontWeight:800,color:C.color}}>방법 A · {C.runName}</span>
         <span style={{fontSize:10.5,color:"#adb5bd"}}>기간 자동 진행 · 여러 번 세팅 가능(1차·2차…)</span>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:9}}>
-        {data.runs.length===0&&<div style={{fontSize:11.5,color:"#adb5bd",background:"#f7f8fa",borderRadius:9,padding:"12px",textAlign:"center"}}>등록된 리뷰나우 세팅이 없습니다</div>}
+        {data.runs.length===0&&<div style={{fontSize:11.5,color:"#adb5bd",background:"#f7f8fa",borderRadius:9,padding:"12px",textAlign:"center"}}>등록된 {C.runName} 세팅이 없습니다</div>}
         {data.runs.map((r,i)=>{
           const end=blogRunEnd(r),dn=blogRunDone(r,todayStr),tot=intOr(r.total,0);
           const late=end&&contract.endDate&&end>contract.endDate;
           const hasAdj=r.actual!==""&&r.actual!=null&&!isNaN(parseInt(r.actual));
-          return(<div key={r.id} style={{border:"1px solid "+(r.paused?"#e5e7eb":"#e9d5ff"),background:r.paused?"#f7f8fa":"#fff",borderRadius:10,padding:"10px 12px",opacity:r.paused?0.75:1}}>
+          return(<div key={r.id} style={{border:"1px solid "+(r.paused?"#e5e7eb":C.bd),background:r.paused?"#f7f8fa":"#fff",borderRadius:10,padding:"10px 12px",opacity:r.paused?0.75:1}}>
             <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,fontWeight:800,color:"#8468D3",background:"#f5f3ff",borderRadius:5,padding:"2px 8px"}}>{i+1}차</span>
+              <span style={{fontSize:11,fontWeight:800,color:C.color,background:C.bg,borderRadius:5,padding:"2px 8px"}}>{i+1}차</span>
               {r.paused&&<span style={{fontSize:10,fontWeight:700,color:"#6b7280",background:"#f0f1f3",borderRadius:5,padding:"2px 7px"}}>일시중지 {r.pausedAt}</span>}
               <div style={{flex:1}}/>
               <button onClick={()=>togglePause(r)} style={{fontSize:10.5,fontWeight:700,color:r.paused?"#10b981":"#6b7280",background:r.paused?"#f0fdf4":"#f7f8fa",border:"1px solid "+(r.paused?"#bbf7d0":"#f0f1f3"),borderRadius:7,padding:"4px 10px",cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{r.paused?"재개":"일시중지"}</button>
@@ -1199,8 +1206,8 @@ function BlogReviewPanel({contract,st,onSummary}){
               {[{l:"매일",v:[]},{l:"평일",v:[1,2,3,4,5]}].map(pre=>{
                 const on=blogDaysLabel(r)===(pre.l==="매일"?"매일":"평일(월~금)");
                 return <button key={pre.l} onClick={()=>setRun(r.id,{days:pre.v})}
-                  style={{border:`1.5px solid ${on?"#8468D3":"#f0f1f3"}`,borderRadius:99,padding:"3px 11px",fontSize:11,
-                    fontWeight:600,cursor:"pointer",background:on?"#f5f3ff":"#fff",color:on?"#8468D3":"#6b7280",
+                  style={{border:`1.5px solid ${on?C.color:"#f0f1f3"}`,borderRadius:99,padding:"3px 11px",fontSize:11,
+                    fontWeight:600,cursor:"pointer",background:on?C.bg:"#fff",color:on?C.color:"#6b7280",
                     fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{pre.l}</button>;
               })}
               <div style={{display:"flex",gap:3}}>
@@ -1210,21 +1217,21 @@ function BlogReviewPanel({contract,st,onSummary}){
                   return <button key={i} title={d+"요일"}
                     onClick={()=>setRun(r.id,{days:on?cur.filter(x=>x!==i):[...cur,i].sort((a,b)=>a-b)})}
                     style={{width:26,height:26,borderRadius:"50%",fontSize:11,fontWeight:600,cursor:"pointer",
-                      border:`1.5px solid ${on?"#8468D3":"#e5e7eb"}`,background:on?"#8468D3":"#fff",
+                      border:`1.5px solid ${on?C.color:"#e5e7eb"}`,background:on?C.color:"#fff",
                       color:on?"#fff":i===0?"#ef4444":i===6?"#0071CE":"#6b7280",
                       fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{d}</button>;
                 })}
               </div>
-              <span style={{fontSize:10.5,color:"#8468D3",fontWeight:700}}>{blogDaysLabel(r)}</span>
+              <span style={{fontSize:10.5,color:C.color,fontWeight:700}}>{blogDaysLabel(r)}</span>
             </div>
             <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px dashed #f0f1f3",fontSize:11.5}}>
               <span style={{color:"#6b7280"}}>예상 종료일 <b style={{color:late?"#b91c1c":"#0f1117"}}>{end||"—"}</b></span>
               <span style={{color:"#6b7280"}}>{blogDaysLabel(r)} · 하루 {intOr(r.daily,0)}건</span>
-              <span style={{color:"#6b7280"}}>오늘 기준 진행 <b style={{color:"#8468D3"}}>{dn}건</b>{tot>0?" / "+tot+"건":""}{hasAdj&&<span style={{color:"#b45309",fontWeight:700}}> (보정값 적용)</span>}</span>
+              <span style={{color:"#6b7280"}}>오늘 기준 진행 <b style={{color:C.color}}>{dn}건</b>{tot>0?" / "+tot+"건":""}{hasAdj&&<span style={{color:"#b45309",fontWeight:700}}> (보정값 적용)</span>}</span>
             </div>
           </div>);})}
       </div>
-      <button onClick={addRun} style={{width:"100%",background:"#f5f3ff",color:"#8468D3",border:"1px dashed #e9d5ff",borderRadius:9,padding:"8px",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:16,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 리뷰나우 세팅 추가</button>
+      <button onClick={addRun} style={{width:"100%",background:C.bg,color:C.color,border:"1px dashed "+C.bd,borderRadius:9,padding:"8px",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:16,fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ {C.runName} 세팅 추가</button>
 
       {/* 방법 B: CMS */}
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
@@ -1251,7 +1258,7 @@ function BlogReviewPanel({contract,st,onSummary}){
       <button onClick={()=>setShowWeeks(v=>!v)} style={{width:"100%",background:"#f0f7ff",color:"#0071CE",border:"1px solid #bfd7f5",borderRadius:9,padding:"8px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>주차별 보기 {showWeeks?"닫기":"열기"} ({weeks.length}주)</button>
       {showWeeks&&(weeks.length===0?<div style={{fontSize:11.5,color:"#adb5bd",textAlign:"center",padding:"12px 0"}}>계약 시작일·종료일이 있어야 주차를 나눌 수 있습니다</div>:(
         <div style={{overflowX:"auto",marginTop:9,border:"1px solid #f0f1f3",borderRadius:9}}>
-          <table style={{width:"100%",borderCollapse:"collapse",minWidth:460}}><thead><tr>{["주차","기간","리뷰나우 예상","CMS 예정","CMS 실적"].map((h,i)=><th key={i} style={th}>{h}</th>)}</tr></thead><tbody>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:460}}><thead><tr>{["주차","기간",C.runName+" 예상","CMS 예정","CMS 실적"].map((h,i)=><th key={i} style={th}>{h}</th>)}</tr></thead><tbody>
             {weeks.map((w,i)=>{
               const rn=data.runs.reduce((s,r)=>s+blogRunInRange(r,w.start,w.end),0);
               const act=blogCmsSum(data.cms,w.start,w.end);
@@ -1261,16 +1268,16 @@ function BlogReviewPanel({contract,st,onSummary}){
               return(<tr key={w.mon} style={{background:isNow?"#f0f7ff":"transparent"}}>
                 <td style={{...td,fontWeight:700,color:isNow?"#0071CE":"#374151"}}>{i+1}주{isNow?" · 이번주":""}</td>
                 <td style={{...td,fontSize:11,color:"#6b7280"}}>{w.start.slice(5)} ~ {w.end.slice(5)}</td>
-                <td style={{...td,fontWeight:700,color:rn>0?"#8468D3":"#d1d5db"}}>{rn}건</td>
+                <td style={{...td,fontWeight:700,color:rn>0?C.color:"#d1d5db"}}>{rn}건</td>
                 <td style={td}><input type="number" min="0" value={plan==null?"":plan} onChange={e=>setWeekPlan(w.mon,e.target.value)} placeholder="—" style={{...iS,width:62,textAlign:"center",padding:"4px 6px"}}/></td>
                 <td style={{...td,fontWeight:700,color:planN>0?(act>=planN?"#10b981":"#b45309"):"#0891b2"}}>{act}건{planN>0&&<span style={{fontSize:10,fontWeight:600}}> / {planN}</span>}</td>
               </tr>);})}
           </tbody></table>
         </div>))}
       <p style={{fontSize:10.5,color:"#adb5bd",margin:"9px 0 0",lineHeight:1.65}}>
-        <b>리뷰나우</b>는 <b>올리는 요일</b>에만 하루 <b>일 건수</b>만큼 올라간다고 보고 진행량을 계산합니다(시작일 포함). 매일·평일 버튼을 쓰거나 요일을 직접 골라도 됩니다 (예: 월·금 하루 2건, 총 10건). 실제와 다르면 <b>실제 확인 건수</b>에 숫자를 넣으세요 — 그 값이 우선합니다.<br/>
+        <b>{C.runName}</b>는 <b>올리는 요일</b>에만 하루 <b>일 건수</b>만큼 올라간다고 보고 진행량을 계산합니다(시작일 포함). 매일·평일 버튼을 쓰거나 요일을 직접 골라도 됩니다 (예: 월·금 하루 2건, 총 10건). 실제와 다르면 <b>실제 확인 건수</b>에 숫자를 넣으세요 — 그 값이 우선합니다.<br/>
         <b>CMS</b>는 올린 날짜마다 1건씩 기록하고, 주차별 보기에서 <b>이번 주 예정 건수</b>와 실제 실적을 비교할 수 있습니다.<br/>
-        입력 후 오른쪽 위 <b style={{color:"#8468D3"}}>저장</b> 버튼을 눌러야 저장됩니다.
+        입력 후 오른쪽 위 <b style={{color:C.color}}>저장</b> 버튼을 눌러야 저장됩니다.
       </p>
     </div>)}
   </CollapsibleSection>);
@@ -1649,7 +1656,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
         </div>
         </CollapsibleSection>
         {/* 블플이 포함된 계약에만 블로그 리뷰 계획을 붙인다 (provide.blogPlus > 0) */}
-        {blogHasProduct(sel)&&<BlogReviewPanel key={sel.id} contract={sel} st={st} onSummary={setBlogSum}/>}
+        {blogHasProduct(sel)&&<ReviewPlanPanel key={sel.id} cfg={REVIEW_PANELS.blog} contract={sel} st={st} onSummary={setBlogSum}/>}
       </>)}
     </div>
   </div>);
