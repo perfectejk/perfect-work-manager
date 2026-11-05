@@ -6,6 +6,7 @@ import WorkManagerTab from'./workmanager/WorkManagerTab';
 import DashboardTab from'./dashboard/DashboardTab';
 import{SHORTCUTS,Favicon,openSite}from'./shared/Shortcuts';
 import Mascot,{MascotSettings}from'./components/Mascot';
+import CollapsibleSection from'./workplan/CollapsibleSection';
 const METRICS=[{key:"calls",label:"콜수",unit:"콜"},{key:"callTime",label:"콜시간",unit:"분"},{key:"materials",label:"자료수",unit:"개"},{key:"toss",label:"토스",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"},{key:"positive",label:"긍정백톡",unit:"개"},{key:"negative",label:"부정백톡",unit:"개"}];
 const FINAL_METRICS=[{key:"dailySales",label:"일매출",unit:"원"},{key:"connRate",label:"도입률-연결",unit:""},{key:"rate30s",label:"도입률-30초이상",unit:""}];
 const DEF_TARGETS={calls:200,materials:25,retarget:4};
@@ -1117,14 +1118,17 @@ function BlogReviewPanel({contract,st,onSummary}){
   const td={padding:"6px 8px",fontSize:12,textAlign:"center",borderBottom:"1px solid #f7f8fa",color:"#374151"};
   const warn=(bg,bd,col,text)=><div style={{background:bg,border:"1px solid "+bd,borderRadius:9,padding:"8px 12px",fontSize:11.5,fontWeight:600,color:col,lineHeight:1.6}}>{text}</div>;
 
-  return(<div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",marginTop:12,overflow:"hidden"}}>
-    <div style={{padding:"13px 18px",borderBottom:"1px solid #f0f1f3",background:"linear-gradient(90deg,#f5f3ff,#f0f7ff)",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-      <span style={{fontSize:14,fontWeight:800,color:"#0f1117"}}>블로그 리뷰 계획</span>
-      <span style={{fontSize:10,fontWeight:700,color:"#8468D3",background:"#fff",border:"1px solid #e9d5ff",borderRadius:6,padding:"2px 8px"}}>블플 {intOr(contract.provide&&contract.provide.blogPlus,0)}건 계약</span>
-      <div style={{flex:1}}/>
+  // 접기·펼치기 섹션 — 접혀 있어도 제목 옆 요약과 저장 버튼·"저장 안 됨" 표시는 항상 보인다
+  const provideN=intOr(contract.provide&&contract.provide.blogPlus,0);
+  return(<CollapsibleSection title="블로그 리뷰 계획" storageKey="plan:blog" headerBg="linear-gradient(90deg,#f5f3ff,#f0f7ff)"
+    summary={<span style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <span style={{fontSize:10,fontWeight:700,color:"#8468D3",background:"#fff",border:"1px solid #e9d5ff",borderRadius:6,padding:"2px 8px"}}>블플 {provideN}건 계약</span>
+      {loading?"불러오는 중…":<span>배분 <b style={{color:"#8468D3"}}>{plannedTotal}</b> / {provideN}건 · 완료 {done}건</span>}
+    </span>}
+    right={<>
       {dirty&&<span style={{fontSize:11,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,padding:"3px 8px"}}>저장 안 됨</span>}
       <button onClick={save} disabled={saving||loading} style={{background:dirty?"#8468D3":"#f3f4f6",color:dirty?"#fff":"#9ca3af",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:saving||loading?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{saving?"저장 중…":"저장"}</button>
-    </div>
+    </>}>
     {loading?<div style={{padding:"30px 0",textAlign:"center",fontSize:12,color:"#adb5bd"}}>불러오는 중…</div>:(<div style={{padding:"14px 18px"}}>
 
       {/* 목표 · 진행 현황 */}
@@ -1269,7 +1273,7 @@ function BlogReviewPanel({contract,st,onSummary}){
         입력 후 오른쪽 위 <b style={{color:"#8468D3"}}>저장</b> 버튼을 눌러야 저장됩니다.
       </p>
     </div>)}
-  </div>);
+  </CollapsibleSection>);
 }
 function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   const[search,setSearch]=useState("");
@@ -1322,6 +1326,18 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   },[rows,sel]);
 
   const rankPerf=useMemo(()=>planRankPerf(rows),[rows]);
+  // 트래픽 섹션 접힘 상태에서도 보이는 건수 요약 — 주차 수 + 종류별 배분량(0인 종류는 생략)
+  const trafficSummary=useMemo(()=>{
+    if(loading)return"불러오는 중…";
+    if(rows.length===0)return"등록된 주차 없음";
+    const weeks=new Set(rows.map(r=>r.week)).size;
+    const bits=[`${weeks}개 주차`];
+    if(summary.total>0)bits.push(`리워드 ${summary.trafficUsed.toLocaleString()} / ${summary.total.toLocaleString()}타`);
+    else if(summary.trafficUsed>0)bits.push(`리워드 ${summary.trafficUsed.toLocaleString()}타`);
+    if(summary.premiumUsed>0)bits.push(`프리미엄 ${summary.premiumUsed.toLocaleString()}${summary.premiumTotal>0?" / "+summary.premiumTotal.toLocaleString():""}타`);
+    summary.byType.filter(t=>!t.pk&&t.used>0).forEach(t=>bits.push(`${t.label} ${t.used.toLocaleString()}${t.unit}`));
+    return bits.join(" · ");
+  },[loading,rows,summary]);
   const industry=(sel?.industry||"").trim();
   const peers=useMemo(()=>industry?contracts.filter(c=>c.id!==selId&&(c.industry||"").trim()===industry):[],[contracts,selId,industry]);
 
@@ -1510,9 +1526,12 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
           </div>
         )}
 
+        {/* ===== 순위 성과 섹션 (접기·펼치기) — 키워드별 순위 성과 + 같은 업종 참고 사례 ===== */}
+        <CollapsibleSection title="순위 성과" storageKey="plan:rank"
+          summary={(rankPerf.length>0?`키워드 ${rankPerf.length}개 기록`:"순위 기록 없음")+(industry?` · ${industry} 참고 ${peers.length}건`:"")}>
         {/* 키워드별 순위 성과 */}
         {rankPerf.length>0&&(
-          <div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px",marginBottom:12}}>
+          <div style={{padding:"12px 14px",borderBottom:"1px solid #f7f8fa"}}>
             <div style={{fontSize:11,fontWeight:700,color:"#0f1117",marginBottom:8}}>이 계약의 키워드별 순위 성과</div>
             <div style={{display:"flex",flexDirection:"column",gap:5}}>
               {rankPerf.map(m=>{
@@ -1529,7 +1548,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
         )}
 
         {/* 같은 업종 참고 사례 */}
-        <div style={{background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px",marginBottom:12}}>
+        <div style={{padding:"12px 14px"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:refData?10:0}}>
             <span style={{fontSize:11,fontWeight:700,color:"#0f1117"}}>같은 업종 참고 사례</span>
             {industry?(
@@ -1565,9 +1584,12 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
             <p style={{fontSize:10,color:"#adb5bd",margin:"8px 0 0"}}>순위를 올린 사례만 집계합니다(하락·유지는 제외). 계획량 기준이라 실제 투입과는 차이가 있을 수 있습니다.</p>
           </>))}
         </div>
+        </CollapsibleSection>
 
+        {/* ===== 트래픽 섹션 (접기·펼치기) — 트래픽 주차 표만 ===== */}
+        <CollapsibleSection title="트래픽" storageKey="plan:traffic" color="#0071CE" summary={trafficSummary}>
         {/* 주차 표 */}
-        <div style={{background:"#fff",borderRadius:14,border:"1px solid #f0f1f3",padding:14}}>
+        <div style={{padding:14}}>
           {loading?<p style={{fontSize:12,color:"#adb5bd",textAlign:"center",padding:"20px 0"}}>불러오는 중…</p>:(<>
             <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap",marginBottom:10}}>
               <button onClick={fillFromRanks} disabled={rows.length===0} style={{background:rows.length===0?"#f3f4f6":"#ecfeff",color:rows.length===0?"#adb5bd":"#0891b2",border:"1px solid "+(rows.length===0?"#f0f1f3":"#a5f3fc"),borderRadius:8,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:rows.length===0?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>순위체크 기록에서 순위 채우기</button>
@@ -1625,6 +1647,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
             <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일이 자동으로 잡히고(시작일 포함 7일), 다음 주차는 직전 종료일 <b>다음 날</b>부터 이어집니다. 작업일수는 시작일·종료일을 <b>모두 포함</b>해 자동 계산되며, 계획량은 일일량 × 작업일수입니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 직전 줄의 종료순위가 시작순위로 넘어옵니다.<br/>순위는 숫자만 넣으면 되고(12 → 5 이면 ▲7), 키워드별 누적 성과는 표 위에 자동 집계됩니다.</p>
           </>)}
         </div>
+        </CollapsibleSection>
         {/* 블플이 포함된 계약에만 블로그 리뷰 계획을 붙인다 (provide.blogPlus > 0) */}
         {blogHasProduct(sel)&&<BlogReviewPanel key={sel.id} contract={sel} st={st} onSummary={setBlogSum}/>}
       </>)}
