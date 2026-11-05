@@ -1307,6 +1307,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   const[refLoading,setRefLoading]=useState(false);
   const[goalStep,setGoalStep]=useState("5");
   const[blogSum,setBlogSum]=useState(null);   // 블로그 리뷰 진행률 (아래 패널이 올려준다)
+  const[receiptSum,setReceiptSum]=useState(null);   // 영수증 리뷰 진행률 (아래 패널이 올려준다)
   const[fillMsg,setFillMsg]=useState("");
 
   const list=useMemo(()=>{
@@ -1321,7 +1322,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   const sel=useMemo(()=>contracts.find(c=>c.id===selId)||null,[contracts,selId]);
 
   useEffect(()=>{
-    setRefData(null);setFillMsg("");setBlogSum(null);
+    setRefData(null);setFillMsg("");setBlogSum(null);setReceiptSum(null);
     if(!selId){setRows([]);setDirty(false);return;}
     let alive=true;setLoading(true);
     (async()=>{const d=await st.get("traffic:plan:"+selId);if(!alive)return;setRows(Array.isArray(d)?d:[]);setDirty(false);setLoading(false);})();
@@ -1527,6 +1528,29 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
             </div>);
           })()}
 
+          {/* 영수증 리뷰 배분 — 블로그 카드와 같은 모양. 계약 제공내역(영수증리뷰) 총량과 대조한다.
+              배분 = 영수증 리뷰 세팅 총 건수 합, 값은 아래 영수증 리뷰 계획에서 올려준다.
+              아직 세팅이 하나도 없으면 요약이 안 올라오므로 0건으로 보여준다(계약 45건 중 0건 배분 · 잔여 45건) */}
+          {receiptHasProduct(sel)&&(()=>{
+            const rs=receiptSum||{plannedTotal:0,done:0};
+            const rt=parseInt(sel?.provide?.receipt)||0,ru=rs.plannedTotal,rr=rt-ru,ro=ru>rt;
+            return(
+            <div style={{flex:"1 1 260px",background:"#fff",borderRadius:12,border:"1px solid "+(ro?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#db2777",marginBottom:5}}>영수증 리뷰</div>
+              {rt===0?(
+                <div style={{fontSize:12,color:"#92400e",fontWeight:600}}>제공내역 총량 미설정 · 배분 {ru.toLocaleString()}건</div>
+              ):(<>
+                <div style={{fontSize:12,color:"#374151",fontWeight:600}}>총 {rt.toLocaleString()}건 중 <b style={{color:"#db2777"}}>{ru.toLocaleString()}건</b> 배분</div>
+                <div style={{fontSize:12,marginTop:2,fontWeight:700,color:ro?"#ef4444":"#10b981"}}>{ro?"초과 "+Math.abs(rr).toLocaleString()+"건":"잔여 "+rr.toLocaleString()+"건"}</div>
+                <div style={{height:6,background:"#f0f1f3",borderRadius:99,marginTop:8,overflow:"hidden"}}><div style={{height:"100%",width:Math.min(100,Math.round(ru/rt*100))+"%",background:ro?"#ef4444":"#db2777",borderRadius:99}}/></div>
+              </>)}
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px solid #f7f8fa"}}>
+                <span style={{fontSize:11,color:"#db2777",fontWeight:700}}>영수증 리뷰 세팅 {ru.toLocaleString()}건</span>
+                <span style={{fontSize:11,color:"#10b981",fontWeight:700}}>그 중 완료 {rs.done.toLocaleString()}건</span>
+              </div>
+            </div>);
+          })()}
+
           {summary.byType.filter(t=>!t.pk).map(t=>(
             <div key={t.k} style={{flex:"0 1 150px",background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px"}}>
               <div style={{fontSize:11,fontWeight:700,color:t.color,marginBottom:5}}>{t.label}</div>
@@ -1543,6 +1567,11 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
         {blogSum&&(parseInt(sel?.provide?.blogPlus)||0)>0&&blogSum.plannedTotal>(parseInt(sel?.provide?.blogPlus)||0)&&(
           <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"11px 16px",marginBottom:12,fontSize:12,color:"#b91c1c",fontWeight:600}}>
             총량 초과 — 블로그 리뷰 {(blogSum.plannedTotal-(parseInt(sel?.provide?.blogPlus)||0)).toLocaleString()}건 만큼 계약 제공내역보다 많이 배분되었습니다.
+          </div>
+        )}
+        {receiptSum&&(parseInt(sel?.provide?.receipt)||0)>0&&receiptSum.plannedTotal>(parseInt(sel?.provide?.receipt)||0)&&(
+          <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"11px 16px",marginBottom:12,fontSize:12,color:"#b91c1c",fontWeight:600}}>
+            총량 초과 — 영수증 리뷰 {(receiptSum.plannedTotal-(parseInt(sel?.provide?.receipt)||0)).toLocaleString()}건 만큼 계약 제공내역보다 많이 배분되었습니다.
           </div>
         )}
 
@@ -1671,7 +1700,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
         {/* 블플이 포함된 계약에만 블로그 리뷰 계획을 붙인다 (provide.blogPlus > 0) */}
         {blogHasProduct(sel)&&<ReviewPlanPanel key={sel.id} cfg={REVIEW_PANELS.blog} contract={sel} st={st} onSummary={setBlogSum}/>}
         {/* 영수증리뷰가 포함된 계약에만 영수증 리뷰 계획을 붙인다 (provide.receipt > 0) */}
-        {receiptHasProduct(sel)&&<ReviewPlanPanel key={"r-"+sel.id} cfg={REVIEW_PANELS.receipt} contract={sel} st={st}/>}
+        {receiptHasProduct(sel)&&<ReviewPlanPanel key={"r-"+sel.id} cfg={REVIEW_PANELS.receipt} contract={sel} st={st} onSummary={setReceiptSum}/>}
       </>)}
     </div>
   </div>);
