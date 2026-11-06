@@ -47,6 +47,13 @@ export default function TaskPanel({ task, types, subTypes = [], contracts = [], 
           {STATUS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
         </select>
 
+        {task.status === "done" && (<>
+          <PropLabel>완료일</PropLabel>
+          {task.completedAt
+            ? <span style={{ fontSize: 12, color: C.text }}>{fmtDate(task.completedAt)}</span>
+            : <span style={{ fontSize: 11.5, color: C.faint }}>기록 없음 — 이번 개선 전에 완료</span>}
+        </>)}
+
         <PropLabel>업무 구분</PropLabel>
         <div>
           <div style={{ display: "flex", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>

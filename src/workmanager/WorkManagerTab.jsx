@@ -16,6 +16,7 @@ import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } f
 import { extractReportTargets } from "./reportTarget";
 import ImportModal from "./ImportModal";
 import RepeatModal from "./RepeatModal";
+import DoneLog from "./DoneLog";
 import { isPeriod, startOf, dueOf, ddayOf, md, progressOf, layoutBars } from "./period";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
@@ -23,7 +24,9 @@ import { isPeriod, startOf, dueOf, ddayOf, md, progressOf, layoutBars } from "./
 // 모든 데이터는 wm: 접두어로만 저장하며, 기존 PRO 데이터는 읽지도 쓰지도 않는다.
 const SUB_TABS = [
   { id: "list", label: "오늘·이번 주" },
-  { id: "board", label: "진행 현황" },
+  // 진행 현황(칸반)은 개선 2에서 완료 로그로 바꿨다. 화면 코드(boardView)는 지우지 않고 남겨 두었다.
+  // 다시 켜려면 아래 줄을 { id: "board", label: "진행 현황" } 으로 되돌리면 된다.
+  { id: "log", label: "완료 로그" },
   { id: "biz", label: "계약업체 일정" },
   { id: "edu", label: "교육 과정" },
   { id: "lib", label: "스크립트 목록" },
@@ -426,7 +429,17 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     setPendingPick(null);
     setSide({ kind: "task", id: t.id });
   };
-  const patchTask = async (id, patch) => saveTasks(tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  // 상태가 바뀌면 완료일(completedAt)도 같이 맞춘다 — 완료가 되면 오늘 날짜, 완료가 아니게 되면 지운다.
+  // 체크버튼·상세 패널·칸반 끌어놓기 모두 여기를 지나간다.
+  const patchTask = async (id, patch) => saveTasks(tasks.map((t) => {
+    if (t.id !== id) return t;
+    const n = { ...t, ...patch };
+    if ("status" in patch && patch.status !== t.status) {
+      if (patch.status === "done") n.completedAt = TD;
+      else delete n.completedAt;
+    }
+    return n;
+  }));
   const deleteTask = async (t) => {
     if (!window.confirm(`"${t.title}" 작업을 삭제할까요? 되돌릴 수 없습니다.`)) return;
     await saveTasks(tasks.filter((x) => x.id !== t.id));
@@ -437,8 +450,10 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const createRepeats = async (base, rule, dates) => {
     const rid = base.id;
     const repeat = { id: rid, ...rule };
+    // 복사본에는 완료일이 따라가지 않게 뺀다
+    const { completedAt: _done, ...plain } = base;
     const copies = dates.map((d) => ({
-      ...base, id: uid(), date: d, status: "todo", createdAt: TD, repeat,
+      ...plain, id: uid(), date: d, status: "todo", createdAt: TD, repeat,
       subs: (base.subs || []).map((x) => ({ ...x, d: false })),
       links: [...(base.links || [])],
     }));
@@ -1215,6 +1230,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       <div style={card({ padding: 16 })}>
         {sub === "list" && listView()}
         {sub === "board" && boardView()}
+        {sub === "log" && <DoneLog tasks={tasks} types={types} typeOf={typeOf} today={TD}
+          selectedId={side && side.kind === "task" ? side.id : ""} onOpen={(id) => setSide({ kind: "task", id })} />}
         {sub === "biz" && bizView()}
         {sub === "edu" && eduView()}
         {sub === "lib" && libView()}
