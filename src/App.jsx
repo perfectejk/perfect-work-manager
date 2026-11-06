@@ -7,6 +7,8 @@ import DashboardTab from'./dashboard/DashboardTab';
 import{SHORTCUTS,Favicon,openSite}from'./shared/Shortcuts';
 import Mascot,{MascotSettings}from'./components/Mascot';
 import CollapsibleSection from'./workplan/CollapsibleSection';
+import{PLAN_TYPES,ymdLocal,planAddDays,planDays,intOr,blogDaysOf}from'./workplan/planUtils';
+import WorkCalendar from'./workplan/WorkCalendar';
 const METRICS=[{key:"calls",label:"콜수",unit:"콜"},{key:"callTime",label:"콜시간",unit:"분"},{key:"materials",label:"자료수",unit:"개"},{key:"toss",label:"토스",unit:"개"},{key:"retarget",label:"재통픽스",unit:"개"},{key:"positive",label:"긍정백톡",unit:"개"},{key:"negative",label:"부정백톡",unit:"개"}];
 const FINAL_METRICS=[{key:"dailySales",label:"일매출",unit:"원"},{key:"connRate",label:"도입률-연결",unit:""},{key:"rate30s",label:"도입률-30초이상",unit:""}];
 const DEF_TARGETS={calls:200,materials:25,retarget:4};
@@ -974,22 +976,6 @@ function WeeklyTab({contracts,st}){
   );
 }
 // ===== 주간 계획판 =====
-const PLAN_TYPES=[
-  {k:"traffic",label:"트래픽",pk:"rewardTraffic",unit:"타",color:"#0071CE"},
-  {k:"route",label:"길찾기 트래픽",pk:"rewardTraffic",unit:"타",color:"#0891b2"},
-  {k:"savetraffic",label:"저장+트래픽",pk:"rewardTraffic",unit:"타",color:"#8468D3"},
-  {k:"premium",label:"프리미엄 트래픽",pk:"premiumTraffic",unit:"타",color:"#b45309"},
-  {k:"save",label:"저장",pk:null,unit:"건",color:"#f59e0b"},
-  {k:"alarm",label:"알림받기",pk:null,unit:"건",color:"#10b981"},
-];
-// 로컬 날짜 그대로 포맷한다. toISOString() 을 쓰면 UTC 로 밀려 한국에서 하루가 어긋난다.
-const ymdLocal=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-const planAddDays=(ds,n)=>{const d=new Date(ds+"T00:00:00");d.setDate(d.getDate()+n);return ymdLocal(d);};
-// 작업일수 = 시작일과 종료일을 모두 포함한 일수. 날짜가 비면 저장된 값으로 대체.
-const planDays=r=>{
-  if(r&&r.start&&r.end&&r.end>=r.start)return Math.round((new Date(r.end+"T00:00:00")-new Date(r.start+"T00:00:00"))/86400000)+1;
-  return parseInt(r&&r.days)||0;
-};
 const planQty=r=>(parseInt(r.daily)||0)*planDays(r);
 const planType=k=>PLAN_TYPES.find(x=>x.k===k)||PLAN_TYPES[0];
 const rankNum=v=>{const n=parseInt(v);return isNaN(n)?null:n;};
@@ -1016,11 +1002,9 @@ const planRankPerf=rows=>{
 // 기존 계약엔 이 문서가 없으므로 어디서든 빈 값으로 읽히도록 blogNorm 을 거친다.
 const blogNorm=d=>({goal:d&&d.goal!=null?d.goal:"",runs:Array.isArray(d&&d.runs)?d.runs:[],cms:Array.isArray(d&&d.cms)?d.cms:[],weekPlan:(d&&d.weekPlan&&typeof d.weekPlan==="object")?d.weekPlan:{}});
 const blogHasProduct=c=>(parseInt(c&&c.provide&&c.provide.blogPlus)||0)>0;
-const intOr=(v,f)=>{const n=parseInt(v);return isNaN(n)?f:n;};
 // 리뷰나우는 매일 올릴 수도 있고, 지정한 요일에만 올릴 수도 있다.
 // r.days = [0~6] (0=일). 비어 있거나 없으면 "매일" — 예전에 만든 설정도 그대로 동작한다.
 const BLOG_ALL_DAYS=[0,1,2,3,4,5,6];
-const blogDaysOf=r=>{const d=r&&r.days;return Array.isArray(d)&&d.length&&d.length<7?d:null;};
 // from~to 사이에서 실제로 올리는 날이 며칠인지 (양끝 포함)
 const blogWorkDayCount=(from,to,days)=>{
   if(!from||!to||to<from)return 0;
@@ -1086,7 +1070,7 @@ const REVIEW_PANELS={
     color:"#db2777",bg:"#fdf2f8",bd:"#fbcfe8",headerBg:"linear-gradient(90deg,#fdf2f8,#f0f7ff)",useCms:false},
 };
 const receiptHasProduct=c=>(parseInt(c&&c.provide&&c.provide.receipt)||0)>0;
-function ReviewPlanPanel({contract,st,onSummary,cfg}){
+function ReviewPlanPanel({contract,st,onSummary,onData,cfg}){
   const C=cfg;// 블로그·영수증 공용 — 글자·색·저장 위치는 REVIEW_PANELS 설정에서 온다
   const cid=contract.id;
   const[data,setData]=useState(blogNorm(null));
@@ -1115,6 +1099,8 @@ function ReviewPlanPanel({contract,st,onSummary,cfg}){
   const weeks=useMemo(()=>blogWeeks(contract.startDate,contract.endDate),[contract.startDate,contract.endDate]);
   // 주간계획 상단에서도 블로그 진행률을 보여줄 수 있도록 올려보낸다
   useEffect(()=>{if(onSummary)onSummary({goal,done,runDone,cmsDone,plannedTotal});},[goal,done,runDone,cmsDone,plannedTotal]);
+  // 작업 캘린더가 저장 전 내용까지 바로 보여줄 수 있도록 기록 자체도 올려보낸다 (읽기 전용)
+  useEffect(()=>{if(onData)onData({cid,runs:data.runs,cms:data.cms});},[cid,data.runs,data.cms]);
 
   const addRun=()=>patch(d=>({...d,runs:[...d.runs,{id:uid(),total:"",daily:"",start:todayStr,days:[1,2,3,4,5],paused:false,pausedAt:"",actual:"",memo:""}]}));
   const setRun=(id,p)=>patch(d=>({...d,runs:d.runs.map(r=>r.id===id?{...r,...p}:r)}));
@@ -1308,6 +1294,8 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
   const[goalStep,setGoalStep]=useState("5");
   const[blogSum,setBlogSum]=useState(null);   // 블로그 리뷰 진행률 (아래 패널이 올려준다)
   const[receiptSum,setReceiptSum]=useState(null);   // 영수증 리뷰 진행률 (아래 패널이 올려준다)
+  const[blogData,setBlogData]=useState(null);       // 작업 캘린더용 블로그 기록 {cid,runs,cms}
+  const[receiptData,setReceiptData]=useState(null); // 작업 캘린더용 영수증 기록 {cid,runs,cms}
   const[fillMsg,setFillMsg]=useState("");
 
   const list=useMemo(()=>{
@@ -1703,9 +1691,13 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
         </div>
         </CollapsibleSection>
         {/* 블플이 포함된 계약에만 블로그 리뷰 계획을 붙인다 (provide.blogPlus > 0) */}
-        {blogHasProduct(sel)&&<ReviewPlanPanel key={sel.id} cfg={REVIEW_PANELS.blog} contract={sel} st={st} onSummary={setBlogSum}/>}
+        {blogHasProduct(sel)&&<ReviewPlanPanel key={sel.id} cfg={REVIEW_PANELS.blog} contract={sel} st={st} onSummary={setBlogSum} onData={setBlogData}/>}
         {/* 영수증리뷰가 포함된 계약에만 영수증 리뷰 계획을 붙인다 (provide.receipt > 0) */}
-        {receiptHasProduct(sel)&&<ReviewPlanPanel key={"r-"+sel.id} cfg={REVIEW_PANELS.receipt} contract={sel} st={st} onSummary={setReceiptSum}/>}
+        {receiptHasProduct(sel)&&<ReviewPlanPanel key={"r-"+sel.id} cfg={REVIEW_PANELS.receipt} contract={sel} st={st} onSummary={setReceiptSum} onData={setReceiptData}/>}
+        {/* 작업 캘린더 — 위 트래픽 주차 표·블로그·영수증 기록을 날짜별로 펼쳐 보여준다 (읽기만 함) */}
+        <WorkCalendar key={"cal-"+sel.id} trafficRows={rows} contractStart={sel.startDate} contractEnd={effEndDate(sel)}
+          blog={blogHasProduct(sel)&&blogData&&blogData.cid===sel.id?blogData:null}
+          receipt={receiptHasProduct(sel)&&receiptData&&receiptData.cid===sel.id?receiptData:null}/>
       </>)}
     </div>
   </div>);
