@@ -1089,6 +1089,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                 const it = periodItems.find((x) => x.id === b.t.id);
                 if (!it) return null;
                 const on = side?.kind === "task" && side?.id === it.id;
+                // 마감이 지났으면 유형 색은 그대로 두고 빨간 테두리 + 마감일 쪽 끝에 D+n
+                const late = !it.done && it.due < TD;
+                const ring = [late ? `inset 0 0 0 2px ${C.red}` : "", on ? `0 0 0 2px ${C.title}` : ""].filter(Boolean).join(", ");
                 return (
                   <div key={it.id} title={`${it.title} (${md(it.start)}~${md(it.due)})`}
                     onClick={(ev) => { ev.stopPropagation(); openSide("task", it.id); }}
@@ -1098,8 +1101,12 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                       overflow: "hidden", whiteSpace: "nowrap", boxSizing: "border-box",
                       borderRadius: `${b.cutLeft ? 0 : 4}px ${b.cutRight ? 0 : 4}px ${b.cutRight ? 0 : 4}px ${b.cutLeft ? 0 : 4}px`,
                       opacity: it.done ? 0.45 : 1, textDecoration: it.done ? "line-through" : "none",
-                      boxShadow: on ? `0 0 0 2px ${C.title}` : "none" }}>
-                    {b.cutLeft ? "◀ " : ""}{it.title}{b.cutRight ? " ▶" : ""}
+                      boxShadow: ring || "none" }}>
+                    {b.cutLeft ? "◀ " : ""}<span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{it.title}</span>{b.cutRight ? " ▶" : ""}
+                    {late && !b.cutRight && (
+                      <span style={{ marginLeft: "auto", flexShrink: 0, background: C.white, color: C.red, borderRadius: 3,
+                        padding: "0 4px", fontSize: 9, fontWeight: 800, lineHeight: "11px" }}>{ddayOf(it.task, TD).label}</span>
+                    )}
                   </div>
                 );
               })}
