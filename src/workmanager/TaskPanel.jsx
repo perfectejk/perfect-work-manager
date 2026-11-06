@@ -3,12 +3,13 @@ import { C, FONT, input, btn, fmtDate } from "../shared/ui";
 import { SpTitle, SpSub, Props, PropLabel, Section, CheckList, Textarea } from "../shared/SidePanel";
 import { STATUS, CONTRACT_TYPE, subTypesOf, withSubTypes, reportLabel } from "./store";
 import { ruleLabel } from "./recur";
+import { isPeriod, startOf, dueOf, ddayOf, md, toPeriodPatch, toDayPatch } from "./period";
 
 // 작업 상세 — 유형 / 상태 / 날짜 / 시간 / 작업 설명 / 하위 작업 / 관련 링크
 // 유형이 "계약업체"면 연결된 계약과 세부 분류가 더 나온다.
 // 계약은 고유 식별값(contractId)으로 저장하고 화면에는 상호명을 보여준다.
 // 입력하는 즉시 onPatch 로 저장한다.
-export default function TaskPanel({ task, types, subTypes = [], contracts = [], reportTargets = [], series = [], onPatch, onDelete, onOpenContract, onRepeat, onDeleteRepeatRest }) {
+export default function TaskPanel({ task, types, subTypes = [], contracts = [], reportTargets = [], series = [], today, onPatch, onDelete, onOpenContract, onRepeat, onDeleteRepeatRest }) {
   const [link, setLink] = React.useState("");
   if (!task) return null;
   const p = (patch) => onPatch(task.id, patch);
@@ -20,6 +21,8 @@ export default function TaskPanel({ task, types, subTypes = [], contracts = [], 
   const toggleRep = (k) => p({ reportTo: reps.includes(k) ? reps.filter((x) => x !== k) : [...reps, k] });
   const toggleSub = (k) =>
     p(withSubTypes(picked.includes(k) ? picked.filter((x) => x !== k) : [...picked, k]));
+  const period = isPeriod(task);
+  const help = { fontSize: 10.5, color: C.faint, marginTop: 4, lineHeight: 1.5 };
 
   const addLink = () => {
     const v = link.trim();
@@ -44,11 +47,62 @@ export default function TaskPanel({ task, types, subTypes = [], contracts = [], 
           {STATUS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
         </select>
 
-        <PropLabel>날짜</PropLabel>
-        <input type="date" value={task.date || ""} onChange={(e) => { if (e.target.value) p({ date: e.target.value }); }} style={sel} />
+        <PropLabel>업무 구분</PropLabel>
+        <div>
+          <div style={{ display: "flex", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
+            {[["day", "당일 업무"], ["period", "기간 업무"]].map(([k, n]) => {
+              const on = (k === "period") === period;
+              const off = k === "period" && !!task.repeat && !period;
+              return (
+                <button key={k} disabled={off} title={off ? "반복 일정에 묶인 업무는 기간 업무로 바꿀 수 없습니다" : undefined}
+                  onClick={() => { if (on || off) return; p(k === "period" ? toPeriodPatch(task) : toDayPatch(task)); }}
+                  style={{ flex: 1, border: "none", padding: "6px 0", fontFamily: FONT, fontSize: 12, fontWeight: 700,
+                    cursor: off ? "not-allowed" : "pointer",
+                    background: on ? C.main : C.white, color: on ? C.white : off ? "#d1d5db" : C.muted }}>{n}</button>
+              );
+            })}
+          </div>
+          {task.repeat && !period && <div style={help}>반복 일정에 묶인 업무라 기간 업무로 바꿀 수 없습니다.</div>}
+        </div>
 
-        <PropLabel>시간</PropLabel>
-        <input type="time" value={task.time || ""} onChange={(e) => p({ time: e.target.value })} style={sel} />
+        {period ? (<>
+          <PropLabel>시작일</PropLabel>
+          <div>
+            <input type="date" value={task.startDate || ""} max={task.dueDate || undefined}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v && task.dueDate && v > task.dueDate) { alert("시작일은 마감일보다 늦을 수 없습니다."); return; }
+                p({ startDate: v });
+              }} style={{ ...sel, width: "100%", boxSizing: "border-box" }} />
+            {!task.startDate && <div style={help}>비워 두면 등록일({fmtDate(task.createdAt)})부터 시작으로 봅니다.</div>}
+          </div>
+
+          <PropLabel>마감일</PropLabel>
+          <input type="date" value={task.dueDate || ""} min={task.startDate || undefined}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              if (startOf(task) > v) { alert("마감일은 시작일(" + fmtDate(startOf(task)) + ")보다 빠를 수 없습니다."); return; }
+              // date 칸에도 마감일을 같이 둔다 — 대시보드·알림은 date 를 본다
+              p({ dueDate: v, date: v });
+            }} style={sel} />
+
+          <PropLabel>남은 기간</PropLabel>
+          <div>
+            {task.status === "done"
+              ? <span style={{ fontSize: 12, color: C.faint }}>완료</span>
+              : (() => { const d = ddayOf(task, today); return (
+                <span style={{ fontSize: 11, fontWeight: 800, borderRadius: 6, padding: "2px 8px", background: d.bg, color: d.color }}>{d.label}</span>
+              ); })()}
+            <span style={{ fontSize: 11, color: C.faint, marginLeft: 8 }}>{md(startOf(task))} ~ {md(dueOf(task))}</span>
+          </div>
+        </>) : (<>
+          <PropLabel>날짜</PropLabel>
+          <input type="date" value={task.date || ""} onChange={(e) => { if (e.target.value) p({ date: e.target.value }); }} style={sel} />
+
+          <PropLabel>시간</PropLabel>
+          <input type="time" value={task.time || ""} onChange={(e) => p({ time: e.target.value })} style={sel} />
+        </>)}
 
         {isContract && (<>
           <PropLabel>연결된 업체</PropLabel>
@@ -127,8 +181,9 @@ export default function TaskPanel({ task, types, subTypes = [], contracts = [], 
             <div style={{ fontSize: 11, color: C.faint, marginBottom: 8, lineHeight: 1.55 }}>
               매주·격주·매월처럼 같은 일정을 여러 날짜에 한 번에 만듭니다. 이 일정이 첫 번째가 됩니다.
             </div>
-            {onRepeat && <button onClick={() => { if (!task.date) { alert("날짜를 먼저 정해주세요."); return; } onRepeat(task); }}
-              style={btn("ghost", { padding: "5px 12px", fontSize: 11.5 })}>↻ 반복 일정 만들기</button>}
+            {onRepeat && <button disabled={period} onClick={() => { if (period) return; if (!task.date) { alert("날짜를 먼저 정해주세요."); return; } onRepeat(task); }}
+              style={btn("ghost", { padding: "5px 12px", fontSize: 11.5, ...(period ? { opacity: 0.45, cursor: "not-allowed" } : {}) })}>↻ 반복 일정 만들기</button>}
+            {period && <div style={{ ...help, marginTop: 6 }}>기간 업무는 반복 일정을 쓸 수 없습니다. 당일 업무로 바꾸면 다시 쓸 수 있어요.</div>}
           </>
         )}
       </Section>

@@ -91,7 +91,10 @@ export default function QuickAddBar({ cats = [], fallback = null, onAdd, placeho
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8, fontSize: 11, color: C.faint }}>
           <span>인식 결과</span>
           {chip(shown.title || "(제목 없음)", { background: C.mainBg, color: C.main })}
-          {chip(fmtDate(parsed.date) + (parsed.dateGuessed ? " · 날짜 미입력 → 오늘" : ""))}
+          {parsed.mode === "period"
+            ? chip("기간 업무 · " + (parsed.startDate ? fmtDate(parsed.startDate) : "오늘부터") + " ~ " + fmtDate(parsed.date) + " 마감",
+              { background: C.mainBg, color: C.main })
+            : chip(fmtDate(parsed.date) + (parsed.dateGuessed ? " · 날짜 미입력 → 오늘" : ""))}
           {parsed.time ? chip(parsed.time) : null}
           {hit ? chip(hit.n, { background: (hit.c || C.sub) + "1f", color: hit.c || C.sub }) : null}
           {found && (found.chips || []).map((x, i) =>

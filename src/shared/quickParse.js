@@ -35,9 +35,32 @@ export function quickParse(raw, opts = {}) {
     if (hit) cat = hit.k;
   }
 
-  // ── 날짜 ──
+  // ── 기간: "~11/20" 또는 "11/10~11/20" (11월20일 처럼 써도 된다) ──
+  // 기간을 찾으면 마감일이 date 가 되고 mode:"period" 가 붙는다. 시작일을 안 쓰면 비워 둔다(= 등록일).
+  // 다른 날짜 표현보다 먼저 찾아서 "11/10" 만 단독 날짜로 잡히는 일을 막는다.
+  const toYMD = (mo, da) => {
+    const t = parseYMD(today);
+    let d = new Date(t.getFullYear(), +mo - 1, +da);
+    if (YMD(d) < addDays(today, -60)) d = new Date(t.getFullYear() + 1, +mo - 1, +da);
+    return YMD(d);
+  };
   let m;
-  if ((m = s.match(/\s(오늘|내일|모레)(?=[\s\d])/))) {
+  let mode = "", startDate = "";
+  if ((m = s.match(/(?:\s(\d{1,2})\s?(?:\/|월\s?)(\d{1,2})일?\s?)?~\s?(\d{1,2})\s?(?:\/|월\s?)(\d{1,2})일?(?=\s)/))) {
+    date = toYMD(m[3], m[4]);
+    if (m[1]) {
+      startDate = toYMD(m[1], m[2]);
+      // 시작이 마감보다 뒤로 계산되면(예: 12/20~1/5) 시작을 한 해 앞으로
+      if (startDate > date) startDate = YMD(new Date(+startDate.slice(0, 4) - 1, +m[1] - 1, +m[2]));
+    }
+    mode = "period";
+    s = s.replace(m[0], " ");
+  }
+
+  // ── 날짜 ──
+  if (mode) {
+    // 기간을 이미 찾았으면 다른 날짜 표현은 보지 않는다
+  } else if ((m = s.match(/\s(오늘|내일|모레)(?=[\s\d])/))) {
     date = addDays(today, { 오늘: 0, 내일: 1, 모레: 2 }[m[1]]);
     s = s.replace(m[0], " ");
   } else if ((m = s.match(/\s(다음\s?주\s?)?([일월화수목금토])요일(?=[\s\d])/))) {
@@ -82,12 +105,13 @@ export function quickParse(raw, opts = {}) {
     dateGuessed: !date,     // 날짜를 못 찾아 오늘로 채운 경우
     time,
     cat: cat ?? fallback,
+    ...(mode ? { mode, startDate } : {}),
   };
 }
 
 // 미리보기 문구에 쓰는 도움말 — 인식 가능한 표현을 안내한다
 export const quickHint = (cats = [], fallback = null) => {
   const tags = cats.filter((c) => c.k !== fallback).map((c) => "#" + ((c.kw && c.kw[0]) || (c.n || "").replace(/\s/g, "")));
-  return "날짜: 오늘, 내일, 금요일, 다음주 화요일, 10/5 · 시간: 오후 3시, 3시반, 14:30"
+  return "날짜: 오늘, 내일, 금요일, 다음주 화요일, 10/5 · 기간: ~11/20, 11/10~11/20 · 시간: 오후 3시, 3시반, 14:30"
     + (tags.length ? " · 분류: " + tags.join(" ") + " (단어만 써도 인식)" : "");
 };

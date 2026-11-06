@@ -16,6 +16,7 @@ import { contractOptions, findSubTypes, parseMention, searchRunningCompanies } f
 import { extractReportTargets } from "./reportTarget";
 import ImportModal from "./ImportModal";
 import RepeatModal from "./RepeatModal";
+import { isPeriod, startOf, dueOf, ddayOf, md, progressOf, layoutBars } from "./period";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
 // 1단계 자료 제작 → 2단계 교육 과정 운영.
@@ -414,6 +415,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       id: uid(), title: p.title,
       type: cid ? CONTRACT_TYPE : (p.cat || "etc"),
       date: p.date, time: p.time || "",
+      // 한 줄 입력에서 "~11/20", "11/10~11/20" 을 쓰면 기간 업무로 만든다 (date 에도 마감일)
+      ...(p.mode === "period" ? { mode: "period", startDate: p.startDate || "", dueDate: p.date, time: "" } : {}),
       status: "todo", desc: "", subs: [], links: [], createdAt: TD,
       ...(cid ? { contractId: cid } : {}),
       ...(subs.length ? { subTypes: subs } : {}),
@@ -468,9 +471,11 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const items = useMemo(() => {
     const a = tasks.map((t) => ({
       kind: "task", id: t.id, title: t.title, color: typeOf(t.type).c,
-      date: t.date, time: t.time, done: t.status === "done",
+      date: dueOf(t), time: isPeriod(t) ? "" : t.time, done: t.status === "done",
       statusLabel: (STATUS.find((x) => x[0] === t.status) || STATUS[0])[1],
       reportTo: t.reportTo || [], repeatId: t.repeat ? t.repeat.id : "",
+      // 기간 업무 — 시작일(비면 등록일) ~ 마감일. date 는 마감일과 같다.
+      ...(isPeriod(t) ? { period: true, start: startOf(t), due: dueOf(t), task: t } : {}),
     }));
     const b = sessions.filter((sx) => sx.status !== "skip").map((sx) => ({
       kind: "session", id: sx.id, pid: sx.pid,
@@ -530,21 +535,52 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
             보고 · {it.reportTo.map(reportName).filter(Boolean).join(", ")}
           </span>
         )}
-        <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{fmtDate(it.date)}{it.time ? " " + it.time : ""}</span>
+        {it.period ? periodMeta(it) : (
+          <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{fmtDate(it.date)}{it.time ? " " + it.time : ""}</span>
+        )}
         <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{it.statusLabel}</span>
       </div>
+    );
+  };
+  // 기간 업무 한 줄의 오른쪽 — "기간" 표시, 시작 전이면 "11/10 시작", 진행 중이면 진행 막대, 그리고 D-day
+  const periodMeta = (it) => {
+    const tag = (label, color, bg) => (
+      <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", color, background: bg }}>{label}</span>
+    );
+    const range = md(it.start) + "~" + md(it.due);
+    let mid;
+    if (it.start > TD) mid = tag(md(it.start) + " 시작", C.amber, C.amberBg);
+    else if (!it.done && it.due >= TD) mid = (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10.5, color: C.muted, whiteSpace: "nowrap" }}>
+        {range}
+        <span style={{ display: "inline-block", width: 60, height: 5, background: C.line, borderRadius: 99, overflow: "hidden" }}>
+          <span style={{ display: "block", height: "100%", width: progressOf(it.task, TD) + "%", background: C.main, borderRadius: 99 }} />
+        </span>
+      </span>
+    );
+    else mid = <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{range}</span>;
+    const d = it.done ? null : ddayOf(it.task, TD);
+    return (
+      <>
+        {tag("기간", C.main, C.mainBg)}
+        {mid}
+        {d && <span style={{ fontSize: 10.5, fontWeight: 800, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", color: d.color, background: d.bg }}>{d.label}</span>}
+      </>
     );
   };
 
   // ---- 오늘·이번 주 ----
   const listView = () => {
     const weekEnd = addDays(TD, (7 - new Date(TD + "T00:00:00").getDay()) % 7);
-    const g = { late: [], today: [], week: [], later: [], done: [] };
+    const g = { late: [], prog: [], today: [], week: [], later: [], done: [] };
     const shown = {};
+    // 한 업무는 한 곳에만 — 마감 지남 → 지연됨, 기간 업무 진행 중 → 진행 중,
+    // 시작 전 기간 업무는 마감일 기준으로 이번 주/예정에 ("11/10 시작" 표시)
     items.forEach((i) => {
       if (i.done) g.done.push(i);
       else if (i.date < TD) g.late.push(i);
-      else if (i.date === TD) g.today.push(i);
+      else if (i.period && i.start <= TD) g.prog.push(i);
+      else if (i.date === TD && !i.period) g.today.push(i);
       else if (i.date <= weekEnd) g.week.push(i);
       else {
         // 예정 구간에서 교육은 과정별 다음 회차 하나만 보여준다
@@ -555,10 +591,11 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       }
     });
     g.done = g.done.slice(-5).reverse();
-    const sec = (k, title, danger) => g[k].length ? (
+    g.prog.sort((a, b) => a.due.localeCompare(b.due));   // 마감 가까운 순
+    const sec = (k, title, danger, color) => g[k].length ? (
       <div key={k} style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8, fontSize: 12,
-          fontWeight: 700, color: danger ? C.red : C.muted }}>
+          fontWeight: 700, color: danger ? C.red : color || C.muted }}>
           {title}<span style={{ ...badge(C.muted, C.soft), fontSize: 10.5 }}>{g[k].length}</span>
         </div>
         {g[k].map((i) => <Row key={i.kind + i.id} it={i} />)}
@@ -566,7 +603,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     ) : null;
     const any = Object.values(g).some((x) => x.length);
     if (!any) return <div style={{ textAlign: "center", padding: "44px 0", color: C.faint, fontSize: 13 }}>작업이 없습니다. 위 입력창에 한 줄로 적어보세요.</div>;
-    return <>{sec("late", "지연됨", true)}{sec("today", "오늘")}{sec("week", "이번 주")}{sec("later", "예정 (교육·반복 일정은 다음 한 건만)")}{sec("done", "최근 완료")}</>;
+    return <>{sec("late", "지연됨", true)}{sec("prog", "진행 중 · 기간 업무 (마감 가까운 순)", false, C.main)}{sec("today", "오늘")}{sec("week", "이번 주")}{sec("later", "예정 (교육·반복 일정은 다음 한 건만)")}{sec("done", "최근 완료")}</>;
   };
 
   // ---- 자료 제작 보드 (드래그로 단계 이동) ----
@@ -960,12 +997,24 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     if (personSessionIds) list = list.filter((x) => x.isEdu && personSessionIds.has(x.id));
     return list;
   }, [items, calFilter, personSessionIds]);
-  const dayItems = useMemo(() => (calDay ? calItems.filter((x) => x.date === calDay) : []), [calItems, calDay]);
+  // 고른 날짜의 일정 — 기간 업무는 그 날이 시작~마감 사이면 들어간다
+  const dayItems = useMemo(() => (calDay
+    ? calItems.filter((x) => (x.period ? x.start <= calDay && x.due >= calDay : x.date === calDay)) : []), [calItems, calDay]);
   const calView = () => {
     const { y, m } = calMonth;
     const first = new Date(y, m, 1);
     const start = new Date(y, m, 1 - first.getDay());
     const cells = Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+    // 주 단위 줄 — 기간 업무 막대를 주마다 한 줄로 그린다. 그 달이 끝난 뒤의 빈 주는 그리지 않는다.
+    const weeks = [];
+    for (let w = 0; w < 6; w++) {
+      const days = cells.slice(w * 7, w * 7 + 7);
+      if (w > 0 && days[0].getMonth() !== m) break;
+      weeks.push(days);
+    }
+    const periodItems = calItems.filter((x) => x.period);
+    const dayOnly = calItems.filter((x) => !x.period);
+    const LANE = 17;   // 막대 한 줄 높이(간격 포함)
     const move = (delta) => { const d = new Date(y, m + delta, 1); setCalMonth({ y: d.getFullYear(), m: d.getMonth() }); };
     return (
       <>
@@ -993,17 +1042,24 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           <b style={{ fontSize: 14, color: C.title }}>{y}년 {m + 1}월</b>
           <button onClick={() => move(1)} style={btn("ghost", { padding: "5px 12px", fontSize: 15 })}>›</button>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 2 }}>
           {[...WD].map((d, i) => (
             <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, padding: "4px 0",
               color: i === 0 ? C.red : i === 6 ? C.main : C.faint }}>{d}</div>
           ))}
-          {cells.map((d, i) => {
+        </div>
+        {weeks.map((days, w) => {
+          const ws = YMD(days[0]), we = YMD(days[6]);
+          const { placed, lanes } = layoutBars(periodItems.map((x) => x.task), ws, we);
+          const barsH = lanes * LANE + (lanes ? 2 : 0);
+          return (
+        <div key={ws} style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 2 }}>
+          {days.map((d, i) => {
             const ds = YMD(d), inMonth = d.getMonth() === m, isToday = ds === TD;
-            const evs = calItems.filter((x) => x.date === ds);
+            const evs = dayOnly.filter((x) => x.date === ds);
             return (
               <div key={i} onClick={() => setCalDay(calDay === ds ? "" : ds)}
-                style={{ minHeight: 86, padding: 4, borderRadius: 6, boxSizing: "border-box", cursor: "pointer",
+                style={{ minHeight: 86 + barsH, padding: 4, borderRadius: 6, boxSizing: "border-box", cursor: "pointer",
                   background: calDay === ds ? "#e8f4fd" : inMonth ? C.white : "#fafbfc",
                   border: `1px solid ${calDay === ds ? C.main : isToday ? "#93c5fd" : C.line}`, overflow: "hidden" }}>
                 <div style={{ fontSize: 11, fontWeight: isToday ? 800 : 500, marginBottom: 2, textAlign: "center",
@@ -1012,6 +1068,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                     ? <span style={{ background: C.main, color: C.white, borderRadius: "50%", width: 17, height: 17, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9.5 }}>{d.getDate()}</span>
                     : d.getDate()}
                 </div>
+                {barsH > 0 && <div style={{ height: barsH }} />}
                 {evs.slice(0, 2).map((e) => (
                   <div key={e.kind + e.id} title={e.title}
                     style={{ fontSize: 9, padding: "1px 3px", borderRadius: 3, marginBottom: 1,
@@ -1024,7 +1081,33 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
               </div>
             );
           })}
+          {/* 기간 업무 막대 — 시작일~마감일을 한 줄로. 주를 넘어가면 잘린 쪽을 각지게 하고 ◀ ▶ 로 표시 */}
+          {lanes > 0 && (
+            <div style={{ position: "absolute", left: 0, right: 0, top: 22, display: "grid", gridTemplateColumns: "repeat(7,1fr)",
+              gap: "0 2px", padding: "0 3px", pointerEvents: "none" }}>
+              {placed.map((b) => {
+                const it = periodItems.find((x) => x.id === b.t.id);
+                if (!it) return null;
+                const on = side?.kind === "task" && side?.id === it.id;
+                return (
+                  <div key={it.id} title={`${it.title} (${md(it.start)}~${md(it.due)})`}
+                    onClick={(ev) => { ev.stopPropagation(); openSide("task", it.id); }}
+                    style={{ gridColumn: `${b.c0 + 1} / ${b.c1 + 2}`, gridRow: b.lane + 1, pointerEvents: "auto",
+                      height: 15, marginBottom: 2, padding: "0 6px", display: "flex", alignItems: "center", gap: 4,
+                      fontSize: 9.5, fontWeight: 700, color: C.white, background: it.color, cursor: "pointer",
+                      overflow: "hidden", whiteSpace: "nowrap", boxSizing: "border-box",
+                      borderRadius: `${b.cutLeft ? 0 : 4}px ${b.cutRight ? 0 : 4}px ${b.cutRight ? 0 : 4}px ${b.cutLeft ? 0 : 4}px`,
+                      opacity: it.done ? 0.45 : 1, textDecoration: it.done ? "line-through" : "none",
+                      boxShadow: on ? `0 0 0 2px ${C.title}` : "none" }}>
+                    {b.cutLeft ? "◀ " : ""}{it.title}{b.cutRight ? " ▶" : ""}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
+          );
+        })}
 
         {/* 고른 날짜의 일정 목록 — 여기서 고르면 상세가 열린다.
             칸이 좁아 3개 넘어가면 안 보이던 문제를 이 목록으로 해결한다. */}
@@ -1056,6 +1139,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
                       <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500,
                         color: e.done ? C.faint : C.title, overflow: "hidden", textOverflow: "ellipsis",
                         whiteSpace: "nowrap", textDecoration: e.done ? "line-through" : "none" }}>{e.title}</span>
+                      {e.period && periodMeta(e)}
                       {e.time && <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{e.time}</span>}
                       <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>{e.statusLabel}</span>
                     </div>
@@ -1066,7 +1150,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
         )}
         {!calDay && (
           <p style={{ fontSize: 11, color: C.faint, marginTop: 10, textAlign: "center" }}>
-            날짜를 누르면 그 날 일정 목록이 아래에 열립니다. 목록에서 고르면 상세가 열립니다.
+            날짜를 누르면 그 날 일정 목록이 아래에 열립니다. 목록에서 고르거나 기간 업무 막대를 누르면 상세가 열립니다.
           </p>
         )}
       </>
@@ -1148,7 +1232,7 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
 
       <SidePanel open={!!selTask} kind="작업 상세" onClose={() => setSide(null)}>
         <TaskPanel task={selTask} types={types} subTypes={subTypes} contracts={contracts}
-          reportTargets={reportTargets} series={selTask && selTask.repeat ? tasks.filter((x) => x.repeat && x.repeat.id === selTask.repeat.id) : []}
+          reportTargets={reportTargets} today={TD} series={selTask && selTask.repeat ? tasks.filter((x) => x.repeat && x.repeat.id === selTask.repeat.id) : []}
           onPatch={patchTask} onDelete={deleteTask} onOpenContract={onOpenContract}
           onRepeat={setRepeatTask} onDeleteRepeatRest={deleteRepeatRest} />
       </SidePanel>
