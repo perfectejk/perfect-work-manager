@@ -1475,8 +1475,9 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
           <button onClick={save} disabled={saving||loading} style={{background:dirty?"#10b981":"#f3f4f6",color:dirty?"#fff":"#9ca3af",border:"none",borderRadius:9,padding:"9px 20px",fontSize:13,fontWeight:700,cursor:saving||loading?"not-allowed":"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>{saving?"저장 중…":"저장"}</button>
         </div>
 
-        {/* 총량 연동 */}
-        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        {/* 총량 연동 — 왼쪽: 리워드·프리미엄·저장·알림받기 / 오른쪽: 블로그·영수증 리뷰 */}
+        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"flex-start"}}>
+        <div style={{flex:"2 1 440px",display:"flex",gap:8,flexWrap:"wrap",alignContent:"flex-start"}}>
           <div style={{flex:"1 1 300px",background:"#fff",borderRadius:12,border:"1px solid "+(summary.over?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
             <div style={{fontSize:11,fontWeight:700,color:"#0071CE",marginBottom:5}}>리워드트래픽 (트래픽 계열 합산)</div>
             {summary.total===0?(
@@ -1506,12 +1507,22 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
             </div>
           )}
 
+          {summary.byType.filter(t=>!t.pk).map(t=>(
+            <div key={t.k} style={{flex:"0 1 150px",background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:t.color,marginBottom:5}}>{t.label}</div>
+              <div style={{fontSize:16,fontWeight:800,color:"#0f1117"}}>{t.used.toLocaleString()}{t.unit}</div>
+              <div style={{fontSize:10,color:"#adb5bd",marginTop:3}}>배분량 (총량 대조 없음)</div>
+            </div>
+          ))}
+        </div>
+        {(blogSum||receiptHasProduct(sel))&&(
+        <div style={{flex:"1 1 300px",display:"flex",flexDirection:"column",gap:8}}>
           {/* 블로그 리뷰 배분 — 트래픽처럼 계약 제공내역(블플) 총량과 대조한다.
               배분 = 리뷰나우 세팅 총 건수 합 + CMS 기록, 값은 아래 블로그 리뷰 계획에서 올려준다 */}
           {blogSum&&(()=>{
             const bt=parseInt(sel?.provide?.blogPlus)||0,bu=blogSum.plannedTotal,br=bt-bu,bo=bu>bt;
             return(
-            <div style={{flex:"1 1 260px",background:"#fff",borderRadius:12,border:"1px solid "+(bo?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
+            <div style={{flex:"0 0 auto",background:"#fff",borderRadius:12,border:"1px solid "+(bo?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#8468D3",marginBottom:5}}>블로그 리뷰</div>
               {bt===0?(
                 <div style={{fontSize:12,color:"#92400e",fontWeight:600}}>제공내역 총량 미설정 · 배분 {bu.toLocaleString()}건</div>
@@ -1535,7 +1546,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
             const rs=receiptSum||{plannedTotal:0,done:0};
             const rt=parseInt(sel?.provide?.receipt)||0,ru=rs.plannedTotal,rr=rt-ru,ro=ru>rt;
             return(
-            <div style={{flex:"1 1 260px",background:"#fff",borderRadius:12,border:"1px solid "+(ro?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
+            <div style={{flex:"0 0 auto",background:"#fff",borderRadius:12,border:"1px solid "+(ro?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#db2777",marginBottom:5}}>영수증 리뷰</div>
               {rt===0?(
                 <div style={{fontSize:12,color:"#92400e",fontWeight:600}}>제공내역 총량 미설정 · 배분 {ru.toLocaleString()}건</div>
@@ -1550,14 +1561,8 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
               </div>
             </div>);
           })()}
-
-          {summary.byType.filter(t=>!t.pk).map(t=>(
-            <div key={t.k} style={{flex:"0 1 150px",background:"#fff",borderRadius:12,border:"1px solid #f0f1f3",padding:"12px 14px"}}>
-              <div style={{fontSize:11,fontWeight:700,color:t.color,marginBottom:5}}>{t.label}</div>
-              <div style={{fontSize:16,fontWeight:800,color:"#0f1117"}}>{t.used.toLocaleString()}{t.unit}</div>
-              <div style={{fontSize:10,color:"#adb5bd",marginTop:3}}>배분량 (총량 대조 없음)</div>
-            </div>
-          ))}
+        </div>
+        )}
         </div>
         {summary.over&&(
           <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"11px 16px",marginBottom:12,fontSize:12,color:"#b91c1c",fontWeight:600}}>
