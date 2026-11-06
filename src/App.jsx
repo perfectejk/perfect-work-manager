@@ -1085,13 +1085,15 @@ function ReviewPlanPanel({contract,st,onSummary,onData,cfg}){
   const patch=fn=>{setData(d=>fn(d));setDirty(true);};
   const save=async()=>{setSaving(true);await st.set(C.storePrefix+cid,data);setSaving(false);setDirty(false);};
 
-  const goal=intOr(data.goal,0);
+  // 목표 = 계약 건수. 계약된 작업은 전부 완료하는 게 기준이라 따로 목표를 넣지 않는다.
+  // 예전에 넣어 둔 data.goal 값은 지우지 않고 저장값에 그대로 둔다(화면에서만 안 쓴다).
+  const goal=intOr(contract.provide&&contract.provide[C.provideKey],0);
   const runDone=data.runs.reduce((s,r)=>s+blogRunDone(r,todayStr),0);
   const cmsDone=blogCmsSum(data.cms);
   const done=runDone+cmsDone;
   const remain=goal-done;
   const pct=goal>0?Math.min(100,Math.round(done/goal*100)):0;
-  // 경고 1) 설정 합계가 총 목표를 넘음  2) 계약 종료일까지 목표를 못 채움
+  // 경고 1) 배분 합계가 계약 건수를 넘음  2) 아직 배분 안 한 건수가 남음  3) 예상 종료일이 계약 종료일보다 늦음
   const plannedTotal=data.runs.reduce((s,r)=>s+intOr(r.total,0),0)+cmsDone;
   const overSet=goal>0&&plannedTotal>goal;
   const lateRun=data.runs.find(r=>{const e=blogRunEnd(r);return e&&contract.endDate&&e>contract.endDate;});
@@ -1128,18 +1130,13 @@ function ReviewPlanPanel({contract,st,onSummary,onData,cfg}){
     </>}>
     {loading?<div style={{padding:"30px 0",textAlign:"center",fontSize:12,color:"#adb5bd"}}>불러오는 중…</div>:(<div style={{padding:"14px 18px"}}>
 
-      {/* 목표 · 진행 현황 */}
-      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:10}}>
-        <span style={{fontSize:12,fontWeight:700,color:"#374151"}}>총 목표</span>
-        <input type="number" min="0" value={data.goal} onChange={e=>patch(d=>({...d,goal:e.target.value}))} placeholder="예: 50" style={{...iS,width:90,textAlign:"center",fontWeight:700,color:"#0071CE"}}/>
-        <span style={{fontSize:12,color:"#6b7280"}}>건</span>
-      </div>
+      {/* 진행 현황 — 기준은 계약 건수 */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:10}}>
         {/* 큰 숫자 = 배분(등록) 건수, 아래 초록 글자 = 그 중 작업이 완료된 건수 — 상단 카드(배분 기준)와 같은 숫자로 맞춘다 */}
         {[{k:"sum",l:"배분 합계 (계약 "+provideN+"건)",v:plannedTotal+"건",s:"그 중 완료 "+done+"건",c:"#0071CE",bg:"#f0f7ff"},
           {k:"run",l:C.runName,v:"배분 "+(plannedTotal-cmsDone)+"건",s:"그 중 완료 "+runDone+"건",c:C.color,bg:C.bg},
           C.useCms&&{k:"cms",l:"CMS",v:cmsDone+"건",s:"올린 기록 = 완료",c:"#0891b2",bg:"#ecfeff"},
-          {k:"remain",l:"남은 작업"+(goal>0?" (목표 "+goal+"건 기준)":""),v:goal>0?Math.max(0,remain)+"건":"—",s:goal>0?"":"총 목표를 넣으면 계산",c:remain<=0&&goal>0?"#10b981":"#374151",bg:remain<=0&&goal>0?"#f0fdf4":"#f7f8fa"}].filter(Boolean).map(x=>(
+          {k:"remain",l:"남은 작업"+(goal>0?" (계약 "+goal+"건 기준)":""),v:goal>0?Math.max(0,remain)+"건":"—",s:goal>0?"":"계약 건수 없음",c:remain<=0&&goal>0?"#10b981":"#374151",bg:remain<=0&&goal>0?"#f0fdf4":"#f7f8fa"}].filter(Boolean).map(x=>(
           <div key={x.k} style={{background:x.bg,borderRadius:10,padding:"9px 12px",textAlign:"center"}}>
             <div style={{fontSize:16,fontWeight:800,color:x.c}}>{x.v}</div>
             {x.s&&<div style={{fontSize:11,fontWeight:700,color:x.k==="remain"?"#adb5bd":"#10b981",marginTop:1}}>{x.s}</div>}
@@ -1148,15 +1145,15 @@ function ReviewPlanPanel({contract,st,onSummary,onData,cfg}){
       </div>
       <div style={{marginBottom:10}}>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6b7280",marginBottom:4}}>
-          <span>작업 완료율 (목표 대비 완료)</span><span style={{fontWeight:700,color:pct>=100?"#10b981":"#0071CE"}}>{pct}%{goal>0&&pct>=100?" · 목표 달성":""}</span>
+          <span>작업 완료율 (계약 대비 완료)</span><span style={{fontWeight:700,color:pct>=100?"#10b981":"#0071CE"}}>{pct}%{goal>0&&pct>=100?" · 전부 완료":""}</span>
         </div>
         <div style={{height:9,background:"#f0f1f3",borderRadius:99,overflow:"hidden"}}>
           <div style={{width:pct+"%",height:"100%",background:pct>=100?"#10b981":"linear-gradient(90deg,#0071CE,"+C.color+")",borderRadius:99,transition:"width 0.3s"}}/>
         </div>
       </div>
       {(overSet||shortFall||lateRun)&&(<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
-        {overSet&&warn("#fffbeb","#fde68a","#92400e","설정 합계가 총 목표를 넘습니다 — "+C.runName+(C.useCms?"+CMS":"")+" 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(plannedTotal-goal)+"건 초과)")}
-        {shortFall&&warn("#fef2f2","#fecaca","#b91c1c","현재 설정으로는 목표를 채우지 못합니다 — 합계 "+plannedTotal+"건 / 목표 "+goal+"건 ("+(goal-plannedTotal)+"건 부족)")}
+        {overSet&&warn("#fffbeb","#fde68a","#92400e","배분 합계가 계약 건수를 넘습니다 — "+C.runName+(C.useCms?"+CMS":"")+" 합계 "+plannedTotal+"건 / 계약 "+goal+"건 ("+(plannedTotal-goal)+"건 초과)")}
+        {shortFall&&warn("#fffbeb","#fde68a","#92400e","아직 배분하지 않은 건수가 있습니다 — 배분 "+plannedTotal+"건 / 계약 "+goal+"건 ("+(goal-plannedTotal)+"건 남음)")}
         {lateRun&&warn("#fef2f2","#fecaca","#b91c1c",C.runName+" 예상 종료일("+blogRunEnd(lateRun)+")이 계약 종료일("+contract.endDate+")보다 늦습니다 — 일 건수를 늘리거나 "+(C.useCms?"CMS로 보완하세요":"세팅을 추가하세요"))}
       </div>)}
 
