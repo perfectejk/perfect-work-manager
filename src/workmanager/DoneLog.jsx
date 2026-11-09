@@ -13,19 +13,25 @@ const mondayOf = (s) => addDays(s, -((parseYMD(s).getDay() + 6) % 7));
 const weekLabel = (mon) => { const d = parseYMD(mon); return `${d.getMonth() + 1}월 ${Math.floor((d.getDate() - 1) / 7) + 1}주차`; };
 const mdw = (s) => { const d = parseYMD(s); return `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})`; };
 const md = (s) => { const d = parseYMD(s); return `${d.getMonth() + 1}/${d.getDate()}`; };
-const RANGES = [["week", "이번 주"], ["month", "이번 달"], ["all", "전체"]];
+const RANGES = [["month", "이번 달"], ["all", "전체"], ["custom", "기간 설정"]];
+// 기간 설정의 처음 값 — 지난달 1일 (예: 오늘이 11/9 이면 10/1)
+const prevMonthFirst = (s) => {
+  const y = +s.slice(0, 4), m = +s.slice(5, 7);
+  return m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, "0")}-01`;
+};
 
 export default function DoneLog({ tasks, types, typeOf, today, selectedId, onOpen }) {
   const [range, setRange] = useState("month");
+  const [from, setFrom] = useState(() => prevMonthFirst(today));
+  const [to, setTo] = useState(today);
   const [typeF, setTypeF] = useState("");
   const [q, setQ] = useState("");
 
   const { base, list, byType } = useMemo(() => {
-    const mon = mondayOf(today);
     const inRange = (t) => {
       const d = doneDay(t);
       if (!d) return range === "all";
-      if (range === "week") return d >= mon && d <= addDays(mon, 6);
+      if (range === "custom") return d >= from && d <= to;
       if (range === "month") return d.slice(0, 7) === today.slice(0, 7);
       return true;
     };
@@ -36,7 +42,7 @@ export default function DoneLog({ tasks, types, typeOf, today, selectedId, onOpe
     const byType = {};
     base.forEach((t) => { const k = typeOf(t.type).k; byType[k] = (byType[k] || 0) + 1; });
     return { base, list, byType };
-  }, [tasks, range, typeF, q, today, typeOf]);
+  }, [tasks, range, from, to, typeF, q, today, typeOf]);
 
   // 주차별 묶음 (list 가 최근 순이라 묶음도 최근 순)
   const groups = [];
@@ -48,7 +54,8 @@ export default function DoneLog({ tasks, types, typeOf, today, selectedId, onOpe
     g.items.push(t);
   });
 
-  const rangeName = (RANGES.find((r) => r[0] === range) || RANGES[1])[1];
+  const rangeName = range === "custom" ? `${md(from)} ~ ${md(to)}` : (RANGES.find((r) => r[0] === range) || RANGES[0])[1];
+  const dateBox = inputSm({ border: "1px solid #e5e7eb", padding: "5px 8px" });
   const segBtn = (on) => ({ border: "none", background: on ? C.main : C.white, color: on ? C.white : C.muted,
     padding: "6px 13px", fontFamily: FONT, fontSize: 12, fontWeight: 700, cursor: "pointer" });
 
@@ -58,6 +65,16 @@ export default function DoneLog({ tasks, types, typeOf, today, selectedId, onOpe
         <div style={{ display: "flex", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
           {RANGES.map(([k, n]) => <button key={k} onClick={() => setRange(k)} style={segBtn(range === k)}>{n}</button>)}
         </div>
+        {range === "custom" && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {/* 시작일이 끝일보다 늦어지지 않게 막는다 (비우거나 거꾸로 고르면 바꾸지 않음) */}
+            <input type="date" value={from} max={to} style={dateBox}
+              onChange={(e) => { const v = e.target.value; if (v && v <= to) setFrom(v); }} />
+            <span style={{ color: C.faint, fontSize: 12 }}>~</span>
+            <input type="date" value={to} min={from} style={dateBox}
+              onChange={(e) => { const v = e.target.value; if (v && v >= from) setTo(v); }} />
+          </div>
+        )}
         <select value={typeF} onChange={(e) => setTypeF(e.target.value)} style={inputSm({ border: "1px solid #e5e7eb" })}>
           <option value="">유형 전체</option>
           {types.map((t) => <option key={t.k} value={t.k}>{t.n}</option>)}
