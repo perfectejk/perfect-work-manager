@@ -17,6 +17,7 @@ import { extractReportTargets } from "./reportTarget";
 import ImportModal from "./ImportModal";
 import RepeatModal from "./RepeatModal";
 import DoneLog from "./DoneLog";
+import { computeAuto, planSync, loadAutos, autoKey, needsActionIds, withActionIds, AUTO_COLOR } from "./autoSchedule";
 import { isPeriod, startOf, dueOf, ddayOf, md, progressOf, layoutBars } from "./period";
 
 // ===== 업무관리 탭 (슈퍼관리자 전용) =====
@@ -73,6 +74,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const [showImport, setShowImport] = useState(false);
   const [repeatTask, setRepeatTask] = useState(null);   // 반복 일정 만들기 창에 넘길 작업
   const [side, setSide] = useState(null);           // {kind:"task", id}
+  const [autos, setAutos] = useState({});           // 교육 자동 일정 {고유ID: 문서} — wm:auto:* 에 따로 저장
+  const autosRef = React.useRef(null);              // 마지막으로 저장한 자동 일정 (null = 아직 안 읽음)
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(TD + "T00:00:00"); return { y: d.getFullYear(), m: d.getMonth() }; });
 
   useEffect(() => {
@@ -199,6 +202,42 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     if (!target) return;
     await saveSessions(sessions.map((sx) => (sx.id === id ? { ...sx, ...patch } : sx)), target.pid);
   };
+
+  // ---- 교육 자동 일정 (점검 · 과제확인) ----
+  // 화면을 열 때(새로고침 포함)와 교육 기록이 바뀔 때 검사한다. 입력하는 동안에는 잠깐 기다렸다가 한 번만 돈다.
+  // 바뀐 일정만 wm:auto:{고유ID} 문서에 덮어쓰고, 기존 업무(wm:tasks)는 건드리지 않는다.
+  useEffect(() => {
+    if (loading) return;
+    let alive = true;
+    const timer = setTimeout(async () => {
+      // 1) 예전 과제에 고유번호를 한 번만 붙인다. 붙이기 전에 그 과정의 회차 기록을 통째로 백업 문서에 남긴다.
+      const pids = [...new Set(sessions.filter((sx) => needsActionIds(sx.actions)).map((sx) => String(sx.pid)))];
+      if (pids.length) {
+        for (const pid of pids) {
+          const bk = "wm:backup:before-action-ids:" + pid;
+          if (!(await st.get(bk))) await st.set(bk, sessions.filter((sx) => String(sx.pid) === pid));
+        }
+        if (!alive) return;
+        const next = sessions.map((sx) => (needsActionIds(sx.actions) ? { ...sx, actions: withActionIds(sx.actions) } : sx));
+        setSessions(next);   // 회차가 바뀌므로 이 검사가 한 번 더 돈다
+        for (const pid of pids) await saveSessionsOf(st, pid, next);
+        return;
+      }
+      // 교육 기록을 못 읽은 경우(과정 0개)에는 자동 일정을 지우지 않도록 멈춘다
+      if (!programs.length) return;
+      if (!autosRef.current) autosRef.current = await loadAutos(st);
+      if (!alive) return;
+      const { writes, dels } = planSync(autosRef.current, computeAuto(programs, sessions, TD), TD);
+      const map = { ...autosRef.current };
+      writes.forEach((d) => { map[d.id] = d; });
+      dels.forEach((id) => { delete map[id]; });
+      autosRef.current = map;
+      setAutos(map);
+      if (writes.length || dels.length)
+        await Promise.all([...writes.map((d) => st.set(autoKey(d.id), d)), ...dels.map((id) => st.del(autoKey(id)))]);
+    }, 600);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [loading, programs, sessions, TD]);
 
   // 회차 한 건 삭제 — "취소"와 달리 기록 없이 완전히 지운다. 뒤 회차 번호는 자동으로 당겨진다.
   const deleteSession = async (sx) => {
@@ -473,6 +512,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const cycleStatus = async (t) => patchTask(t.id, { status: t.status === "done" ? "todo" : "done" });
   // 목록·캘린더의 체크버튼 — 작업과 회차를 구분해 완료 표시를 뒤집는다
   const toggleItem = async (it) => {
+    // 자동 일정은 교육 기록(참석·과제 체크)에 따라 저절로 완료된다 — 체크 대신 해당 회차를 연다
+    if (it.kind === "auto") { openSide("auto", it.id); return; }
     if (it.kind === "task") {
       const t = tasks.find((x) => x.id === it.id);
       if (t) await cycleStatus(t);
@@ -498,10 +539,18 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       color: progColor(programs.find((p) => String(p.id) === String(sx.pid))), date: sx.date, time: sx.time, done: sx.status === "done",
       statusLabel: SESSION_STATUS[sx.status], isEdu: true,
     }));
-    return a.concat(b).sort((x, y) => (x.date + (x.time || "")).localeCompare(y.date + (y.time || "")));
-  }, [tasks, sessions, programs, typeOf, nameOf]);
+    // 교육 자동 일정 (점검 · 과제확인) — 누르면 근거가 된 회차가 열린다
+    const c = Object.values(autos).map((x) => ({
+      kind: "auto", id: x.id, sid: x.sid, title: x.title, color: AUTO_COLOR, date: x.date, time: "",
+      done: x.status === "done", statusLabel: x.status === "done" ? "완료" : "미완료", autoKind: x.kind,
+    }));
+    return a.concat(b, c).sort((x, y) => (x.date + (x.time || "")).localeCompare(y.date + (y.time || "")));
+  }, [tasks, sessions, programs, typeOf, nameOf, autos]);
 
-  const openSide = (kind, id) => setSide({ kind, id });
+  const openSide = (kind, id) => {
+    if (kind === "auto") { const a = autos[id]; if (a) setSide({ kind: "session", id: a.sid }); return; }
+    setSide({ kind, id });
+  };
   const selTask = side?.kind === "task" ? tasks.find((t) => t.id === side.id) : null;
   const selScript = side?.kind === "script" ? scripts.find((x) => x.id === side.id) : null;
   const selProgram = side?.kind === "program" ? programs.find((x) => x.id === side.id) : null;
@@ -545,6 +594,10 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           textDecoration: it.done ? "line-through" : "none" }}>{it.title}</span>
         {it.repeatId && <span title="반복 일정" style={{ fontSize: 11, color: C.faint }}>↻</span>}
+        {it.kind === "auto" && (
+          <span title="교육 기록으로 자동 생성된 일정입니다. 참석·과제를 체크하면 저절로 완료됩니다."
+            style={{ ...badge(AUTO_COLOR, C.subBg), fontSize: 10 }}>자동</span>
+        )}
         {it.reportTo && it.reportTo.length > 0 && (
           <span style={{ ...badge("#b45309", "#fffbeb"), fontSize: 10 }}>
             보고 · {it.reportTo.map(reportName).filter(Boolean).join(", ")}
