@@ -7,6 +7,7 @@
 import crypto from 'node:crypto';
 
 const FS = 'https://firestore.googleapis.com/v1/projects/perfect-work-manager/databases/(default)/documents/kv/';
+const RUNQ = 'https://firestore.googleapis.com/v1/projects/perfect-work-manager/databases/(default)/documents:runQuery';
 const ALL = '*';
 
 async function kv(id) {
@@ -16,6 +17,23 @@ async function kv(id) {
   const j = await r.json();
   const v = j.fields && j.fields.v && j.fields.v.stringValue;
   return v ? JSON.parse(v) : null;
+}
+
+// 이름이 prefix 로 시작하는 문서를 모두 읽는다 (앱의 st.list 와 같은 방식 — 저장 이름 k 의 범위로 찾기)
+async function kvList(prefix) {
+  const body = { structuredQuery: { from: [{ collectionId: 'kv' }], where: { compositeFilter: { op: 'AND', filters: [
+    { fieldFilter: { field: { fieldPath: 'k' }, op: 'GREATER_THAN_OR_EQUAL', value: { stringValue: prefix } } },
+    { fieldFilter: { field: { fieldPath: 'k' }, op: 'LESS_THAN', value: { stringValue: prefix + '' } } },
+  ] } } } };
+  const r = await fetch(RUNQ, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error('firestore_' + r.status);
+  const rows = await r.json();
+  return (Array.isArray(rows) ? rows : []).map((x) => {
+    const v = x.document && x.document.fields && x.document.fields.v && x.document.fields.v.stringValue;
+    try { return v ? JSON.parse(v) : null; } catch { return null; }
+  }).filter(Boolean);
 }
 
 const sign = (secret, who) => crypto.createHmac('sha256', secret).update('cal:' + who).digest('base64url').slice(0, 24);
@@ -125,6 +143,17 @@ export default async function handler(req, res) {
     if (s.place) lines.push('LOCATION:' + esc(s.place));
     lines.push('END:VEVENT');
   });
+  // 교육 자동 일정 (점검 · 과제확인) — 전체(관리자) 주소에만 넣는다. 사람별 주소에는 넣지 않는다.
+  // 읽기에 실패해도 교육 회차는 그대로 내보낸다.
+  if (who === ALL) {
+    let autos = [];
+    try { autos = await kvList('wm:auto:'); } catch { autos = []; }
+    autos.filter((a) => a && a.id && a.date && a.date >= since).forEach((a) => {
+      lines.push('BEGIN:VEVENT', `UID:${a.id}@perfect-work-manager`, `DTSTAMP:${now}`,
+        `DTSTART;VALUE=DATE:${dayStamp(a.date)}`, `DTEND;VALUE=DATE:${dayStamp(a.date, 1)}`,
+        'SUMMARY:' + esc(a.title), 'DESCRIPTION:' + esc('업무관리 자동 일정' + (a.status === 'done' ? ' · 완료' : '')), 'END:VEVENT');
+    });
+  }
   lines.push('END:VCALENDAR');
 
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8');

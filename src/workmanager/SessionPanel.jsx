@@ -4,6 +4,7 @@ import { SpTitle, SpSub, Props, PropLabel, Section, CheckList, Textarea } from "
 import { SESSION_STATUS } from "./store";
 import { sessionTitle, isSetProg, setLabel, progRuleLabel } from "./recur";
 import NameInput from "./NameInput";
+import { withActionIds } from "./autoSchedule";
 
 // 링크 주소 정리 — http(s) 로 시작하지 않으면 https:// 를 붙인다 (javascript: 같은 주소도 막힌다)
 const toUrl = (v) => (/^https?:\/\//i.test(v) ? v : "https://" + v.replace(/^[a-z]+:\/*/i, ""));
@@ -208,7 +209,8 @@ export default function SessionPanel({
         <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>
           누가 · 무엇을 · 언제까지 형식으로 적으면 다음 회차에 점검하기 좋습니다.
         </div>
-        <CheckList items={s.actions || []} onChange={(v) => p({ actions: v })}
+        {/* 과제마다 고유번호를 붙여 저장한다 — 과제확인 자동 일정이 이 번호로 과제를 알아본다 */}
+        <CheckList items={s.actions || []} onChange={(v) => p({ actions: withActionIds(v) })}
           placeholder="과제 추가 (예: 김팀장: 반론 멘트 실전 3회)" />
       </Section>
 
