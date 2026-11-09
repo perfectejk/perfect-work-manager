@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { C, FONT, parseYMD, WD } from "../shared/ui";
 import { isPeriod, startOf, dueOf } from "./period";
 import { AUTO_COLOR } from "./autoSchedule";
@@ -19,12 +19,40 @@ const TAG = {
   edu: { n: "교육", c: C.amber, bg: C.amberBg },
 };
 const tlKey = (d) => `tl:${d}`;
+const durText = (n) => [Math.floor(n / 60) ? `${Math.floor(n / 60)}시간` : "", n % 60 ? `${n % 60}분` : ""].filter(Boolean).join(" ");
+// 마우스가 있는 화면에서만 호버 카드를 띄운다 (휴대폰은 제목을 눌러 상세 보기)
+const canHover = () => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(hover: hover)").matches;
 
 export default function DailyTimeline({ st, today, tasks, sessions, autos, typeOf, nameOf, eduColor, onToggleTask, onOpen }) {
   const [blocks, setBlocks] = useState([]);   // [{ref, start:"10:00", len:60}]  ref = "task:id" | "auto:id" | "edu:id"
   const [loaded, setLoaded] = useState(false);
   const [pick, setPick] = useState("");        // 휴대폰용 — 고른 카드
   const [over, setOver] = useState(null);      // 끌고 있는 칸 (분)
+  const [tip, setTip] = useState(null);        // 호버 카드 {ref, time, left, top, bottom}
+  const tipTimer = useRef(null);
+
+  // 호버 카드 — 0.3초 머물면 뜨고, 떠나거나 끌기 시작하거나 화면을 굴리면 사라진다
+  // onlyIfCut: 왼쪽 목록 카드는 제목이 잘렸을 때만 띄운다
+  const showTip = (e, ref, time, onlyIfCut) => {
+    if (!canHover()) return;
+    const el = e.currentTarget;
+    if (onlyIfCut) {
+      const t = el.querySelector("[data-tl-title]");
+      if (!t || t.scrollWidth <= t.clientWidth) return;
+    }
+    clearTimeout(tipTimer.current);
+    tipTimer.current = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      setTip({ ref, time, left: r.left, top: r.top, bottom: r.bottom });
+    }, 300);
+  };
+  const hideTip = () => { clearTimeout(tipTimer.current); setTip(null); };
+  useEffect(() => () => clearTimeout(tipTimer.current), []);
+  useEffect(() => {
+    if (!tip) return undefined;
+    window.addEventListener("scroll", hideTip, true);
+    return () => window.removeEventListener("scroll", hideTip, true);
+  }, [tip]);
 
   useEffect(() => {
     let alive = true;
@@ -41,6 +69,7 @@ export default function DailyTimeline({ st, today, tasks, sessions, autos, typeO
   // 저장할 때 원래 일정이 지워진 블록은 함께 정리한다
   const save = (list) => {
     const next = list.filter((b) => all[b.ref]);
+    hideTip();   // 옮기기·길이 바꾸기·빼기 뒤에는 호버 카드를 닫는다 (시간이 바뀌었으므로)
     setBlocks(next);
     if (loaded) st.set(tlKey(today), { date: today, blocks: next });
   };
@@ -164,13 +193,14 @@ export default function DailyTimeline({ st, today, tasks, sessions, autos, typeO
           ) : left.map((x) => {
             const on = pick === x.ref;
             return (
-              <div key={x.ref} draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", x.ref); e.dataTransfer.effectAllowed = "move"; }}
+              <div key={x.ref} draggable onDragStart={(e) => { hideTip(); e.dataTransfer.setData("text/plain", x.ref); e.dataTransfer.effectAllowed = "move"; }}
+                onMouseEnter={(e) => showTip(e, x.ref, "", true)} onMouseLeave={hideTip}
                 onClick={() => setPick(on ? "" : x.ref)}
                 style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", marginBottom: 6, background: C.white,
                   border: `1px solid ${on ? C.main : C.line}`, borderLeft: `4px solid ${x.color}`, borderRadius: 9, cursor: "grab",
                   userSelect: "none", boxShadow: on ? `0 0 0 2px ${C.mainBg}` : "none" }}>
                 {tagEl(x.kind)}
-                <span title={x.title} style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: C.title,
+                <span data-tl-title style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: C.title,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.title}</span>
                 <i className="ti ti-grip-vertical" style={{ color: C.faint, fontSize: 14 }} />
               </div>
@@ -207,7 +237,8 @@ export default function DailyTimeline({ st, today, tasks, sessions, autos, typeO
                 // 30분 블록은 높이가 한 줄뿐이라, 시간·버튼을 제목 옆 한 줄에 모아 담는다
                 const compact = b.len <= 30;
                 return (
-                  <div key={b.ref} draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", b.ref); e.dataTransfer.effectAllowed = "move"; }}
+                  <div key={b.ref} draggable onDragStart={(e) => { hideTip(); e.dataTransfer.setData("text/plain", b.ref); e.dataTransfer.effectAllowed = "move"; }}
+                    onMouseEnter={(e) => showTip(e, b.ref, `${b.start} ~ ${hm(s0 + b.len)} · ${durText(b.len)}`, false)} onMouseLeave={hideTip}
                     style={{ position: "absolute", top: ((s0 - S) / 30) * ROW + 2, height: (b.len / 30) * ROW - 4,
                       // 카드를 골라 둔 동안에는 블록이 눌리지 않게 해서, 블록이 있는 시간칸에도 놓을 수 있게 한다
                       left: `calc(${lane[b.ref] * w}% + 2px)`, width: `calc(${w}% - 4px)`, pointerEvents: pick ? "none" : "auto",
@@ -223,7 +254,7 @@ export default function DailyTimeline({ st, today, tasks, sessions, autos, typeO
                             color: C.white, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>{x.done ? "✓" : ""}</button>
                       )}
                       {!compact && tagEl(x.kind)}
-                      <span onClick={() => onOpen(x.src === "edu" ? "session" : x.src, x.id)} title={x.title + " — 눌러서 상세 보기"}
+                      <span onClick={() => onOpen(x.src === "edu" ? "session" : x.src, x.id)}
                         style={{ flex: compact ? "1 1 auto" : 1, minWidth: compact ? 24 : 0, fontSize: 12, fontWeight: 700, cursor: "pointer",
                           color: x.done ? C.faint : C.title, textDecoration: x.done ? "line-through" : "none",
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.title}</span>
@@ -241,6 +272,25 @@ export default function DailyTimeline({ st, today, tasks, sessions, autos, typeO
           </div>
         </div>
       </div>
+
+      {/* 호버 카드 — 잘린 제목 전체 · 시간. 화면 기준으로 띄워서 시간표 테두리에 잘리지 않게 한다 */}
+      {tip && all[tip.ref] && (() => {
+        const x = all[tip.ref];
+        const W = 260;
+        const left = Math.max(8, Math.min(tip.left, window.innerWidth - W - 8));
+        const below = tip.bottom + 6 + 150 < window.innerHeight;
+        return (
+          <div style={{ position: "fixed", zIndex: 50, width: W, left, pointerEvents: "none",
+            ...(below ? { top: tip.bottom + 6 } : { bottom: window.innerHeight - tip.top + 6 }),
+            background: C.white, border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.14)",
+            padding: "10px 12px", fontFamily: FONT, boxSizing: "border-box" }}>
+            {tagEl(x.kind)}
+            <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color: C.title, lineHeight: 1.45, wordBreak: "keep-all", overflowWrap: "anywhere" }}>{x.title}</div>
+            {tip.time && <div style={{ marginTop: 6, fontSize: 11.5, color: C.muted }}>{tip.time}</div>}
+            {tip.time && <div style={{ marginTop: 4, fontSize: 11, color: C.faint }}>제목을 누르면 상세 보기</div>}
+          </div>
+        );
+      })()}
     </div>
   );
 }
