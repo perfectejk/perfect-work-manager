@@ -514,18 +514,8 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
   const cycleStatus = async (t) => patchTask(t.id, { status: t.status === "done" ? "todo" : "done" });
   // 목록·캘린더의 체크버튼 — 작업과 회차를 구분해 완료 표시를 뒤집는다
   const toggleItem = async (it) => {
-    // 과제확인 일정 — 체크하면 그 회차의 과제를 완료/미완료로 바꾼다 (일정은 과제에 따라 저절로 맞춰진다)
-    // 점검 일정 — 참석 체크로만 완료되므로, 체크 대신 해당 회차를 연다
+    // 자동 일정(점검 · 과제확인) — 회차 기록의 참석·과제 체크로만 완료되므로, 체크 대신 해당 회차를 연다
     if (it.kind === "auto") {
-      const a = autos[it.id];
-      const sx = a && a.kind === "hw" ? sessions.find((x) => x.id === a.sid) : null;
-      if (sx && (sx.actions || []).some((x) => x.id === a.aid)) {
-        const done = a.status !== "done";
-        // 화면에 바로 보이도록 먼저 바꿔 두고, 저장은 자동 검사가 맞춰 준다
-        setAutos((m) => ({ ...m, [a.id]: { ...a, status: done ? "done" : "todo" } }));
-        await patchSession(sx.id, { actions: sx.actions.map((x) => (x.id === a.aid ? { ...x, d: done } : x)) });
-        return;
-      }
       openSide("auto", it.id);
       return;
     }
