@@ -17,7 +17,12 @@ export const needsActionIds = (list) => (list || []).some((a) => a && !a.id);
 export const withActionIds = (list) => (list || []).map((a) => (a && !a.id ? { ...a, id: newActionId() } : a));
 
 // 회차 이름 — 세트 교육은 "2세트 · 필기", 그 밖에는 "3회차"
-const roundLabel = (s, prog, round) => (isSetProg(prog) && s.set ? setLabel(s, prog) : `${round}회차`);
+// 회차에 따로 붙인 이름(예: "프로모션 사전 대비")이 있으면 그 이름을 쓴다 — 패널 제목과 같게
+const roundLabel = (s, prog, round) => {
+  const own = (s.title || "").trim();
+  if (own) return `"${own}"`;
+  return isSetProg(prog) && s.set ? setLabel(s, prog) : `${round}회차`;
+};
 
 // 지금 교육 기록으로 있어야 할 자동 일정 목록을 계산한다 (저장은 하지 않음)
 //   open: true = 아직 할 일이 남음(미완료), false = 끝남(완료로 표시)
