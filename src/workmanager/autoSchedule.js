@@ -45,16 +45,18 @@ export function computeAuto(programs, sessions, today) {
           title: miss.length ? `[점검] ${prog.name} ${label} 미완료 ${miss.length}명 (${miss.join(", ")})` : "",
         });
       }
-      // 2) 과제확인 — 다음 회차 날짜가 있을 때만
+      // 2) 과제확인 — 다음 회차 날짜가 있을 때만. 한 회차의 과제는 묶어서 일정 하나로 만든다.
+      //    제목에는 아직 안 끝난 과제만 적고, 모두 체크되면 완료(제목은 마지막 모양 그대로)
       const next = list[i + 1];
-      if (next && next.date) {
-        (s.actions || []).forEach((a) => {
-          if (!a || !a.id || !String(a.t || "").trim()) return;
-          out.push({
-            id: `auto-hw:${prog.id}:${s.id}:${a.id}`, kind: "hw", pid: prog.id, sid: s.id, aid: a.id,
-            date: addDays(next.date, -1), open: !a.d,
-            title: `[과제확인] ${prog.name} ${label} 과제: ${String(a.t).trim()}`,
-          });
+      const hw = (s.actions || []).filter((a) => a && a.id && String(a.t || "").trim());
+      if (next && next.date && hw.length) {
+        const left = hw.filter((a) => !a.d).map((a) => String(a.t).trim());
+        out.push({
+          id: `auto-hw:${prog.id}:${s.id}`, kind: "hw", pid: prog.id, sid: s.id,
+          date: addDays(next.date, -1), open: left.length > 0,
+          title: left.length ? `[과제확인] ${prog.name} ${label} 과제 미완료 ${left.length}개 (${left.join(", ")})` : "",
+          // 처음 만들 때부터 과제가 모두 끝나 있으면 쓸 제목
+          doneTitle: `[과제확인] ${prog.name} ${label} 과제 ${hw.length}개 모두 완료`,
         });
       }
     });
@@ -74,9 +76,9 @@ export function planSync(existing, desired, today) {
     keep.add(d.id);
     const status = d.open ? "todo" : "done";
     const doc = {
-      id: d.id, auto: true, kind: d.kind, pid: d.pid, sid: d.sid, ...(d.aid ? { aid: d.aid } : {}),
-      // 전원 완료된 점검 일정은 마지막 제목(누가 미완료였는지)을 그대로 둔다
-      title: d.title || (ex && ex.title) || "",
+      id: d.id, auto: true, kind: d.kind, pid: d.pid, sid: d.sid,
+      // 모두 끝난 일정은 마지막 제목(무엇이 남아 있었는지)을 그대로 둔다
+      title: d.title || (ex && ex.title) || d.doneTitle || "",
       date: d.date, status,
       createdAt: (ex && ex.createdAt) || today,
       ...(status === "done" ? { completedAt: (ex && ex.status === "done" && ex.completedAt) || today } : {}),
@@ -87,7 +89,7 @@ export function planSync(existing, desired, today) {
   return { writes, dels };
 }
 
-const FIELDS = ["id", "auto", "kind", "pid", "sid", "aid", "title", "date", "status", "createdAt", "completedAt"];
+const FIELDS = ["id", "auto", "kind", "pid", "sid", "title", "date", "status", "createdAt", "completedAt"];
 const sameDoc = (a, b) => FIELDS.every((k) => (a[k] ?? "") === (b[k] ?? ""));
 
 // 저장된 자동 일정을 모두 읽어온다 → {고유ID: 문서}
