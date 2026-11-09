@@ -17,6 +17,7 @@ import { extractReportTargets } from "./reportTarget";
 import ImportModal from "./ImportModal";
 import RepeatModal from "./RepeatModal";
 import DoneLog from "./DoneLog";
+import DailyTimeline from "./DailyTimeline";
 import { computeAuto, planSync, loadAutos, autoKey, needsActionIds, withActionIds, AUTO_COLOR } from "./autoSchedule";
 import { isPeriod, startOf, dueOf, ddayOf, md, progressOf, layoutBars } from "./period";
 
@@ -24,6 +25,7 @@ import { isPeriod, startOf, dueOf, ddayOf, md, progressOf, layoutBars } from "./
 // 1단계 자료 제작 → 2단계 교육 과정 운영.
 // 모든 데이터는 wm: 접두어로만 저장하며, 기존 PRO 데이터는 읽지도 쓰지도 않는다.
 const SUB_TABS = [
+  { id: "tl", label: "오늘 타임라인" },
   { id: "list", label: "오늘·이번 주" },
   // 진행 현황(칸반)은 개선 2에서 완료 로그로 바꿨다. 화면 코드(boardView)는 지우지 않고 남겨 두었다.
   // 다시 켜려면 아래 줄을 { id: "board", label: "진행 현황" } 으로 되돌리면 된다.
@@ -546,6 +548,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
     }));
     return a.concat(b, c).sort((x, y) => (x.date + (x.time || "")).localeCompare(y.date + (y.time || "")));
   }, [tasks, sessions, programs, typeOf, nameOf, autos]);
+
+  // 회차의 과정 색 (오늘 타임라인의 교육 블록용)
+  const eduColorOf = useCallback((sx) => progColor(programs.find((p) => String(p.id) === String(sx.pid))), [programs]);
 
   const openSide = (kind, id) => {
     if (kind === "auto") { const a = autos[id]; if (a) setSide({ kind: "session", id: a.sid }); return; }
@@ -1281,6 +1286,9 @@ export default function WorkManagerTab({ st, today, contracts = [], onOpenContra
       </div>
 
       <div style={card({ padding: 16 })}>
+        {sub === "tl" && <DailyTimeline st={st} today={TD} tasks={tasks} sessions={sessions} autos={autos}
+          typeOf={typeOf} nameOf={nameOf} eduColor={eduColorOf}
+          onToggleTask={(id) => { const t = tasks.find((x) => x.id === id); if (t) cycleStatus(t); }} onOpen={openSide} />}
         {sub === "list" && listView()}
         {sub === "board" && boardView()}
         {sub === "log" && <DoneLog tasks={tasks} types={types} typeOf={typeOf} today={TD}
