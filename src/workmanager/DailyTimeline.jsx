@@ -120,6 +120,24 @@ export default function DailyTimeline({ st, today, tasks, sessions, autos, typeO
   );
   const small = { border: "1px solid #e5e7eb", background: C.white, borderRadius: 6, fontFamily: FONT, fontSize: 10.5,
     fontWeight: 700, color: C.muted, padding: "1px 6px", cursor: "pointer", whiteSpace: "nowrap" };
+  // 블록의 "시작 ~ 종료 까지" + -30분/+30분 버튼. 폭이 좁으면 시간 글자가 먼저 줄어들고(…) 버튼은 남는다.
+  // short: 30분 블록용 짧은 모양 (제목과 한 줄에 들어가게)
+  const timeAndButtons = (b, s0, short) => {
+    // 30분 블록은 자리가 좁아 "−" "+" 로 줄여 보여준다 (누르면 똑같이 30분씩 바뀜)
+    const btnS = short ? { ...small, padding: 0, width: 18, height: 18, fontSize: 12, lineHeight: "16px", textAlign: "center" } : small;
+    return (
+      <>
+        <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          minWidth: 0, flex: short ? "0 20 auto" : 1 }}>
+          {b.start} ~ {hm(s0 + b.len)}{short ? "" : " 까지"}
+        </span>
+        <button onClick={() => resize(b.ref, -30)} disabled={b.len <= 30} title="30분 줄이기"
+          style={{ ...btnS, flexShrink: 0, opacity: b.len <= 30 ? 0.4 : 1 }}>{short ? "−" : "-30분"}</button>
+        <button onClick={() => resize(b.ref, 30)} disabled={s0 + b.len >= E} title="30분 늘리기"
+          style={{ ...btnS, flexShrink: 0, opacity: s0 + b.len >= E ? 0.4 : 1 }}>{short ? "+" : "+30분"}</button>
+      </>
+    );
+  };
   const d0 = parseYMD(today);
   const slots = [];
   for (let m = S; m < E; m += 30) slots.push(m);
@@ -186,6 +204,8 @@ export default function DailyTimeline({ st, today, tasks, sessions, autos, typeO
                 const s0 = toMin(b.start);
                 const w = 100 / (width[b.ref] || 1);
                 const canCheck = x.src === "task";
+                // 30분 블록은 높이가 한 줄뿐이라, 시간·버튼을 제목 옆 한 줄에 모아 담는다
+                const compact = b.len <= 30;
                 return (
                   <div key={b.ref} draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", b.ref); e.dataTransfer.effectAllowed = "move"; }}
                     style={{ position: "absolute", top: ((s0 - S) / 30) * ROW + 2, height: (b.len / 30) * ROW - 4,
@@ -193,28 +213,27 @@ export default function DailyTimeline({ st, today, tasks, sessions, autos, typeO
                       left: `calc(${lane[b.ref] * w}% + 2px)`, width: `calc(${w}% - 4px)`, pointerEvents: pick ? "none" : "auto",
                       boxSizing: "border-box", borderRadius: 8, padding: "3px 7px", overflow: "hidden", cursor: "grab",
                       background: x.color + "0d", border: `1px solid ${x.color}55`, borderLeft: `4px solid ${x.color}`,
-                      opacity: x.done ? 0.6 : 1, display: "flex", flexDirection: "column", gap: 2 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      opacity: x.done ? 0.6 : 1, display: "flex", flexDirection: "column", gap: 2,
+                      justifyContent: compact ? "center" : "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: compact ? 4 : 6, minWidth: 0 }}>
                       {canCheck && (
                         <button onClick={() => onToggleTask(x.id)} title={x.done ? "완료 취소" : "완료"}
                           style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, cursor: "pointer", padding: 0,
                             border: `2px solid ${x.done ? C.green : "#c5cdd8"}`, background: x.done ? C.green : C.white,
                             color: C.white, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>{x.done ? "✓" : ""}</button>
                       )}
-                      {tagEl(x.kind)}
+                      {!compact && tagEl(x.kind)}
                       <span onClick={() => onOpen(x.src === "edu" ? "session" : x.src, x.id)} title={x.title + " — 눌러서 상세 보기"}
-                        style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        style={{ flex: compact ? "1 1 auto" : 1, minWidth: compact ? 24 : 0, fontSize: 12, fontWeight: 700, cursor: "pointer",
                           color: x.done ? C.faint : C.title, textDecoration: x.done ? "line-through" : "none",
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.title}</span>
+                      {compact && timeAndButtons(b, s0, true)}
                       <button onClick={() => remove(b.ref)} title="목록으로 되돌리기"
-                        style={{ border: "none", background: "none", color: C.faint, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 2px" }}>×</button>
+                        style={{ border: "none", background: "none", color: C.faint, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: "nowrap" }}>{b.start} ~ {hm(s0 + b.len)} 까지</span>
-                      <span style={{ flex: 1 }} />
-                      <button onClick={() => resize(b.ref, -30)} disabled={b.len <= 30} style={{ ...small, opacity: b.len <= 30 ? 0.4 : 1 }}>-30분</button>
-                      <button onClick={() => resize(b.ref, 30)} disabled={s0 + b.len >= E} style={{ ...small, opacity: s0 + b.len >= E ? 0.4 : 1 }}>+30분</button>
-                    </div>
+                    {!compact && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>{timeAndButtons(b, s0, false)}</div>
+                    )}
                   </div>
                 );
               })}
