@@ -1500,12 +1500,14 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
             </div>
           ))}
         </div>
-        {(blogSum||receiptHasProduct(sel))&&(
+        {(blogSum||blogHasProduct(sel)||receiptHasProduct(sel))&&(
         <div style={{flex:"1 1 300px",display:"flex",flexDirection:"column",gap:8}}>
           {/* 블로그 리뷰 배분 — 트래픽처럼 계약 제공내역(블플) 총량과 대조한다.
-              배분 = 리뷰나우 세팅 총 건수 합 + CMS 기록, 값은 아래 블로그 리뷰 계획에서 올려준다 */}
-          {blogSum&&(()=>{
-            const bt=parseInt(sel?.provide?.blogPlus)||0,bu=blogSum.plannedTotal,br=bt-bu,bo=bu>bt;
+              배분 = 리뷰나우 세팅 총 건수 합 + CMS 기록, 값은 아래 블로그 리뷰 계획에서 올려준다.
+              아직 세팅이 하나도 없는 새 계약은 요약이 안 올라오므로 0건으로 보여준다 (영수증 카드와 같은 방식) */}
+          {(blogSum||blogHasProduct(sel))&&(()=>{
+            const blogSum0=blogSum||{plannedTotal:0,cmsDone:0,done:0};
+            const bt=parseInt(sel?.provide?.blogPlus)||0,bu=blogSum0.plannedTotal,br=bt-bu,bo=bu>bt;
             return(
             <div style={{flex:"0 0 auto",background:"#fff",borderRadius:12,border:"1px solid "+(bo?"#fecaca":"#f0f1f3"),padding:"12px 14px"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#8468D3",marginBottom:5}}>블로그 리뷰</div>
@@ -1517,9 +1519,9 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
                 <div style={{height:6,background:"#f0f1f3",borderRadius:99,marginTop:8,overflow:"hidden"}}><div style={{height:"100%",width:Math.min(100,Math.round(bu/bt*100))+"%",background:bo?"#ef4444":"#8468D3",borderRadius:99}}/></div>
               </>)}
               <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px solid #f7f8fa"}}>
-                <span style={{fontSize:11,color:"#8468D3",fontWeight:700}}>리뷰나우 {(blogSum.plannedTotal-blogSum.cmsDone).toLocaleString()}건</span>
-                <span style={{fontSize:11,color:"#0891b2",fontWeight:700}}>CMS {blogSum.cmsDone.toLocaleString()}건</span>
-                <span style={{fontSize:11,color:"#10b981",fontWeight:700}}>그 중 완료 {blogSum.done.toLocaleString()}건</span>
+                <span style={{fontSize:11,color:"#8468D3",fontWeight:700}}>리뷰나우 {(blogSum0.plannedTotal-blogSum0.cmsDone).toLocaleString()}건</span>
+                <span style={{fontSize:11,color:"#0891b2",fontWeight:700}}>CMS {blogSum0.cmsDone.toLocaleString()}건</span>
+                <span style={{fontSize:11,color:"#10b981",fontWeight:700}}>그 중 완료 {blogSum0.done.toLocaleString()}건</span>
               </div>
             </div>);
           })()}
