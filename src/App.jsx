@@ -1652,8 +1652,14 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
                     const t=planType(r.type);
                     const sr=rankNum(r.startRank),er=rankNum(r.endRank);
                     const tag=(sr!==null&&er!==null)?diffTag(sr-er):null;
-                    return(<tr key={r.id} style={r.extra?{background:"#fffdf7"}:undefined}>
-                      <td style={{...td,fontWeight:800,color:"#0f1117",fontSize:12,whiteSpace:"nowrap"}}>{r.week}주{r.extra&&<span style={{display:"block",fontSize:9,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:5,padding:"0 4px",marginTop:2}}>추가</span>}</td>
+                    // 진행 상태 — 시작일·종료일만 보고 자동으로 정한다 (저장하지 않음)
+                    //   완료: 종료일이 지남 / 예정: 시작일 전 / 종료임박: 종료일까지 3일 이하 / 진행중: 그 밖
+                    const dl=r.end?getDDay(r.end):null;
+                    const ph=(!r.start||!r.end)?null:r.end<todayStr?"done":r.start>todayStr?"wait":dl<=3?"end":"run";
+                    const PH={run:{t:"진행중",c:"#15803d",bg:"#dcfce7",bd:"#bbf7d0",row:"#f0fdf4",bar:"#22c55e"},end:{t:"D-"+dl,c:"#dc2626",bg:"#fee2e2",bd:"#fecaca",row:"#fef2f2",bar:"#ef4444"},done:{t:"완료",c:"#9ca3af",bg:"#f3f4f6",bd:"#e5e7eb"},wait:{t:"예정",c:"#0071CE",bg:"#eff6ff",bd:"#bfdbfe"}}[ph];
+                    const trS=PH&&PH.row?{background:PH.row}:ph==="done"?{opacity:.5}:r.extra?{background:"#fffdf7"}:undefined;
+                    return(<tr key={r.id} style={trS}>
+                      <td style={{...td,fontWeight:800,color:"#0f1117",fontSize:12,whiteSpace:"nowrap",...(PH&&PH.bar?{boxShadow:"inset 3px 0 0 "+PH.bar}:{})}}>{r.week}주{r.extra&&<span style={{display:"block",fontSize:9,fontWeight:700,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:5,padding:"0 4px",marginTop:2}}>추가</span>}{PH&&<span style={{display:"block",fontSize:9,fontWeight:800,color:PH.c,background:PH.bg,border:"1px solid "+PH.bd,borderRadius:5,padding:"0 4px",marginTop:2}}>{PH.t}</span>}</td>
                       <td style={td}><input type="date" value={r.start||""} onChange={e=>setStart(r.id,e.target.value)} style={cS}/></td>
                       <td style={td}><input type="date" value={r.end||""} onChange={e=>setEnd(r.id,e.target.value)} style={cS}/></td>
                       <td style={td}><input list={"kwlist-"+selId} value={r.keyword||""} onChange={e=>upd(r.id,{keyword:e.target.value})} placeholder="키워드" style={cS}/></td>
@@ -1685,7 +1691,7 @@ function WeeklyPlanTab({contracts,st,focusId,rankDataMap}){
               </table>
             </div>
             <button onClick={addRow} style={{width:"100%",marginTop:10,background:"#f0f7ff",color:"#0071CE",border:"1px dashed #bfd7f5",borderRadius:9,padding:"9px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Pretendard',-apple-system,sans-serif"}}>+ 주차 추가 (시작일·종료일 자동 연결)</button>
-            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일이 자동으로 잡히고(시작일 포함 7일), 다음 주차는 직전 종료일 <b>다음 날</b>부터 이어집니다. 작업일수는 시작일·종료일을 <b>모두 포함</b>해 자동 계산되며, 계획량은 일일량 × 작업일수입니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 직전 줄의 종료순위가 시작순위로 넘어옵니다.<br/>순위는 숫자만 넣으면 되고(12 → 5 이면 ▲7), 키워드별 누적 성과는 표 위에 자동 집계됩니다.</p>
+            <p style={{fontSize:11,color:"#adb5bd",margin:"8px 0 0",lineHeight:1.6}}>시작일을 넣으면 종료일이 자동으로 잡히고(시작일 포함 7일), 다음 주차는 직전 종료일 <b>다음 날</b>부터 이어집니다. 작업일수는 시작일·종료일을 <b>모두 포함</b>해 자동 계산되며, 계획량은 일일량 × 작업일수입니다.<br/>주차 도중 순위가 떨어져 트래픽을 더 넣거나 키워드를 추가할 땐 그 줄의 <b style={{color:"#0071CE"}}>＋</b>를 누르세요. 같은 주차 아래에 「추가」 줄이 오늘 날짜부터 생기고, 직전 줄의 종료순위가 시작순위로 넘어옵니다.<br/>순위는 숫자만 넣으면 되고(12 → 5 이면 ▲7), 키워드별 누적 성과는 표 위에 자동 집계됩니다.<br/>줄 색은 날짜로 자동 표시됩니다 — <b style={{color:"#15803d"}}>초록</b> 진행중 · <b style={{color:"#dc2626"}}>빨강</b> 종료일까지 3일 이하 · <b style={{color:"#9ca3af"}}>흐리게</b> 기간 끝남(완료) · <b style={{color:"#0071CE"}}>예정</b> 시작 전.</p>
           </>)}
         </div>
         </CollapsibleSection>
