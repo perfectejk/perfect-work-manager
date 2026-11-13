@@ -41,6 +41,11 @@ export default function SessionPanel({
   // 명단 + 이 회차에만 추가된 참석자
   const roster = [...new Set([...(program.members || []), ...Object.keys(s.attend || {})])];
   const attendCount = Object.values(s.attend || {}).filter(Boolean).length;
+  // 패스 — 이번 회차는 안 듣고 넘어간 사람. 참석으로 세지 않고 따로 적는다 (점검 일정만 끝내기 위함)
+  const passMap = s.pass || {};
+  const passCount = roster.filter((m) => passMap[m] && !(s.attend || {})[m]).length;
+  const dropPass = (m) => { const n = { ...passMap }; delete n[m]; return n; };
+  const setAttend = (m, v) => p({ attend: { ...(s.attend || {}), [m]: v }, ...(v && passMap[m] ? { pass: dropPass(m) } : {}) });
   const openPrev = prevSession ? (prevSession.actions || []).filter((a) => !a.d) : [];
   const mats = s.materials || [];
   const addMat = () => {
@@ -171,26 +176,44 @@ export default function SessionPanel({
         </div>
       </Section>
 
-      <Section title="참석자" required count={`${attendCount}명 참석 · 명단 ${(program.members || []).length}명`}>
+      <Section title="참석자" required count={`${attendCount}명 참석${passCount ? ` · 패스 ${passCount}명` : ""} · 명단 ${(program.members || []).length}명`}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 7 }}>
           {roster.length === 0
             ? <span style={{ fontSize: 11.5, color: C.faint }}>명단이 비어 있습니다. 과정 상세에서 대상자를 넣거나, 아래에서 직접 추가하세요.</span>
             : roster.map((m) => {
               const on = !!(s.attend || {})[m];
+              if (!on && passMap[m]) return (
+                <span key={m} style={{ display: "flex", alignItems: "center", gap: 5, border: `1px solid ${C.line}`, borderRadius: 99,
+                  padding: "4px 10px", fontSize: 12.5, background: "#f3f4f6", color: C.faint }}>
+                  <span onClick={() => setAttend(m, true)} title="눌러서 참석으로 바꾸기" style={{ cursor: "pointer" }}>{m}</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: "#8468D3", background: "#f3effc", borderRadius: 99, padding: "0 6px" }}>패스</span>
+                  <span onClick={() => p({ pass: dropPass(m) })} title="패스 취소" style={{ cursor: "pointer", fontSize: 11, color: "#c5cdd8" }}>✕</span>
+                </span>
+              );
               return (
                 <label key={m} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
                   border: `1px solid ${on ? "#bfe5d2" : C.line}`, borderRadius: 99, padding: "4px 10px", fontSize: 12.5,
                   background: on ? C.greenBg : C.white, color: on ? C.greenDeep : C.text, fontWeight: on ? 600 : 400 }}>
                   <input type="checkbox" checked={on} style={{ display: "none" }}
-                    onChange={(e) => p({ attend: { ...(s.attend || {}), [m]: e.target.checked } })} />
+                    onChange={(e) => setAttend(m, e.target.checked)} />
                   {m}
+                  {!on && (
+                    <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); p({ pass: { ...passMap, [m]: true } }); }}
+                      title="이번 회차는 넘어감 (참석으로 세지 않음)"
+                      style={{ fontSize: 10, fontWeight: 700, color: C.muted, border: `1px solid ${C.line}`, borderRadius: 99, padding: "0 6px", background: C.white }}>패스</span>
+                  )}
                 </label>
               );
             })}
         </div>
         <NameInput value={[]} people={people} chips={false} onAddPerson={onAddPerson}
-          onChange={(v) => { const n = v[v.length - 1]; if (n) p({ attend: { ...(s.attend || {}), [n]: true } }); }}
+          onChange={(v) => { const n = v[v.length - 1]; if (n) setAttend(n, true); }}
           placeholder="+ 명단에 없는 참석자 추가 (이름 입력)" />
+        {roster.some((m) => !(s.attend || {})[m] && !passMap[m]) && (
+          <div style={{ fontSize: 11, color: C.faint, marginTop: 6, lineHeight: 1.55 }}>
+            이름을 누르면 참석, 「패스」를 누르면 이번 회차는 넘어감(참석으로 세지 않음). 모두 정리되면 점검 일정이 자동으로 완료됩니다.
+          </div>
+        )}
       </Section>
 
       <Section title="이해도" required count="1 낮음 ~ 5 높음">

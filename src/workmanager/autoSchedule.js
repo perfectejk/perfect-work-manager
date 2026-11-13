@@ -1,6 +1,7 @@
 // ===== 교육 자동 일정 (점검 · 과제확인) =====
 // 교육 기록(과정·회차)을 보고 아래 두 가지 일정을 계산해, 일정마다 따로 문서로 저장한다.
-//   1) 점검:     회차 날짜가 지났는데 참석 체크가 안 된 대상자가 있으면 → 회차 다음날
+//   1) 점검:     회차 날짜가 지났는데 참석 체크도 패스도 안 된 대상자가 있으면 → 회차 다음날
+//                (패스 = 이번 회차는 안 듣고 넘어감. 참석으로 세지 않고 s.pass 에 따로 적는다)
 //   2) 과제확인: 회차에 과제가 있고 다음 회차 날짜가 있으면 → 다음 회차 전날
 // 저장 이름은 wm:auto:{고유ID}. 고유ID가 늘 같으므로 PC·휴대폰에서 동시에 열어도 같은 문서를 덮어쓸 뿐 겹치지 않는다.
 // 기존 업무(wm:tasks)는 읽지도 쓰지도 않는다.
@@ -38,7 +39,7 @@ export function computeAuto(programs, sessions, today) {
       const label = roundLabel(s, prog, i + 1);
       // 1) 점검 — 회차 날짜가 지났을 때만
       if (s.date < today && members.length) {
-        const miss = members.filter((m) => !(s.attend || {})[m]);
+        const miss = members.filter((m) => !(s.attend || {})[m] && !(s.pass || {})[m]);
         out.push({
           id: `auto-check:${prog.id}:${s.id}`, kind: "check", pid: prog.id, sid: s.id,
           date: addDays(s.date, 1), open: miss.length > 0,
